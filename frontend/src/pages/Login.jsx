@@ -126,24 +126,6 @@ export default function Login() {
               </button>
             </form>
 
-            {/* Credenciales de prueba */}
-            <div className="mt-5 pt-4 border-t border-dark-100">
-              <p className="text-xs text-dark-400 text-center mb-2">Cuentas de prueba</p>
-              <div className="space-y-1 text-xs text-dark-500">
-                <div className="flex justify-between bg-dark-50 rounded px-2.5 py-1.5">
-                  <span className="font-medium">Admin:</span>
-                  <span>admin@cesfam.cl / password</span>
-                </div>
-                <div className="flex justify-between bg-dark-50 rounded px-2.5 py-1.5">
-                  <span className="font-medium">Supervisor:</span>
-                  <span>supervisor@cesfam.cl / password</span>
-                </div>
-                <div className="flex justify-between bg-dark-50 rounded px-2.5 py-1.5">
-                  <span className="font-medium">Funcionario:</span>
-                  <span>maria.gonzalez@cesfam.cl / password</span>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </motion.div>

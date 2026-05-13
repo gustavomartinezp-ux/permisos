@@ -306,7 +306,7 @@ router.patch('/:id/pre-aprobar', adminOSupervisor, async (req, res) => {
 
   try {
     const check = await pool.query(
-      `SELECT sol.id, f.sector
+      `SELECT sol.id, sol.funcionario_id, f.sector
        FROM solicitudes sol
        JOIN funcionarios f ON sol.funcionario_id = f.id
        WHERE sol.id = $1 AND sol.estado = 'pendiente'`,
@@ -315,6 +315,10 @@ router.patch('/:id/pre-aprobar', adminOSupervisor, async (req, res) => {
 
     if (check.rows.length === 0) {
       return res.status(404).json({ error: 'Solicitud no encontrada o ya procesada' });
+    }
+
+    if (req.usuario.funcionario_id && check.rows[0].funcionario_id == req.usuario.funcionario_id) {
+      return res.status(403).json({ error: 'No puede pre-aprobar su propia solicitud. Será aprobada directamente por el Administrador.' });
     }
 
     if (req.usuario.sector && check.rows[0].sector !== req.usuario.sector) {
@@ -509,6 +513,12 @@ router.patch('/:id/rechazar', adminOSupervisor, async (req, res) => {
     }
 
     const sol = solicitud.rows[0];
+
+    // Supervisor no puede rechazar su propia solicitud
+    if (req.usuario.rol === 'supervisor' && req.usuario.funcionario_id && sol.funcionario_id == req.usuario.funcionario_id) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'No puede rechazar su propia solicitud. Solo el Administrador puede hacerlo.' });
+    }
 
     // Supervisor solo puede rechazar de su sector
     if (req.usuario.rol === 'supervisor' && req.usuario.sector && sol.sector !== req.usuario.sector) {

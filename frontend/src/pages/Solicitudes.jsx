@@ -27,7 +27,7 @@ const ESTADOS = [
 ];
 
 export default function Solicitudes() {
-  const { esAdmin, esSupervisor } = useAuth();
+  const { esAdmin, esSupervisor, usuario } = useAuth();
   const [solicitudes, setSolicitudes] = useState([]);
   const [total, setTotal] = useState(0);
   const [cargando, setCargando] = useState(true);
@@ -239,8 +239,8 @@ export default function Solicitudes() {
                 {/* Acciones */}
                 {esSupervisor && (
                   <div className="flex items-center gap-2">
-                    {/* Supervisor: pre-aprobar pendientes */}
-                    {!esAdmin && sol.estado === 'pendiente' && (
+                    {/* Supervisor: pre-aprobar pendientes (no las propias) */}
+                    {!esAdmin && sol.estado === 'pendiente' && String(sol.funcionario_id) !== String(usuario?.funcionario_id) && (
                       <>
                         <button
                           onClick={() => preAprobar(sol.id)}

@@ -1,5 +1,8 @@
-const { Pool } = require('pg');
+const { Pool, types } = require('pg');
 require('dotenv').config();
+
+// Devolver NUMERIC como float en vez de string
+types.setTypeParser(1700, (val) => parseFloat(val));
 
 // Supabase (y otros hosts remotos) requieren SSL
 const sslConfig = process.env.DATABASE_URL || process.env.DB_SSL === 'true'

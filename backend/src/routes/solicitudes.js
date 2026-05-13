@@ -91,7 +91,7 @@ router.post('/', [
   body('tipo_permiso_id').isInt(),
   body('fecha_inicio').isDate(),
   body('fecha_fin').isDate(),
-  body('dias_solicitados').isInt({ min: 1 }),
+  body('dias_solicitados').isFloat({ min: 0.5 }),
 ], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
@@ -617,6 +617,109 @@ router.patch('/:id/rechazar', adminOSupervisor, async (req, res) => {
     await client.query('ROLLBACK');
     console.error(err);
     res.status(500).json({ error: 'Error al rechazar solicitud' });
+  } finally {
+    client.release();
+  }
+});
+
+// REINTEGRAR días — admin cancela una solicitud aprobada y devuelve los días
+router.patch('/:id/reintegrar', soloAdmin, async (req, res) => {
+  const { id } = req.params;
+  const { observaciones } = req.body;
+  const client = await pool.connect();
+
+  try {
+    await client.query('BEGIN');
+
+    const solicitud = await client.query(
+      `SELECT sol.*, tp.es_feriado_legal, tp.nombre AS tipo_nombre
+       FROM solicitudes sol
+       JOIN tipos_permisos tp ON sol.tipo_permiso_id = tp.id
+       WHERE sol.id = $1 AND sol.estado = 'aprobado'
+       FOR UPDATE`,
+      [id]
+    );
+
+    if (solicitud.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Solicitud no encontrada o no está aprobada' });
+    }
+
+    const sol = solicitud.rows[0];
+    const anio = new Date(sol.fecha_inicio).getFullYear();
+    const diasArrastre = parseFloat(sol.dias_arrastre) || 0;
+    const diasActual = parseFloat(sol.dias_periodo_actual) || parseFloat(sol.dias_solicitados);
+
+    const saldo = await client.query(
+      `SELECT * FROM saldos_funcionarios
+       WHERE funcionario_id = $1 AND tipo_permiso_id = $2 AND anio = $3
+       FOR UPDATE`,
+      [sol.funcionario_id, sol.tipo_permiso_id, anio]
+    );
+
+    if (!saldo.rows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Saldo no encontrado' });
+    }
+
+    const s = saldo.rows[0];
+
+    if (sol.es_feriado_legal) {
+      const saldoAntes = (parseFloat(s.saldo_arrastre) - parseFloat(s.arrastre_usados) - parseFloat(s.arrastre_pendientes))
+                       + (parseFloat(s.dias_asignados) - parseFloat(s.dias_usados) - parseFloat(s.dias_pendientes));
+      await client.query(
+        `UPDATE saldos_funcionarios
+         SET arrastre_usados = GREATEST(arrastre_usados - $1, 0),
+             dias_usados     = GREATEST(dias_usados - $2, 0),
+             updated_at = NOW()
+         WHERE id = $3`,
+        [diasArrastre, diasActual, s.id]
+      );
+      await client.query(
+        `INSERT INTO historial_movimientos
+           (funcionario_id, solicitud_id, tipo_permiso_id, tipo_movimiento,
+            dias_movimiento, saldo_anterior, saldo_nuevo, descripcion, usuario_responsable)
+         VALUES ($1,$2,$3,'reintegro',$4,$5,$6,$7,$8)`,
+        [sol.funcionario_id, id, sol.tipo_permiso_id,
+         sol.dias_solicitados, saldoAntes, saldoAntes + parseFloat(sol.dias_solicitados),
+         `Reintegro manual: ${sol.tipo_nombre} del ${sol.fecha_inicio} al ${sol.fecha_fin}${observaciones ? ' — ' + observaciones : ''}`,
+         req.usuario.id]
+      );
+    } else {
+      const saldoAntes = parseFloat(s.dias_asignados) - parseFloat(s.dias_usados) - parseFloat(s.dias_pendientes);
+      await client.query(
+        `UPDATE saldos_funcionarios
+         SET dias_usados = GREATEST(dias_usados - $1, 0),
+             updated_at = NOW()
+         WHERE id = $2`,
+        [sol.dias_solicitados, s.id]
+      );
+      await client.query(
+        `INSERT INTO historial_movimientos
+           (funcionario_id, solicitud_id, tipo_permiso_id, tipo_movimiento,
+            dias_movimiento, saldo_anterior, saldo_nuevo, descripcion, usuario_responsable)
+         VALUES ($1,$2,$3,'reintegro',$4,$5,$6,$7,$8)`,
+        [sol.funcionario_id, id, sol.tipo_permiso_id,
+         sol.dias_solicitados, saldoAntes, saldoAntes + parseFloat(sol.dias_solicitados),
+         `Reintegro manual: ${sol.tipo_nombre} del ${sol.fecha_inicio} al ${sol.fecha_fin}${observaciones ? ' — ' + observaciones : ''}`,
+         req.usuario.id]
+      );
+    }
+
+    await client.query(
+      `UPDATE solicitudes
+       SET estado = 'cancelado', aprobado_por = $1, fecha_resolucion = NOW(),
+           observaciones = $2
+       WHERE id = $3`,
+      [req.usuario.id, observaciones || 'Reintegro manual por administrador', id]
+    );
+
+    await client.query('COMMIT');
+    res.json({ mensaje: 'Días reintegrados correctamente al saldo del funcionario' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    res.status(500).json({ error: 'Error al reintegrar días' });
   } finally {
     client.release();
   }

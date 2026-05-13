@@ -69,6 +69,7 @@ export const solicitudesApi = {
   preAprobar: (id, observaciones) => api.patch(`/solicitudes/${id}/pre-aprobar`, { observaciones }),
   aprobar: (id, observaciones) => api.patch(`/solicitudes/${id}/aprobar`, { observaciones }),
   rechazar: (id, observaciones) => api.patch(`/solicitudes/${id}/rechazar`, { observaciones }),
+  reintegrar: (id, observaciones) => api.patch(`/solicitudes/${id}/reintegrar`, { observaciones }),
 };
 
 export const saldosApi = {

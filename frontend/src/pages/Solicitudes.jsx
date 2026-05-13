@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { FileText, CheckCircle2, XCircle, Search, ShieldCheck } from 'lucide-react';
+import { FileText, CheckCircle2, XCircle, Search, ShieldCheck, RotateCcw } from 'lucide-react';
 import { solicitudesApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import EstadoBadge from '../components/EstadoBadge';
@@ -24,6 +24,7 @@ const ESTADOS = [
   { value: 'pre_aprobado', label: 'Pre-aprobados' },
   { value: 'aprobado',    label: 'Aprobadas' },
   { value: 'rechazado',   label: 'Rechazadas' },
+  { value: 'cancelado',   label: 'Reintegradas' },
 ];
 
 export default function Solicitudes() {
@@ -70,6 +71,21 @@ export default function Solicitudes() {
       cargar();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Error al aprobar');
+    } finally {
+      setProcesando(null);
+    }
+  };
+
+  const reintegrar = async (id) => {
+    const obs = window.prompt('Motivo del reintegro (opcional):') ?? '';
+    if (obs === null) return;
+    setProcesando(id);
+    try {
+      await solicitudesApi.reintegrar(id, obs);
+      toast.success('Días reintegrados al saldo del funcionario');
+      cargar();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al reintegrar');
     } finally {
       setProcesando(null);
     }
@@ -262,6 +278,20 @@ export default function Solicitudes() {
                           <XCircle size={17} />
                         </button>
                       </>
+                    )}
+                    {/* Admin: reintegrar días de una solicitud aprobada */}
+                    {esAdmin && sol.estado === 'aprobado' && (
+                      <button
+                        onClick={() => reintegrar(sol.id)}
+                        disabled={procesando === sol.id}
+                        className="p-2 rounded-lg bg-orange-50 text-orange-600 hover:bg-orange-100 transition-colors disabled:opacity-50"
+                        title="Reintegrar días al saldo"
+                      >
+                        {procesando === sol.id
+                          ? <span className="animate-spin h-4 w-4 border-2 border-orange-500 border-t-transparent rounded-full block" />
+                          : <RotateCcw size={17} />
+                        }
+                      </button>
                     )}
                     {/* Admin: aprobar final pre-aprobadas (o pendientes directamente) */}
                     {esAdmin && (sol.estado === 'pre_aprobado' || sol.estado === 'pendiente') && (

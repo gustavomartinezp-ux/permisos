@@ -52,6 +52,7 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
     fecha_fin: '',
     motivo: '',
   });
+  const [medioDia, setMedioDia] = useState(false);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
 
@@ -63,8 +64,9 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
     }
   }, [funcionario]);
 
-  const diasSolicitados = calcularDiasHabiles(form.fecha_inicio, form.fecha_fin);
   const saldoSel = saldos.find(s => s.tipo_permiso_id == form.tipo_permiso_id);
+  const permiteMedioDia = saldoSel?.permite_medio_dia === true;
+  const diasSolicitados = medioDia ? 0.5 : calcularDiasHabiles(form.fecha_inicio, form.fecha_fin);
 
   const arrastreDisp = saldoSel?.es_feriado_legal
     ? ((saldoSel.saldo_arrastre || 0) - (saldoSel.arrastre_usados || 0) - (saldoSel.arrastre_pendientes || 0))
@@ -91,8 +93,10 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    if (diasSolicitados <= 0) return setError('Las fechas no son válidas');
+    if (!medioDia && diasSolicitados <= 0) return setError('Las fechas no son válidas');
     if (saldoInsuficiente) return setError(`Saldo insuficiente. Disponibles: ${totalDisp} días`);
+
+    const fechaFin = medioDia ? form.fecha_inicio : form.fecha_fin;
 
     setCargando(true);
     try {
@@ -100,7 +104,7 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
         funcionario_id: funcionario.id,
         tipo_permiso_id: parseInt(form.tipo_permiso_id),
         fecha_inicio: form.fecha_inicio,
-        fecha_fin: form.fecha_fin,
+        fecha_fin: fechaFin,
         dias_solicitados: diasSolicitados,
         motivo: form.motivo,
       });
@@ -169,12 +173,36 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
               </select>
             </div>
 
+            {/* Toggle medio día (solo para tipos que lo permiten) */}
+            {permiteMedioDia && (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMedioDia(false)}
+                  className={`flex-1 py-2 text-sm rounded-xl border font-medium transition-all ${
+                    !medioDia ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-dark-600 border-dark-200 hover:border-brand-300'
+                  }`}
+                >
+                  Día completo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMedioDia(true)}
+                  className={`flex-1 py-2 text-sm rounded-xl border font-medium transition-all ${
+                    medioDia ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-dark-600 border-dark-200 hover:border-brand-300'
+                  }`}
+                >
+                  Medio día (desde 13:00)
+                </button>
+              </div>
+            )}
+
             {/* Fechas */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className={medioDia ? '' : 'grid grid-cols-2 gap-3'}>
               <div>
                 <label className="block text-sm font-medium text-dark-700 mb-1.5">
                   <Calendar size={14} className="inline mr-1" />
-                  Fecha inicio
+                  {medioDia ? 'Fecha' : 'Fecha inicio'}
                 </label>
                 <input
                   type="date"
@@ -184,20 +212,22 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
                   required
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-dark-700 mb-1.5">
-                  <Calendar size={14} className="inline mr-1" />
-                  Fecha fin
-                </label>
-                <input
-                  type="date"
-                  value={form.fecha_fin}
-                  min={form.fecha_inicio}
-                  onChange={(e) => setForm({ ...form, fecha_fin: e.target.value })}
-                  className="input-field"
-                  required
-                />
-              </div>
+              {!medioDia && (
+                <div>
+                  <label className="block text-sm font-medium text-dark-700 mb-1.5">
+                    <Calendar size={14} className="inline mr-1" />
+                    Fecha fin
+                  </label>
+                  <input
+                    type="date"
+                    value={form.fecha_fin}
+                    min={form.fecha_inicio}
+                    onChange={(e) => setForm({ ...form, fecha_fin: e.target.value })}
+                    className="input-field"
+                    required
+                  />
+                </div>
+              )}
             </div>
 
             {/* Resumen días */}

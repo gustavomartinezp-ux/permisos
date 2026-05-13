@@ -96,7 +96,7 @@ router.post('/', [
   const errors = validationResult(req);
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-  const { funcionario_id, tipo_permiso_id, fecha_inicio, fecha_fin, dias_solicitados, motivo } = req.body;
+  const { funcionario_id, tipo_permiso_id, fecha_inicio, fecha_fin, dias_solicitados, motivo, jornada_medio_dia } = req.body;
 
   if (req.usuario.rol === 'funcionario' && req.usuario.funcionario_id != funcionario_id) {
     return res.status(403).json({ error: 'Solo puedes solicitar permisos para ti mismo' });
@@ -210,10 +210,10 @@ router.post('/', [
       const nuevaSolicitud = await client.query(
         `INSERT INTO solicitudes
            (funcionario_id, tipo_permiso_id, fecha_inicio, fecha_fin,
-            dias_solicitados, dias_arrastre, dias_periodo_actual, motivo)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+            dias_solicitados, dias_arrastre, dias_periodo_actual, motivo, jornada_medio_dia)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
         [funcionario_id, tipo_permiso_id, fecha_inicio, fecha_fin,
-         dias_solicitados, fromArrastre, fromActual, motivo]
+         dias_solicitados, fromArrastre, fromActual, motivo, jornada_medio_dia || null]
       );
 
       const saldoAnteriorDisponible = totalDisponible;
@@ -263,9 +263,9 @@ router.post('/', [
     const nuevaSolicitud = await client.query(
       `INSERT INTO solicitudes
          (funcionario_id, tipo_permiso_id, fecha_inicio, fecha_fin,
-          dias_solicitados, dias_arrastre, dias_periodo_actual, motivo)
-       VALUES ($1, $2, $3, $4, $5, 0, $5, $6) RETURNING *`,
-      [funcionario_id, tipo_permiso_id, fecha_inicio, fecha_fin, dias_solicitados, motivo]
+          dias_solicitados, dias_arrastre, dias_periodo_actual, motivo, jornada_medio_dia)
+       VALUES ($1, $2, $3, $4, $5, 0, $5, $6, $7) RETURNING *`,
+      [funcionario_id, tipo_permiso_id, fecha_inicio, fecha_fin, dias_solicitados, motivo, jornada_medio_dia || null]
     );
 
     await client.query(

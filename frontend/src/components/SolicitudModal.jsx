@@ -53,6 +53,7 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
     motivo: '',
   });
   const [medioDia, setMedioDia] = useState(false);
+  const [jornadaMedioDia, setJornadaMedioDia] = useState('AM');
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
 
@@ -90,10 +91,19 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
 
   const saldoInsuficiente = !!form.tipo_permiso_id && (diasSolicitados > totalDisp || excedeParcializacion);
 
+  // Devuelve el rango horario según día de semana y jornada
+  const getHorario = (fecha, jornada) => {
+    if (!fecha || !jornada) return '';
+    const dow = new Date(fecha + 'T12:00:00').getDay();
+    if (jornada === 'AM') return dow === 5 ? '08:00 – 12:00 hrs' : '08:00 – 12:30 hrs';
+    return dow === 5 ? '12:00 – 16:00 hrs' : '12:30 – 17:00 hrs';
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     if (!medioDia && diasSolicitados <= 0) return setError('Las fechas no son válidas');
+    if (medioDia && !jornadaMedioDia) return setError('Selecciona la jornada AM o PM');
     if (saldoInsuficiente) return setError(`Saldo insuficiente. Disponibles: ${totalDisp} días`);
 
     const fechaFin = medioDia ? form.fecha_inicio : form.fecha_fin;
@@ -107,6 +117,7 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
         fecha_fin: fechaFin,
         dias_solicitados: diasSolicitados,
         motivo: form.motivo,
+        jornada_medio_dia: medioDia ? jornadaMedioDia : undefined,
       });
       toast.success('Solicitud registrada exitosamente');
       onSuccess?.();
@@ -173,27 +184,64 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
               </select>
             </div>
 
-            {/* Toggle medio día (solo para tipos que lo permiten) */}
+            {/* Toggle día completo / medio día */}
             {permiteMedioDia && (
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setMedioDia(false)}
-                  className={`flex-1 py-2 text-sm rounded-xl border font-medium transition-all ${
-                    !medioDia ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-dark-600 border-dark-200 hover:border-brand-300'
-                  }`}
-                >
-                  Día completo
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMedioDia(true)}
-                  className={`flex-1 py-2 text-sm rounded-xl border font-medium transition-all ${
-                    medioDia ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-dark-600 border-dark-200 hover:border-brand-300'
-                  }`}
-                >
-                  Medio día (desde 13:00)
-                </button>
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setMedioDia(false)}
+                    className={`flex-1 py-2 text-sm rounded-xl border font-medium transition-all ${
+                      !medioDia ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-dark-600 border-dark-200 hover:border-brand-300'
+                    }`}
+                  >
+                    Día completo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMedioDia(true)}
+                    className={`flex-1 py-2 text-sm rounded-xl border font-medium transition-all ${
+                      medioDia ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-dark-600 border-dark-200 hover:border-brand-300'
+                    }`}
+                  >
+                    Medio día
+                  </button>
+                </div>
+
+                {/* Selector AM / PM */}
+                {medioDia && (
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setJornadaMedioDia('AM')}
+                        className={`flex-1 py-2 text-sm rounded-xl border font-medium transition-all ${
+                          jornadaMedioDia === 'AM'
+                            ? 'bg-amber-500 text-white border-amber-500'
+                            : 'bg-white text-dark-600 border-dark-200 hover:border-amber-300'
+                        }`}
+                      >
+                        Jornada AM
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setJornadaMedioDia('PM')}
+                        className={`flex-1 py-2 text-sm rounded-xl border font-medium transition-all ${
+                          jornadaMedioDia === 'PM'
+                            ? 'bg-indigo-500 text-white border-indigo-500'
+                            : 'bg-white text-dark-600 border-dark-200 hover:border-indigo-300'
+                        }`}
+                      >
+                        Jornada PM
+                      </button>
+                    </div>
+                    {form.fecha_inicio && (
+                      <p className="text-xs text-center text-dark-500 bg-dark-50 rounded-lg py-1.5 font-medium">
+                        {jornadaMedioDia === 'AM' ? 'Mañana' : 'Tarde'}: {getHorario(form.fecha_inicio, jornadaMedioDia)}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

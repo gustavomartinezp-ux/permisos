@@ -10,6 +10,13 @@ import EstadoBadge from '../components/EstadoBadge';
 import RechazoModal from '../components/RechazoModal';
 import toast from 'react-hot-toast';
 
+const getHorarioJornada = (fechaISO, jornada) => {
+  if (!jornada || !fechaISO) return null;
+  const dow = new Date(fechaISO + 'T12:00:00').getDay();
+  if (jornada === 'AM') return dow === 5 ? '08:00–12:00 hrs' : '08:00–12:30 hrs';
+  return dow === 5 ? '12:00–16:00 hrs' : '12:30–17:00 hrs';
+};
+
 const SECTORES_COLORES = {
   'Verde':    'bg-green-100 text-green-700',
   'Azul':     'bg-blue-100 text-blue-700',
@@ -227,6 +234,11 @@ export default function Solicitudes() {
                     {format(parseISO(sol.fecha_inicio), 'd MMM', { locale: es })} –{' '}
                     {format(parseISO(sol.fecha_fin), 'd MMM yyyy', { locale: es })}
                   </p>
+                  {sol.jornada_medio_dia && (
+                    <p className={`text-xs font-medium mt-0.5 ${sol.jornada_medio_dia === 'AM' ? 'text-amber-600' : 'text-indigo-600'}`}>
+                      Medio día {sol.jornada_medio_dia} · {getHorarioJornada(sol.fecha_inicio, sol.jornada_medio_dia)}
+                    </p>
+                  )}
                   {sol.motivo && (
                     <p className="text-xs text-dark-400 truncate max-w-xs">{sol.motivo}</p>
                   )}

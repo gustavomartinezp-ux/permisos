@@ -1,14 +1,28 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, XCircle } from 'lucide-react';
+import { X, XCircle, RotateCcw } from 'lucide-react';
 
-export default function RechazoModal({ onClose, onConfirm, cargando }) {
+export default function RechazoModal({
+  onClose, onConfirm, cargando,
+  titulo = 'Rechazar solicitud',
+  labelMotivo = 'Motivo del rechazo',
+  placeholder = 'Ej: Falta de personal, período no disponible...',
+  textoBoton = 'Rechazar',
+  variante = 'red',
+}) {
   const [motivo, setMotivo] = useState('');
 
   const handleSubmit = (e) => {
     e.preventDefault();
     onConfirm(motivo.trim() || null);
   };
+
+  const esNaranja = variante === 'orange';
+  const Icono = esNaranja ? RotateCcw : XCircle;
+  const iconoCls = esNaranja ? 'text-orange-500' : 'text-red-500';
+  const btnCls = esNaranja
+    ? 'bg-orange-500 hover:bg-orange-600'
+    : 'bg-red-500 hover:bg-red-600';
 
   return (
     <AnimatePresence>
@@ -23,8 +37,8 @@ export default function RechazoModal({ onClose, onConfirm, cargando }) {
         >
           <div className="flex items-center justify-between px-6 py-4 border-b border-dark-100">
             <h2 className="font-semibold text-dark-900 flex items-center gap-2">
-              <XCircle size={17} className="text-red-500" />
-              Rechazar solicitud
+              <Icono size={17} className={iconoCls} />
+              {titulo}
             </h2>
             <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-dark-100 text-dark-400">
               <X size={18} />
@@ -33,13 +47,13 @@ export default function RechazoModal({ onClose, onConfirm, cargando }) {
           <form onSubmit={handleSubmit} className="p-6 space-y-4">
             <div>
               <label className="block text-sm font-medium text-dark-700 mb-1.5">
-                Motivo del rechazo <span className="text-dark-400 font-normal">(opcional)</span>
+                {labelMotivo} <span className="text-dark-400 font-normal">(opcional)</span>
               </label>
               <textarea
                 value={motivo}
                 onChange={(e) => setMotivo(e.target.value)}
                 className="input-field resize-none h-24"
-                placeholder="Ej: Falta de personal, período no disponible..."
+                placeholder={placeholder}
                 autoFocus
               />
             </div>
@@ -50,11 +64,11 @@ export default function RechazoModal({ onClose, onConfirm, cargando }) {
               <button
                 type="submit"
                 disabled={cargando}
-                className="flex-1 px-4 py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white font-medium text-sm flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+                className={`flex-1 px-4 py-2.5 rounded-xl ${btnCls} text-white font-medium text-sm flex items-center justify-center gap-2 transition-colors disabled:opacity-50`}
               >
                 {cargando
                   ? <span className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
-                  : <><XCircle size={15} />Rechazar</>
+                  : <><Icono size={15} />{textoBoton}</>
                 }
               </button>
             </div>

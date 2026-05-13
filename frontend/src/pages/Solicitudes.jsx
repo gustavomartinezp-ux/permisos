@@ -36,6 +36,7 @@ export default function Solicitudes() {
   const [busqueda, setBusqueda] = useState('');
   const [procesando, setProcesando] = useState(null);
   const [rechazandoId, setRechazandoId] = useState(null);
+  const [anulandoId, setAnulandoId] = useState(null);
 
   const cargar = useCallback(() => {
     setCargando(true);
@@ -76,16 +77,15 @@ export default function Solicitudes() {
     }
   };
 
-  const reintegrar = async (id) => {
-    const obs = window.prompt('Motivo del reintegro (opcional):') ?? '';
-    if (obs === null) return;
-    setProcesando(id);
+  const confirmarAnulacion = async (obs) => {
+    setProcesando(anulandoId);
     try {
-      await solicitudesApi.reintegrar(id, obs);
-      toast.success('Días reintegrados al saldo del funcionario');
+      await solicitudesApi.reintegrar(anulandoId, obs);
+      toast.success('Permiso anulado — días reintegrados al saldo');
+      setAnulandoId(null);
       cargar();
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Error al reintegrar');
+      toast.error(err.response?.data?.error || 'Error al anular permiso');
     } finally {
       setProcesando(null);
     }
@@ -279,13 +279,13 @@ export default function Solicitudes() {
                         </button>
                       </>
                     )}
-                    {/* Admin: reintegrar días de una solicitud aprobada */}
+                    {/* Admin: anular permiso aprobado y reintegrar días */}
                     {esAdmin && sol.estado === 'aprobado' && (
                       <button
-                        onClick={() => reintegrar(sol.id)}
+                        onClick={() => setAnulandoId(sol.id)}
                         disabled={procesando === sol.id}
                         className="p-2 rounded-lg bg-orange-50 text-orange-600 hover:bg-orange-100 transition-colors disabled:opacity-50"
-                        title="Reintegrar días al saldo"
+                        title="Anular permiso y reintegrar días al saldo"
                       >
                         {procesando === sol.id
                           ? <span className="animate-spin h-4 w-4 border-2 border-orange-500 border-t-transparent rounded-full block" />
@@ -342,6 +342,19 @@ export default function Solicitudes() {
           cargando={procesando === rechazandoId}
           onClose={() => setRechazandoId(null)}
           onConfirm={confirmarRechazo}
+        />
+      )}
+
+      {anulandoId && (
+        <RechazoModal
+          cargando={procesando === anulandoId}
+          onClose={() => setAnulandoId(null)}
+          onConfirm={confirmarAnulacion}
+          titulo="Anular permiso aprobado"
+          labelMotivo="Motivo de la anulación"
+          placeholder="Ej: Error en el registro, solicitud duplicada..."
+          textoBoton="Anular permiso"
+          variante="orange"
         />
       )}
     </div>

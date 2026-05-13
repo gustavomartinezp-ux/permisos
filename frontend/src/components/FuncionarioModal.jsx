@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, User, Mail, Calendar, Briefcase, AlertCircle, Info, Clock, Building2, MapPin, Shield } from 'lucide-react';
+import { X, User, Mail, Calendar, Briefcase, AlertCircle, Info, Clock, Building2, MapPin, Shield, Phone, Hash } from 'lucide-react';
 import { funcionariosApi, tiposPermisosApi, serviciosApi, dispositivosApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
@@ -43,7 +43,8 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
 
   const [form, setForm] = useState({
     rut: '', nombres: '', apellidos: '', cargo: '',
-    servicio_id: '', fecha_ingreso: '', email: '',
+    servicio_id: '', fecha_ingreso: '', fecha_nacimiento: '', email: '',
+    telefono: '', direccion_particular: '', numero_reloj: '',
     tipo_contrato: '', horas_contrato: '', dispositivo_id: '', reemplaza_a: '',
     sector: '', area: '', activo: true,
     rol_sistema: 'funcionario',
@@ -52,6 +53,7 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
     area_supervisa: '',
     ...(funcEdit || {}),
     fecha_ingreso: normFecha(funcEdit?.fecha_ingreso),
+    fecha_nacimiento: normFecha(funcEdit?.fecha_nacimiento),
     rol_sistema: funcEdit?.usuario_rol || 'funcionario',
     tipo_supervisor: funcEdit?.supervisor_sector
       ? 'sector'
@@ -173,6 +175,30 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
                       <Calendar size={12} className="inline mr-1" />Fecha de ingreso
                     </label>
                     <input type="date" value={form.fecha_ingreso || ''} onChange={e => set('fecha_ingreso', e.target.value)} className="input-field" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-dark-700 mb-1.5">
+                      <Calendar size={12} className="inline mr-1" />Fecha de nacimiento
+                    </label>
+                    <input type="date" value={form.fecha_nacimiento || ''} onChange={e => set('fecha_nacimiento', e.target.value)} className="input-field" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-dark-700 mb-1.5">
+                      <Phone size={12} className="inline mr-1" />Teléfono
+                    </label>
+                    <input type="tel" value={form.telefono || ''} onChange={e => set('telefono', e.target.value)} className="input-field" placeholder="+56 9 1234 5678" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-dark-700 mb-1.5">
+                      <Hash size={12} className="inline mr-1" />N° Reloj de asistencia
+                    </label>
+                    <input type="number" min="1" value={form.numero_reloj || ''} onChange={e => set('numero_reloj', e.target.value)} className="input-field" placeholder="Ej: 1042" />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-xs font-medium text-dark-700 mb-1.5">
+                      <MapPin size={12} className="inline mr-1" />Dirección particular
+                    </label>
+                    <input type="text" value={form.direccion_particular || ''} onChange={e => set('direccion_particular', e.target.value)} className="input-field" placeholder="Calle, número, comuna" />
                   </div>
                 </div>
               </section>

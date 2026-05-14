@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Calendar, FileText, AlertCircle, ArrowLeftRight, Info, Download, Printer, CheckCircle2 } from 'lucide-react';
 import { solicitudesApi, saldosApi } from '../api/client';
-import { descargarFormatoPermiso, imprimirFormatoPermiso } from '../utils/reportePDF';
+import { descargarFormularioOficial, imprimirFormularioOficial } from '../utils/reportePDF';
 import toast from 'react-hot-toast';
 
 // Feriados Chile 2025-2026 (espejo del backend para preview instantáneo)
@@ -126,7 +126,13 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
       setSolicitudCreada({
         ...data,
         tipo_nombre: saldoSel?.tipo_nombre,
+        es_feriado_legal: saldoSel?.es_feriado_legal || false,
         jornada_medio_dia: medioDia ? jornadaMedioDia : null,
+        _saldoInfo: {
+          total_dias: totalDisp,
+          saldo_pendiente: Math.max(totalDisp - diasSolicitados, 0),
+          tiene_arrastre: (saldoSel?.saldo_arrastre || 0) > 0,
+        },
       });
     } catch (err) {
       setError(err.response?.data?.error || 'Error al registrar solicitud');
@@ -170,14 +176,14 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
 
             <div className="flex flex-col gap-3">
               <button
-                onClick={() => descargarFormatoPermiso(solicitudCreada, funcionario)}
+                onClick={() => descargarFormularioOficial(solicitudCreada, funcionario, solicitudCreada._saldoInfo)}
                 className="btn-primary justify-center gap-2 py-3"
               >
                 <Download size={17} />
                 Descargar formato oficial (PDF)
               </button>
               <button
-                onClick={() => imprimirFormatoPermiso(solicitudCreada, funcionario)}
+                onClick={() => imprimirFormularioOficial(solicitudCreada, funcionario, solicitudCreada._saldoInfo)}
                 className="btn-secondary justify-center gap-2 py-3"
               >
                 <Printer size={17} />

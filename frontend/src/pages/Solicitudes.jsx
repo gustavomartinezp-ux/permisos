@@ -3,12 +3,24 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { FileText, CheckCircle2, XCircle, Search, ShieldCheck, RotateCcw } from 'lucide-react';
+import { FileText, CheckCircle2, XCircle, Search, ShieldCheck, RotateCcw, Download, Printer } from 'lucide-react';
 import { solicitudesApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { descargarFormularioOficial, imprimirFormularioOficial } from '../utils/reportePDF';
 import EstadoBadge from '../components/EstadoBadge';
 import RechazoModal from '../components/RechazoModal';
 import toast from 'react-hot-toast';
+
+const funcionarioDeSolicitud = (sol) => ({
+  nombres: sol.nombres,
+  apellidos: sol.apellidos,
+  rut: sol.rut,
+  cargo: sol.cargo,
+  servicio: sol.servicio,
+  tipo_contrato: sol.tipo_contrato || '',
+  horas_contrato: sol.horas_contrato || '',
+  dispositivo: sol.dispositivo || sol.cesfam || '',
+});
 
 const getHorarioJornada = (fechaISO, jornada) => {
   if (!jornada || !fechaISO) return null;
@@ -186,11 +198,12 @@ export default function Solicitudes() {
         </div>
       ) : (
         <div className="card overflow-hidden">
-          <div className="hidden md:grid grid-cols-[1fr_1fr_auto_auto_auto] gap-4 px-5 py-3 bg-dark-50 border-b border-dark-100 text-xs font-medium text-dark-500 uppercase tracking-wide">
+          <div className="hidden md:grid grid-cols-[1fr_1fr_auto_auto_auto_auto] gap-4 px-5 py-3 bg-dark-50 border-b border-dark-100 text-xs font-medium text-dark-500 uppercase tracking-wide">
             <span>Funcionario</span>
             <span>Permiso / Período</span>
             <span>Días</span>
             <span>Estado</span>
+            <span>Doc.</span>
             {esSupervisor && <span>Acciones</span>}
           </div>
           <div className="divide-y divide-dark-100">
@@ -200,7 +213,7 @@ export default function Solicitudes() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: index * 0.03 }}
-                className="px-5 py-4 flex flex-col md:grid md:grid-cols-[1fr_1fr_auto_auto_auto] gap-3 md:gap-4 md:items-center"
+                className="px-5 py-4 flex flex-col md:grid md:grid-cols-[1fr_1fr_auto_auto_auto_auto] gap-3 md:gap-4 md:items-center"
               >
                 {/* Funcionario */}
                 <div>
@@ -262,6 +275,24 @@ export default function Solicitudes() {
                       por {sol.aprobador_nombres} {sol.aprobador_apellidos}
                     </p>
                   )}
+                </div>
+
+                {/* PDF / Imprimir */}
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => descargarFormularioOficial(sol, funcionarioDeSolicitud(sol))}
+                    className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+                    title="Descargar PDF oficial"
+                  >
+                    <Download size={15} />
+                  </button>
+                  <button
+                    onClick={() => imprimirFormularioOficial(sol, funcionarioDeSolicitud(sol))}
+                    className="p-2 rounded-lg bg-slate-50 text-slate-600 hover:bg-slate-100 transition-colors"
+                    title="Imprimir formato oficial"
+                  >
+                    <Printer size={15} />
+                  </button>
                 </div>
 
                 {/* Acciones */}

@@ -70,21 +70,25 @@ router.get('/', async (req, res) => {
 
     const solicitudes = result.rows;
 
-    // Adjuntar detalle FIFO a las aprobadas
+    // Adjuntar detalle FIFO a las aprobadas (solo si la tabla ya existe)
     const idsAprobadas = solicitudes.filter(s => s.estado === 'aprobado').map(s => s.id);
     if (idsAprobadas.length > 0) {
-      const consumo = await pool.query(
-        `SELECT con.* FROM horas_compensatorias_consumo con
-         WHERE con.solicitud_id = ANY($1)
-         ORDER BY con.fecha_realizacion ASC`,
-        [idsAprobadas]
-      );
-      const mapa = {};
-      for (const c of consumo.rows) {
-        if (!mapa[c.solicitud_id]) mapa[c.solicitud_id] = [];
-        mapa[c.solicitud_id].push(c);
+      try {
+        const consumo = await pool.query(
+          `SELECT con.* FROM horas_compensatorias_consumo con
+           WHERE con.solicitud_id = ANY($1)
+           ORDER BY con.fecha_realizacion ASC`,
+          [idsAprobadas]
+        );
+        const mapa = {};
+        for (const c of consumo.rows) {
+          if (!mapa[c.solicitud_id]) mapa[c.solicitud_id] = [];
+          mapa[c.solicitud_id].push(c);
+        }
+        for (const s of solicitudes) s.consumo_detalle = mapa[s.id] || [];
+      } catch {
+        for (const s of solicitudes) s.consumo_detalle = [];
       }
-      for (const s of solicitudes) s.consumo_detalle = mapa[s.id] || [];
     }
 
     res.json(solicitudes);

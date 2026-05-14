@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -175,25 +175,59 @@ function RegistrarHorasModal({ funcionarios, onClose, onSuccess }) {
 }
 
 // ─── Modal: solicitar compensación (funcionario) ──────────────────────────────
-function SolicitarCompModal({ funcionario, saldo, onClose, onSuccess }) {
-  const [form, setForm] = useState({ fecha_inicio: '', fecha_fin: '', horas_solicitadas: '', motivo: '' });
+function SolicitarCompModal({ funcionario, saldo, registros = [], onClose, onSuccess }) {
+  const [horas, setHoras]   = useState('');
+  const [fecha, setFecha]   = useState('');
+  const [motivo, setMotivo] = useState('');
   const [cargando, setCargando] = useState(false);
   const [error, setError]       = useState('');
+
+  const horasNum      = parseInt(horas) || 0;
+  const excedeSaldo   = horasNum > saldo;
+  const excedeDia     = horasNum > 8;
+  const saldoRestante = Math.max(saldo - horasNum, 0);
+
+  // Preview FIFO: qué horas se consumirán primero
+  const fifoPreview = useMemo(() => {
+    const activos = [...registros]
+      .filter(r => r.estado === 'activo')
+      .sort((a, b) => new Date(a.fecha_realizacion) - new Date(b.fecha_realizacion));
+    if (!horasNum) return [];
+    let remaining = horasNum;
+    const result = [];
+    for (const r of activos) {
+      if (remaining <= 0) break;
+      const disp = parseFloat(r.horas_compensatorias);
+      const usar = Math.min(disp, remaining);
+      result.push({ ...r, usar });
+      remaining -= usar;
+    }
+    return result;
+  }, [horasNum, registros]);
+
+  const handleHoras = (e) => {
+    const val = e.target.value.replace(/[^0-9]/g, '');
+    setHoras(val);
+    setError('');
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    if (parseFloat(form.horas_solicitadas) > saldo) {
-      return setError(`Saldo insuficiente. Disponible: ${saldo} hrs`);
-    }
+    if (horasNum < 1)   return setError('Ingresa al menos 1 hora entera');
+    if (excedeDia)      return setError('Máximo 8 horas por jornada');
+    if (excedeSaldo)    return setError(`Saldo insuficiente. Disponible: ${saldo} hrs`);
+    if (!fecha)         return setError('Selecciona la fecha de la jornada');
+
     setCargando(true);
     try {
       await solicitudesCompensacionApi.crear({
-        ...form,
-        funcionario_id:   funcionario.id,
-        horas_solicitadas: parseFloat(form.horas_solicitadas),
+        funcionario_id:    funcionario.id,
+        fecha_jornada:     fecha,
+        horas_solicitadas: horasNum,
+        motivo,
       });
-      toast.success('Solicitud registrada');
+      toast.success('Solicitud registrada correctamente');
       onSuccess();
       onClose();
     } catch (err) {
@@ -211,46 +245,112 @@ function SolicitarCompModal({ funcionario, saldo, onClose, onSuccess }) {
     >
       <motion.div
         initial={{ scale: 0.95, y: 16 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 16 }}
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-sm"
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto"
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-dark-100">
-          <h2 className="font-semibold text-dark-900">Solicitar Compensación</h2>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-dark-100 sticky top-0 bg-white z-10">
+          <div>
+            <h2 className="font-semibold text-dark-900">Solicitar Devolución de Horas</h2>
+            <p className="text-xs text-dark-400 mt-0.5">Solo horas enteras — FIFO automático</p>
+          </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-dark-100 text-dark-400"><X size={18} /></button>
         </div>
+
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div className="rounded-xl bg-teal-50 border border-teal-200 p-3 text-center">
-            <p className="text-xs text-teal-600 font-medium">Saldo disponible</p>
-            <p className="text-2xl font-bold text-teal-700">{saldo} hrs</p>
-          </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-dark-700 mb-1.5">Fecha inicio</label>
-              <input type="date" value={form.fecha_inicio}
-                onChange={(e) => setForm({ ...form, fecha_inicio: e.target.value })}
-                className="input-field" required />
+          {/* Saldo actual */}
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-xl bg-teal-50 border border-teal-200 p-2.5">
+              <p className="text-xs text-teal-600 font-medium">Disponible</p>
+              <p className="text-xl font-bold text-teal-700">{saldo}</p>
+              <p className="text-xs text-teal-500">hrs</p>
             </div>
-            <div>
-              <label className="block text-xs font-medium text-dark-700 mb-1.5">Fecha fin</label>
-              <input type="date" value={form.fecha_fin} min={form.fecha_inicio}
-                onChange={(e) => setForm({ ...form, fecha_fin: e.target.value })}
-                className="input-field" required />
+            <div className={`rounded-xl border p-2.5 transition-colors ${
+              horasNum > 0 && !excedeSaldo && !excedeDia ? 'bg-blue-50 border-blue-200' : 'bg-dark-50 border-dark-200'
+            }`}>
+              <p className="text-xs text-dark-500 font-medium">Solicitadas</p>
+              <p className={`text-xl font-bold ${horasNum > 0 && !excedeSaldo ? 'text-blue-700' : 'text-dark-400'}`}>
+                {horasNum || '—'}
+              </p>
+              <p className="text-xs text-dark-400">hrs</p>
+            </div>
+            <div className={`rounded-xl border p-2.5 transition-colors ${
+              excedeSaldo ? 'bg-red-50 border-red-200' : 'bg-emerald-50 border-emerald-200'
+            }`}>
+              <p className="text-xs font-medium text-dark-500">Restante</p>
+              <p className={`text-xl font-bold ${excedeSaldo ? 'text-red-600' : 'text-emerald-700'}`}>
+                {horasNum > 0 ? saldoRestante : saldo}
+              </p>
+              <p className="text-xs text-dark-400">hrs</p>
             </div>
           </div>
 
+          {/* Horas solicitadas */}
           <div>
-            <label className="block text-xs font-medium text-dark-700 mb-1.5">Horas a compensar</label>
-            <input type="number" step="0.25" min="0.25" max={saldo}
-              value={form.horas_solicitadas}
-              onChange={(e) => setForm({ ...form, horas_solicitadas: e.target.value })}
-              className="input-field" placeholder="Ej: 4" required />
+            <label className="block text-xs font-medium text-dark-700 mb-1.5">
+              Horas a devolver <span className="text-red-500">*</span>
+              <span className="text-dark-400 font-normal ml-1">(solo enteras: 1, 2, 3…)</span>
+            </label>
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={horas}
+              onChange={handleHoras}
+              className={`input-field text-lg font-semibold text-center ${excedeSaldo || excedeDia ? 'border-red-400 bg-red-50' : ''}`}
+              placeholder="Ej: 4"
+              required
+            />
+            {excedeDia && (
+              <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                <AlertCircle size={12} /> Máximo 8 horas por jornada diaria
+              </p>
+            )}
+            {excedeSaldo && !excedeDia && (
+              <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                <AlertCircle size={12} /> Supera el saldo disponible ({saldo} hrs)
+              </p>
+            )}
           </div>
 
+          {/* Jornada afectada */}
           <div>
-            <label className="block text-xs font-medium text-dark-700 mb-1.5">Motivo (opcional)</label>
-            <textarea value={form.motivo}
-              onChange={(e) => setForm({ ...form, motivo: e.target.value })}
-              className="input-field resize-none h-16 text-sm" placeholder="Describe brevemente..." />
+            <label className="block text-xs font-medium text-dark-700 mb-1.5">
+              <Calendar size={12} className="inline mr-1" />
+              Jornada afectada <span className="text-red-500">*</span>
+            </label>
+            <input type="date" value={fecha}
+              onChange={(e) => setFecha(e.target.value)}
+              className="input-field" required />
+          </div>
+
+          {/* Preview FIFO */}
+          {fifoPreview.length > 0 && (
+            <div className="rounded-xl bg-amber-50 border border-amber-200 p-3">
+              <p className="text-xs font-semibold text-amber-800 mb-2 flex items-center gap-1">
+                <Clock size={12} /> Consumo FIFO — orden cronológico
+              </p>
+              <div className="space-y-1.5">
+                {fifoPreview.map(r => (
+                  <div key={r.id} className="flex items-center justify-between text-xs">
+                    <span className="text-amber-700">
+                      {format(parseISO(r.fecha_realizacion), 'd MMM yyyy', { locale: es })}
+                      <span className={`ml-1.5 px-1.5 py-0.5 rounded-full font-medium ${TIPO_DIA_BADGE[r.tipo_dia]?.cls}`}>
+                        {TIPO_DIA_BADGE[r.tipo_dia]?.label}
+                      </span>
+                    </span>
+                    <span className="font-semibold text-amber-900">−{r.usar} hrs</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Motivo */}
+          <div>
+            <label className="block text-xs font-medium text-dark-700 mb-1.5">Observaciones (opcional)</label>
+            <textarea value={motivo} onChange={(e) => setMotivo(e.target.value)}
+              className="input-field resize-none h-16 text-sm"
+              placeholder="Motivo de la devolución de horas..." />
           </div>
 
           {error && (
@@ -261,10 +361,14 @@ function SolicitarCompModal({ funcionario, saldo, onClose, onSuccess }) {
 
           <div className="flex gap-3 pt-1">
             <button type="button" onClick={onClose} className="btn-secondary flex-1">Cancelar</button>
-            <button type="submit" disabled={cargando || !form.horas_solicitadas} className="btn-primary flex-1 justify-center">
+            <button
+              type="submit"
+              disabled={cargando || !horas || horasNum < 1 || excedeSaldo || excedeDia}
+              className="btn-primary flex-1 justify-center"
+            >
               {cargando
                 ? <span className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
-                : 'Solicitar'
+                : 'Solicitar devolución'
               }
             </button>
           </div>
@@ -671,6 +775,7 @@ export default function HorasCompensatorias() {
           <SolicitarCompModal
             funcionario={{ id: funcionarioId }}
             saldo={saldo.saldo_disponible}
+            registros={registrosFuncionario}
             onClose={() => setModalSolicitar(false)}
             onSuccess={cargar}
           />

@@ -115,4 +115,10 @@ export const usuariosApi = {
     api.patch(`/usuarios/${id}/email`, { email, password_admin }),
 };
 
+export const reportesApi = {
+  estadisticas: (params = {}) => api.get('/reportes/estadisticas', { params }),
+  permisos:     (params = {}) => api.get('/reportes/permisos',     { params }),
+  ausentismo:   (params = {}) => api.get('/reportes/ausentismo',   { params }),
+};
+
 export default api;

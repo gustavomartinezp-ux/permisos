@@ -10,6 +10,7 @@ import Historial from './pages/Historial';
 import TiposPermisos from './pages/TiposPermisos';
 import Configuracion from './pages/Configuracion';
 import HorasCompensatorias from './pages/HorasCompensatorias';
+import Reportes from './pages/Reportes';
 
 // Redirige según rol al entrar a la app
 function HomeRedirect() {
@@ -62,6 +63,9 @@ function AppRoutes() {
         <Route path="/funcionarios" element={<SoloSupervisor><Funcionarios /></SoloSupervisor>} />
         <Route path="/configuracion" element={<SoloSupervisor><Configuracion /></SoloSupervisor>} />
         <Route path="/tipos-permisos" element={<SoloSupervisor><TiposPermisos /></SoloSupervisor>} />
+
+        {/* Accesibles a todos (backend filtra por funcionario_id) */}
+        <Route path="/reportes"                element={<SoloSupervisor><Reportes /></SoloSupervisor>} />
 
         {/* Accesibles a todos (backend filtra por funcionario_id) */}
         <Route path="/funcionarios/:id"        element={<FuncionarioDetalle />} />

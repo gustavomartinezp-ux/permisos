@@ -15,6 +15,7 @@ const serviciosRoutes          = require('./routes/servicios');
 const usuariosRoutes           = require('./routes/usuarios');
 const horasCompRoutes          = require('./routes/horas-compensatorias');
 const solicitudesCompRoutes    = require('./routes/solicitudes-compensacion');
+const reportesRoutes           = require('./routes/reportes');
 
 const app = express();
 
@@ -49,6 +50,7 @@ app.use('/api/servicios',                serviciosRoutes);
 app.use('/api/usuarios',                 usuariosRoutes);
 app.use('/api/horas-compensatorias',     horasCompRoutes);
 app.use('/api/solicitudes-compensacion', solicitudesCompRoutes);
+app.use('/api/reportes',                 reportesRoutes);
 
 app.get('/api/health', async (req, res) => {
   try {

@@ -7,9 +7,12 @@ const router = express.Router();
 router.use(verificarToken);
 
 router.get('/', async (req, res) => {
+  const soloActivos = req.query.todos !== 'true';
   try {
     const result = await pool.query(
-      `SELECT * FROM tipos_permisos ORDER BY nombre`
+      `SELECT * FROM tipos_permisos
+       ${soloActivos ? 'WHERE activo = TRUE' : ''}
+       ORDER BY nombre`
     );
     res.json(result.rows);
   } catch (err) {

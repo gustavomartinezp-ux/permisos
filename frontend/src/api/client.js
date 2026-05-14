@@ -88,6 +88,22 @@ export const dashboardApi = {
   stats: (anio) => api.get('/dashboard/stats', { params: { anio } }),
 };
 
+export const horasCompensatoriasApi = {
+  listar:           (params = {}) => api.get('/horas-compensatorias', { params }),
+  porFuncionario:   (id) => api.get(`/horas-compensatorias/funcionario/${id}`),
+  saldo:            (id) => api.get(`/horas-compensatorias/saldo/${id}`),
+  registrar:        (data) => api.post('/horas-compensatorias', data),
+  anular:           (id) => api.delete(`/horas-compensatorias/${id}`),
+};
+
+export const solicitudesCompensacionApi = {
+  listar:    (params = {}) => api.get('/solicitudes-compensacion', { params }),
+  crear:     (data) => api.post('/solicitudes-compensacion', data),
+  aprobar:   (id, observaciones) => api.patch(`/solicitudes-compensacion/${id}/aprobar`, { observaciones }),
+  rechazar:  (id, observaciones) => api.patch(`/solicitudes-compensacion/${id}/rechazar`, { observaciones }),
+  cancelar:  (id) => api.patch(`/solicitudes-compensacion/${id}/cancelar`),
+};
+
 export const usuariosApi = {
   listar: () => api.get('/usuarios'),
   actualizar: (id, data) => api.put(`/usuarios/${id}`, data),

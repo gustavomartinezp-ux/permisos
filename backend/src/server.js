@@ -9,10 +9,12 @@ const solicitudesRoutes = require('./routes/solicitudes');
 const saldosRoutes = require('./routes/saldos');
 const historialRoutes = require('./routes/historial');
 const dashboardRoutes = require('./routes/dashboard');
-const tiposPermisosRoutes = require('./routes/tipos-permisos');
-const dispositivosRoutes  = require('./routes/dispositivos');
-const serviciosRoutes     = require('./routes/servicios');
-const usuariosRoutes      = require('./routes/usuarios');
+const tiposPermisosRoutes      = require('./routes/tipos-permisos');
+const dispositivosRoutes       = require('./routes/dispositivos');
+const serviciosRoutes          = require('./routes/servicios');
+const usuariosRoutes           = require('./routes/usuarios');
+const horasCompRoutes          = require('./routes/horas-compensatorias');
+const solicitudesCompRoutes    = require('./routes/solicitudes-compensacion');
 
 const app = express();
 
@@ -42,9 +44,11 @@ app.use('/api/saldos', saldosRoutes);
 app.use('/api/historial', historialRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/tipos-permisos', tiposPermisosRoutes);
-app.use('/api/dispositivos',  dispositivosRoutes);
-app.use('/api/servicios',     serviciosRoutes);
-app.use('/api/usuarios',      usuariosRoutes);
+app.use('/api/dispositivos',              dispositivosRoutes);
+app.use('/api/servicios',                serviciosRoutes);
+app.use('/api/usuarios',                 usuariosRoutes);
+app.use('/api/horas-compensatorias',     horasCompRoutes);
+app.use('/api/solicitudes-compensacion', solicitudesCompRoutes);
 
 app.get('/api/health', async (req, res) => {
   try {

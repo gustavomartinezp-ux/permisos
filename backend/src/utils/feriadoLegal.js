@@ -134,10 +134,40 @@ async function verificarSolapamiento(client, funcionarioId, fechaInicio, fechaFi
   return result.rows.length > 0;
 }
 
+// Reglas fijas por código de tipo especial
+const REGLAS_ESPECIALES = {
+  ESP_FALLECIMIENTO_HIJO: { dias_fijos: 10, tipo_dias: 'corridos',          normativa: 'Art. 108 bis Ley 18.883', requiere_certificado: true },
+  ESP_HIJO_GESTACION:     { dias_fijos: 7,  tipo_dias: 'habiles',            normativa: 'Art. 108 bis Ley 18.883', requiere_certificado: true },
+  ESP_CONYUGE:            { dias_fijos: 7,  tipo_dias: 'corridos',          normativa: 'Art. 108 bis Ley 18.883', requiere_certificado: true },
+  ESP_FAMILIAR_DIRECTO:   { dias_fijos: 4,  tipo_dias: 'habiles',            normativa: 'Art. 108 Ley 18.883',    requiere_certificado: true },
+  ESP_NACIMIENTO:         { dias_fijos: 5,  tipo_dias: 'habiles',            normativa: 'Art. 195 Código del Trabajo', requiere_certificado: false },
+  ESP_MATRIMONIO:         { dias_fijos: 5,  tipo_dias: 'habiles_continuos', normativa: 'Art. 207 bis Código del Trabajo', requiere_certificado: false },
+};
+
+// Calcula fecha_fin para un permiso especial de días fijos
+function calcularFechaFinEspecial(fechaInicio, diasFijos, tipoDias) {
+  const start = new Date(fechaInicio + 'T12:00:00');
+  if (tipoDias === 'corridos') {
+    const end = new Date(start);
+    end.setDate(end.getDate() + diasFijos - 1);
+    return end.toISOString().split('T')[0];
+  }
+  // habiles / habiles_continuos: contar días hábiles avanzando
+  let count = 0;
+  const cur = new Date(start);
+  while (count < diasFijos) {
+    if (esDiaHabil(cur)) count++;
+    if (count < diasFijos) cur.setDate(cur.getDate() + 1);
+  }
+  return cur.toISOString().split('T')[0];
+}
+
 module.exports = {
   esDiaHabil,
   calcularDiasHabiles,
   calcularDistribucion,
+  calcularFechaFinEspecial,
   validarBloqueObligatorio10Dias,
   verificarSolapamiento,
+  REGLAS_ESPECIALES,
 };

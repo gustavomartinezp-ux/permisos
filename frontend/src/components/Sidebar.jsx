@@ -3,17 +3,18 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   LayoutDashboard, Users, FileText, Clock, LogOut, Cross,
-  ChevronRight, Settings, UserCircle, KeyRound,
+  ChevronRight, Settings, UserCircle, KeyRound, Hourglass,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import CambiarPasswordModal from './CambiarPasswordModal';
 
 const NAV_SUPERVISOR = [
-  { to: '/dashboard',     label: 'Dashboard',     icon: LayoutDashboard },
-  { to: '/funcionarios',  label: 'Funcionarios',  icon: Users },
-  { to: '/solicitudes',   label: 'Solicitudes',   icon: FileText },
-  { to: '/historial',     label: 'Historial',     icon: Clock },
-  { to: '/configuracion', label: 'Configuración', icon: Settings },
+  { to: '/dashboard',             label: 'Dashboard',        icon: LayoutDashboard },
+  { to: '/funcionarios',          label: 'Funcionarios',     icon: Users },
+  { to: '/solicitudes',           label: 'Solicitudes',      icon: FileText },
+  { to: '/horas-compensatorias',  label: 'Hrs. Compensat.',  icon: Hourglass },
+  { to: '/historial',             label: 'Historial',        icon: Clock },
+  { to: '/configuracion',         label: 'Configuración',    icon: Settings },
 ];
 
 export default function Sidebar({ mobile = false, onClose }) {
@@ -32,9 +33,10 @@ export default function Sidebar({ mobile = false, onClose }) {
 
   // Nav para funcionario: solo sus propias secciones
   const navFuncionario = [
-    { to: `/funcionarios/${usuario?.funcionario_id}`, label: 'Mi Perfil', icon: UserCircle },
-    { to: '/solicitudes',  label: 'Mis Solicitudes', icon: FileText },
-    { to: '/historial',    label: 'Mi Historial',    icon: Clock },
+    { to: `/funcionarios/${usuario?.funcionario_id}`, label: 'Mi Perfil',          icon: UserCircle },
+    { to: '/solicitudes',            label: 'Mis Solicitudes',    icon: FileText },
+    { to: '/horas-compensatorias',   label: 'Hrs. Compensatorias',icon: Hourglass },
+    { to: '/historial',              label: 'Mi Historial',       icon: Clock },
   ];
 
   const navItems = esFuncionario ? navFuncionario : NAV_SUPERVISOR;

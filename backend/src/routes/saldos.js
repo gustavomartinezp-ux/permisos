@@ -17,7 +17,7 @@ router.get('/funcionario/:id', async (req, res) => {
     const result = await pool.query(
       `SELECT sf.*,
               tp.nombre AS tipo_nombre, tp.codigo, tp.color, tp.descripcion,
-              tp.es_feriado_legal, tp.permite_medio_dia,
+              tp.es_feriado_legal, tp.permite_medio_dia, tp.jornada_forzada,
               (sf.dias_asignados - sf.dias_usados - sf.dias_pendientes) AS dias_disponibles,
               GREATEST(sf.saldo_arrastre - sf.arrastre_usados - sf.arrastre_pendientes, 0) AS arrastre_disponible,
               (sf.dias_asignados - sf.dias_usados - sf.dias_pendientes

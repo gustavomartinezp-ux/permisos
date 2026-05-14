@@ -5,6 +5,7 @@ const { verificarToken, soloAdmin, adminOSupervisor } = require('../middleware/a
 const {
   calcularDiasHabiles,
   calcularDistribucion,
+  calcularFechaFinEspecial,
   validarBloqueObligatorio10Dias,
   verificarSolapamiento,
 } = require('../utils/feriadoLegal');
@@ -53,7 +54,7 @@ router.get('/', async (req, res) => {
          f.nombres, f.apellidos, f.rut, f.cargo, f.sector, f.area AS funcionario_area,
          s.nombre AS servicio,
          tp.nombre AS tipo_nombre, tp.codigo AS tipo_codigo, tp.color,
-         tp.es_feriado_legal,
+         tp.es_feriado_legal, tp.es_especial, tp.tipo_especial,
          aprobador.nombres AS aprobador_nombres,
          aprobador.apellidos AS aprobador_apellidos,
          preap_func.nombres AS preaprobador_nombres,
@@ -119,12 +120,67 @@ router.post('/', [
 
     // Verificar tipo de permiso
     const tipoResult = await client.query(
-      `SELECT es_feriado_legal FROM tipos_permisos WHERE id = $1`,
+      `SELECT * FROM tipos_permisos WHERE id = $1`,
       [tipo_permiso_id]
     );
-    const esFeriadoLegal = tipoResult.rows[0]?.es_feriado_legal === true;
+    const tipo = tipoResult.rows[0];
+    const esFeriadoLegal  = tipo?.es_feriado_legal  === true;
+    const esEspecial      = tipo?.es_especial       === true;
+    const jornadaForzada  = tipo?.jornada_forzada   || null;
 
-    // Verificar solapamiento de fechas (aplica a todos los tipos)
+    // Tipos con jornada forzada (ej: ESTAMENTO) solo permiten media jornada
+    if (jornadaForzada && dias_solicitados !== 0.5) {
+      await client.query('ROLLBACK');
+      const label = jornadaForzada === 'PM' ? 'media jornada PM (13:00 hrs)' : 'media jornada AM';
+      return res.status(400).json({
+        error: `Este tipo de permiso solo puede solicitarse como ${label} según normativa institucional`,
+      });
+    }
+    // Forzar jornada_medio_dia en backend si el tipo lo exige
+    const jornadaMedioDiaFinal = jornadaForzada || jornada_medio_dia || null;
+
+    // ── Lógica permiso especial (sin saldo, fecha_fin calculada en backend) ──
+    if (esEspecial) {
+      const diasFijos  = tipo.dias_fijos;
+      const tipoDias   = tipo.tipo_dias;
+      const fechaFinCalc = calcularFechaFinEspecial(fecha_inicio, diasFijos, tipoDias);
+
+      const solapaEsp = await verificarSolapamiento(client, funcionario_id, fecha_inicio, fechaFinCalc);
+      if (solapaEsp) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Las fechas se solapan con una solicitud existente' });
+      }
+
+      const nuevaSolicitud = await client.query(
+        `INSERT INTO solicitudes
+           (funcionario_id, tipo_permiso_id, fecha_inicio, fecha_fin,
+            dias_solicitados, dias_arrastre, dias_periodo_actual, motivo)
+         VALUES ($1,$2,$3,$4,$5,0,0,$6) RETURNING *`,
+        [funcionario_id, tipo_permiso_id, fecha_inicio, fechaFinCalc, diasFijos, motivo]
+      );
+
+      await client.query(
+        `INSERT INTO historial_movimientos
+           (funcionario_id, solicitud_id, tipo_permiso_id, tipo_movimiento,
+            dias_movimiento, saldo_anterior, saldo_nuevo, descripcion, usuario_responsable)
+         VALUES ($1,$2,$3,'reserva',$4,0,0,$5,$6)`,
+        [
+          funcionario_id, nuevaSolicitud.rows[0].id, tipo_permiso_id, diasFijos,
+          `Permiso especial: ${tipo.nombre} — ${diasFijos} día(s) ${tipoDias} (sin descuento de saldo)`,
+          req.usuario.id,
+        ]
+      );
+
+      await client.query('COMMIT');
+      return res.status(201).json({
+        ...nuevaSolicitud.rows[0],
+        es_especial: true,
+        tipo_especial: tipo.tipo_especial,
+        tipo_nombre: tipo.nombre,
+      });
+    }
+
+    // Verificar solapamiento de fechas (aplica a tipos normales y feriado legal)
     const solapa = await verificarSolapamiento(client, funcionario_id, fecha_inicio, fecha_fin);
     if (solapa) {
       await client.query('ROLLBACK');
@@ -213,7 +269,7 @@ router.post('/', [
             dias_solicitados, dias_arrastre, dias_periodo_actual, motivo, jornada_medio_dia)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
         [funcionario_id, tipo_permiso_id, fecha_inicio, fecha_fin,
-         dias_solicitados, fromArrastre, fromActual, motivo, jornada_medio_dia || null]
+         dias_solicitados, fromArrastre, fromActual, motivo, jornadaMedioDiaFinal]
       );
 
       const saldoAnteriorDisponible = totalDisponible;
@@ -265,7 +321,7 @@ router.post('/', [
          (funcionario_id, tipo_permiso_id, fecha_inicio, fecha_fin,
           dias_solicitados, dias_arrastre, dias_periodo_actual, motivo, jornada_medio_dia)
        VALUES ($1, $2, $3, $4, $5, 0, $5, $6, $7) RETURNING *`,
-      [funcionario_id, tipo_permiso_id, fecha_inicio, fecha_fin, dias_solicitados, motivo, jornada_medio_dia || null]
+      [funcionario_id, tipo_permiso_id, fecha_inicio, fecha_fin, dias_solicitados, motivo, jornadaMedioDiaFinal]
     );
 
     await client.query(
@@ -352,7 +408,7 @@ router.patch('/:id/aprobar', soloAdmin, async (req, res) => {
     await client.query('BEGIN');
 
     const solicitud = await client.query(
-      `SELECT sol.*, tp.nombre AS tipo_nombre, tp.es_feriado_legal
+      `SELECT sol.*, tp.nombre AS tipo_nombre, tp.es_feriado_legal, tp.es_especial
        FROM solicitudes sol
        JOIN tipos_permisos tp ON sol.tipo_permiso_id = tp.id
        WHERE sol.id = $1 AND sol.estado IN ('pendiente', 'pre_aprobado')
@@ -366,6 +422,28 @@ router.patch('/:id/aprobar', soloAdmin, async (req, res) => {
     }
 
     const sol = solicitud.rows[0];
+
+    // ── Aprobar permiso especial (sin movimiento de saldo) ────────────────
+    if (sol.es_especial) {
+      await client.query(
+        `UPDATE solicitudes SET estado='aprobado', aprobado_por=$1, fecha_resolucion=NOW(), observaciones=$2 WHERE id=$3`,
+        [req.usuario.id, observaciones || null, id]
+      );
+      await client.query(
+        `INSERT INTO historial_movimientos
+           (funcionario_id, solicitud_id, tipo_permiso_id, tipo_movimiento,
+            dias_movimiento, saldo_anterior, saldo_nuevo, descripcion, usuario_responsable)
+         VALUES ($1,$2,$3,'descuento',$4,0,0,$5,$6)`,
+        [
+          sol.funcionario_id, id, sol.tipo_permiso_id, sol.dias_solicitados,
+          `Permiso especial aprobado: ${sol.tipo_nombre} del ${sol.fecha_inicio} al ${sol.fecha_fin}`,
+          req.usuario.id,
+        ]
+      );
+      await client.query('COMMIT');
+      return res.json({ mensaje: 'Solicitud aprobada correctamente' });
+    }
+
     const anio = new Date(sol.fecha_inicio).getFullYear();
 
     const saldo = await client.query(
@@ -499,7 +577,7 @@ router.patch('/:id/rechazar', adminOSupervisor, async (req, res) => {
     await client.query('BEGIN');
 
     const solicitud = await client.query(
-      `SELECT sol.*, tp.es_feriado_legal, tp.nombre AS tipo_nombre, f.sector
+      `SELECT sol.*, tp.es_feriado_legal, tp.es_especial, tp.nombre AS tipo_nombre, f.sector
        FROM solicitudes sol
        JOIN tipos_permisos tp ON sol.tipo_permiso_id = tp.id
        JOIN funcionarios f ON sol.funcionario_id = f.id
@@ -524,6 +602,27 @@ router.patch('/:id/rechazar', adminOSupervisor, async (req, res) => {
     if (req.usuario.rol === 'supervisor' && req.usuario.sector && sol.sector !== req.usuario.sector) {
       await client.query('ROLLBACK');
       return res.status(403).json({ error: 'No puede rechazar solicitudes de otro sector' });
+    }
+
+    // ── Rechazar permiso especial (sin movimiento de saldo) ───────────────
+    if (sol.es_especial) {
+      await client.query(
+        `UPDATE solicitudes SET estado='rechazado', aprobado_por=$1, fecha_resolucion=NOW(), observaciones=$2 WHERE id=$3`,
+        [req.usuario.id, observaciones || null, id]
+      );
+      await client.query(
+        `INSERT INTO historial_movimientos
+           (funcionario_id, solicitud_id, tipo_permiso_id, tipo_movimiento,
+            dias_movimiento, saldo_anterior, saldo_nuevo, descripcion, usuario_responsable)
+         VALUES ($1,$2,$3,'reintegro',$4,0,0,$5,$6)`,
+        [
+          sol.funcionario_id, id, sol.tipo_permiso_id, sol.dias_solicitados,
+          `Permiso especial rechazado: ${sol.tipo_nombre}`,
+          req.usuario.id,
+        ]
+      );
+      await client.query('COMMIT');
+      return res.json({ mensaje: 'Solicitud rechazada' });
     }
 
     const anio = new Date(sol.fecha_inicio).getFullYear();
@@ -632,7 +731,7 @@ router.patch('/:id/reintegrar', soloAdmin, async (req, res) => {
     await client.query('BEGIN');
 
     const solicitud = await client.query(
-      `SELECT sol.*, tp.es_feriado_legal, tp.nombre AS tipo_nombre
+      `SELECT sol.*, tp.es_feriado_legal, tp.es_especial, tp.nombre AS tipo_nombre
        FROM solicitudes sol
        JOIN tipos_permisos tp ON sol.tipo_permiso_id = tp.id
        WHERE sol.id = $1 AND sol.estado = 'aprobado'
@@ -646,6 +745,28 @@ router.patch('/:id/reintegrar', soloAdmin, async (req, res) => {
     }
 
     const sol = solicitud.rows[0];
+
+    // ── Reintegrar permiso especial (sin movimiento de saldo) ────────────
+    if (sol.es_especial) {
+      await client.query(
+        `INSERT INTO historial_movimientos
+           (funcionario_id, solicitud_id, tipo_permiso_id, tipo_movimiento,
+            dias_movimiento, saldo_anterior, saldo_nuevo, descripcion, usuario_responsable)
+         VALUES ($1,$2,$3,'reintegro',$4,0,0,$5,$6)`,
+        [
+          sol.funcionario_id, id, sol.tipo_permiso_id, sol.dias_solicitados,
+          `Reintegro manual (especial): ${sol.tipo_nombre} del ${sol.fecha_inicio} al ${sol.fecha_fin}${observaciones ? ' — ' + observaciones : ''}`,
+          req.usuario.id,
+        ]
+      );
+      await client.query(
+        `UPDATE solicitudes SET estado='cancelado', aprobado_por=$1, fecha_resolucion=NOW(), observaciones=$2 WHERE id=$3`,
+        [req.usuario.id, observaciones || 'Reintegro manual por administrador', id]
+      );
+      await client.query('COMMIT');
+      return res.json({ mensaje: 'Solicitud cancelada correctamente' });
+    }
+
     const anio = new Date(sol.fecha_inicio).getFullYear();
     const diasArrastre = parseFloat(sol.dias_arrastre) || 0;
     const diasActual = parseFloat(sol.dias_periodo_actual) || parseFloat(sol.dias_solicitados);

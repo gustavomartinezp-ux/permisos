@@ -594,15 +594,29 @@ const TIPOS_ESPECIALES = [
 ];
 
 function detectarTipoFormulario(solicitud) {
+  if (solicitud.es_especial) return 'especial';
   if (solicitud.es_feriado_legal) return 'feriado';
-  const n = (solicitud.tipo_nombre || '').toLowerCase();
+  const n = (solicitud.tipo_nombre || solicitud.tipo_codigo || '').toLowerCase();
   if (n.includes('feriado')) return 'feriado';
-  const especial = ['fallecimiento', 'nacimiento', 'matrimonio', 'adopcion', 'adopción', 'casamiento', 'union civil', 'unión civil', 'permiso especial'];
-  if (especial.some(k => n.includes(k))) return 'especial';
+  const claves = ['fallecimiento', 'nacimiento', 'matrimonio', 'adopcion', 'adopción', 'casamiento', 'union civil', 'unión civil', 'permiso especial', 'esp_'];
+  if (claves.some(k => n.includes(k))) return 'especial';
   return 'administrativo';
 }
 
-function detectarSubtipoEspecial(tipo_nombre) {
+const MAPA_TIPO_ESPECIAL = {
+  ESP_FALLECIMIENTO_HIJO: 'FALLECIMIENTO HIJO*',
+  ESP_HIJO_GESTACION:     'FALLECIMIENTO HIJO EN GESTACION*',
+  ESP_CONYUGE:            'FALLECIMIENTO CONYUGE O CONVIVIENTE CIVIL*',
+  ESP_FAMILIAR_DIRECTO:   'FALLECIMIENTO PADRE, MADRE O HERMANO*',
+  ESP_NACIMIENTO:         'NACIMIENTO O ADOPCION HIJO*',
+  ESP_MATRIMONIO:         'CASAMIENTO O UNION CIVIL*',
+};
+
+function detectarSubtipoEspecial(tipo_nombre, tipo_especial) {
+  if (tipo_especial && MAPA_TIPO_ESPECIAL[tipo_especial]) {
+    const label = MAPA_TIPO_ESPECIAL[tipo_especial];
+    return TIPOS_ESPECIALES.find(t => t.label === label) || null;
+  }
   const n = (tipo_nombre || '').toLowerCase();
   for (const t of TIPOS_ESPECIALES) {
     if (t.keywords.some(k => n.includes(k))) return t;
@@ -1074,7 +1088,7 @@ function construirFormularioEspecial(solicitud, funcionario) {
   y += 6;
 
   // Tabla de tipos de permiso especial
-  const subtipoActivo = detectarSubtipoEspecial(solicitud.tipo_nombre);
+  const subtipoActivo = detectarSubtipoEspecial(solicitud.tipo_nombre, solicitud.tipo_especial);
   const colDesde = derecho - 40;
   const colHasta = derecho - 16;
 

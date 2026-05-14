@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
-  LayoutDashboard, Users, FileText, Clock, LogOut, Cross,
+  LayoutDashboard, Users, FileText, Clock, LogOut,
   ChevronRight, Settings, UserCircle, KeyRound, Hourglass,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -44,9 +44,9 @@ export default function Sidebar({ mobile = false, onClose }) {
   return (
     <aside className="flex flex-col h-full bg-dark-900 text-white">
       {/* Logo */}
-      <div className="flex items-center gap-3 px-5 py-5 border-b border-white/10">
-        <div className="w-9 h-9 rounded-xl bg-brand-500 flex items-center justify-center flex-shrink-0">
-          <Cross size={18} className="text-white" />
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-white/10">
+        <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center flex-shrink-0 overflow-hidden shadow">
+          <img src="/logo.png" alt="Logo" className="w-full h-full object-contain" />
         </div>
         <div className="min-w-0">
           <p className="font-semibold text-sm truncate">CESFAM Los Cerros</p>

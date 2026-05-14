@@ -44,8 +44,8 @@ export default function Login() {
         <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl overflow-hidden">
           {/* Header */}
           <div className="bg-gradient-to-r from-brand-600 to-brand-700 px-8 pt-8 pb-6 text-center">
-            <div className="w-14 h-14 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <Cross size={26} className="text-white" />
+            <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg overflow-hidden">
+              <img src="/logo.png" alt="CESFAM Los Cerros" className="w-full h-full object-contain" />
             </div>
             <h1 className="text-xl font-bold text-white">CESFAM Los Cerros</h1>
             <p className="text-brand-200 text-sm mt-1">Sistema de Gestión de Permisos</p>

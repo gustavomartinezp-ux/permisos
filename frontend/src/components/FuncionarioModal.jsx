@@ -43,14 +43,10 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
 
   const [form, setForm] = useState({
     rut: '', nombres: '', apellidos: '', cargo: '',
-    servicio_id: '', fecha_ingreso: '', fecha_nacimiento: '', email: '',
+    servicio_id: '', email: '',
     telefono: '', direccion_particular: '', numero_reloj: '',
     tipo_contrato: '', horas_contrato: '', dispositivo_id: '', reemplaza_a: '',
     sector: '', area: '', activo: true,
-    rol_sistema: 'funcionario',
-    tipo_supervisor: 'sector',
-    sector_supervisa: '',
-    area_supervisa: '',
     ...(funcEdit || {}),
     fecha_ingreso: normFecha(funcEdit?.fecha_ingreso),
     fecha_nacimiento: normFecha(funcEdit?.fecha_nacimiento),

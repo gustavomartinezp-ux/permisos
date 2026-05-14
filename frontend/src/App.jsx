@@ -69,6 +69,11 @@ function AppRoutes() {
         <Route path="/reportes"                element={<SoloSupervisor><Reportes /></SoloSupervisor>} />
         <Route path="/suplencias"              element={<SoloSupervisor><Suplencias /></SoloSupervisor>} />
 
+        {/* Grupos contractuales */}
+        <Route path="/funcionarios"            element={<SoloSupervisor><Funcionarios grupo="contrata" /></SoloSupervisor>} />
+        <Route path="/honorarios"              element={<SoloSupervisor><Funcionarios grupo="honorarios" /></SoloSupervisor>} />
+        <Route path="/suplentes"               element={<SoloSupervisor><Funcionarios grupo="suplentes" /></SoloSupervisor>} />
+
         {/* Accesibles a todos (backend filtra por funcionario_id) */}
         <Route path="/funcionarios/:id"        element={<FuncionarioDetalle />} />
         <Route path="/solicitudes"             element={<Solicitudes />} />

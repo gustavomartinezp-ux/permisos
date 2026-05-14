@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, User, Mail, Calendar, Briefcase, AlertCircle, Info, Clock, Building2, MapPin, Shield, Phone, Hash } from 'lucide-react';
+import { X, User, Mail, Calendar, Briefcase, AlertCircle, Info, Clock, Building2, MapPin, Shield, Phone, Hash, AlertTriangle } from 'lucide-react';
 import { funcionariosApi, tiposPermisosApi, serviciosApi, dispositivosApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
@@ -32,7 +32,13 @@ const formatRut = (value) => {
   return `${formatted}-${dv}`;
 };
 
-export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuccess }) {
+const TIPOS_CONTRATO_POR_GRUPO = {
+  contrata:   ['Indefinido', 'Plazo Fijo'],
+  honorarios: ['Honorarios'],
+  suplentes:  ['Suplencia'],
+};
+
+export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuccess, grupoInicial }) {
   const esEdicion = !!funcEdit;
   const { esAdmin } = useAuth();
   const [tipos, setTipos] = useState([]);
@@ -41,15 +47,23 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
   const [todosFunc, setTodosFunc] = useState([]);
   const normFecha = (f) => (f ? String(f).split('T')[0] : '');
 
+  // Si se abre desde un grupo específico, pre-seleccionamos el tipo de contrato
+  const tipoContratoInicial = grupoInicial && !funcEdit
+    ? TIPOS_CONTRATO_POR_GRUPO[grupoInicial]?.[0] || ''
+    : funcEdit?.tipo_contrato || '';
+
   const [form, setForm] = useState({
     rut: '', nombres: '', apellidos: '', cargo: '',
     servicio_id: '', email: '',
     telefono: '', direccion_particular: '', numero_reloj: '',
-    tipo_contrato: '', horas_contrato: '', dispositivo_id: '', reemplaza_a: '',
+    tipo_contrato: tipoContratoInicial,
+    horas_contrato: '', dispositivo_id: '', reemplaza_a: '',
     sector: '', area: '', activo: true,
+    convenio_honorarios: '', prestacion: '', fecha_termino_contrato: '',
     ...(funcEdit || {}),
     fecha_ingreso: normFecha(funcEdit?.fecha_ingreso),
     fecha_nacimiento: normFecha(funcEdit?.fecha_nacimiento),
+    fecha_termino_contrato: normFecha(funcEdit?.fecha_termino_contrato),
     rol_sistema: funcEdit?.usuario_rol || 'funcionario',
     tipo_supervisor: funcEdit?.supervisor_sector
       ? 'sector'
@@ -228,6 +242,21 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
                     </div>
                   )}
 
+                  {/* Fecha término contrato — Honorarios y Suplencia */}
+                  {(form.tipo_contrato === 'Honorarios' || form.tipo_contrato === 'Suplencia' || form.tipo_contrato === 'Plazo Fijo') && (
+                    <div>
+                      <label className="block text-xs font-medium text-dark-700 mb-1.5">
+                        <Calendar size={12} className="inline mr-1" />Fecha término contrato
+                      </label>
+                      <input
+                        type="date"
+                        value={form.fecha_termino_contrato || ''}
+                        onChange={e => set('fecha_termino_contrato', e.target.value)}
+                        className="input-field"
+                      />
+                    </div>
+                  )}
+
                   {/* Reemplaza a — solo si tipo es Suplencia */}
                   {form.tipo_contrato === 'Suplencia' && (
                     <div className="col-span-2">
@@ -242,6 +271,45 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
                   )}
                 </div>
               </section>
+
+              {/* Datos específicos Honorarios */}
+              {form.tipo_contrato === 'Honorarios' && (
+                <section>
+                  <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                    <Briefcase size={12} />Datos de honorarios
+                  </p>
+                  <div className="p-4 bg-amber-50 rounded-xl border border-amber-100 space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium text-dark-700 mb-1.5">Convenio / Programa</label>
+                      <select
+                        value={form.convenio_honorarios || ''}
+                        onChange={e => set('convenio_honorarios', e.target.value)}
+                        className="input-field text-sm"
+                      >
+                        <option value="">— Sin convenio —</option>
+                        {PROGRAMAS.map(p => <option key={p} value={p}>{p}</option>)}
+                        <option value="Convenio Salud Pública">Convenio Salud Pública</option>
+                        <option value="Convenio JUNAEB">Convenio JUNAEB</option>
+                        <option value="Convenio FONASA">Convenio FONASA</option>
+                        <option value="Otro">Otro</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-dark-700 mb-1.5">Tipo de prestación</label>
+                      <input
+                        type="text"
+                        value={form.prestacion || ''}
+                        onChange={e => set('prestacion', e.target.value)}
+                        className="input-field text-sm"
+                        placeholder="Ej: Atención médica, Kinesioterapia, Nutrición..."
+                      />
+                    </div>
+                    <div className="p-2.5 bg-amber-100/60 rounded-lg text-xs text-amber-700">
+                      Los funcionarios a honorarios no tienen derecho a feriado legal institucional ni saldo de vacaciones.
+                    </div>
+                  </div>
+                </section>
+              )}
 
               {/* Lugar y servicio */}
               <section>

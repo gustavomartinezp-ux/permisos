@@ -1,7 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Search, Plus, Users, ChevronRight, Upload, FileDown, UserX } from 'lucide-react';
+import { format, parseISO, differenceInDays } from 'date-fns';
+import { es } from 'date-fns/locale';
+import {
+  Search, Plus, Users, ChevronRight, Upload, FileDown, UserX,
+  AlertTriangle, Clock, Briefcase,
+} from 'lucide-react';
 import { funcionariosApi, solicitudesApi } from '../api/client';
 import { generarReporteFuncionario } from '../utils/reportePDF';
 import { useAuth } from '../context/AuthContext';
@@ -10,10 +15,181 @@ import FuncionarioModal from '../components/FuncionarioModal';
 import CargaMasivaModal from '../components/CargaMasivaModal';
 import toast from 'react-hot-toast';
 
-function FuncionarioCard({ funcionario, index, onSolicitar }) {
+// ─── Config por grupo contractual ─────────────────────────────────────────────
+const GRUPOS = {
+  contrata: {
+    label:      'Planta / Contrata',
+    desc:       'Funcionarios con contrato indefinido o a plazo fijo',
+    avatarBg:   'bg-brand-100',
+    avatarText: 'text-brand-700',
+    barColor:   'bg-brand-500',
+    badge:      'bg-emerald-100 text-emerald-700',
+    api_param:  'contrata',
+  },
+  honorarios: {
+    label:      'Honorarios',
+    desc:       'Funcionarios contratados a honorarios',
+    avatarBg:   'bg-amber-100',
+    avatarText: 'text-amber-700',
+    barColor:   'bg-amber-500',
+    badge:      'bg-amber-100 text-amber-700',
+    api_param:  'honorarios',
+  },
+  suplentes: {
+    label:      'Personal Suplente',
+    desc:       'Funcionarios con calidad contractual de suplencia',
+    avatarBg:   'bg-purple-100',
+    avatarText: 'text-purple-700',
+    barColor:   'bg-purple-500',
+    badge:      'bg-purple-100 text-purple-700',
+    api_param:  'suplentes',
+  },
+};
+
+const fmtFecha = (d) => {
+  if (!d) return null;
+  try { return format(parseISO(d.toString().substring(0,10)), 'd MMM yyyy', { locale: es }); }
+  catch { return null; }
+};
+
+// ─── Tarjeta Planta/Contrata (saldos de permisos) ────────────────────────────
+function CardContrata({ funcionario, cfg, onSolicitar, descargarPDF, generandoPDF }) {
   const totalAsignado = funcionario.saldos?.reduce((s, x) => s + x.dias_asignados, 0) || 0;
-  const totalUsado = funcionario.saldos?.reduce((s, x) => s + x.dias_usados, 0) || 0;
-  const porcentaje = totalAsignado > 0 ? Math.round((totalUsado / totalAsignado) * 100) : 0;
+  const totalUsado    = funcionario.saldos?.reduce((s, x) => s + x.dias_usados, 0) || 0;
+  const porcentaje    = totalAsignado > 0 ? Math.round((totalUsado / totalAsignado) * 100) : 0;
+
+  return (
+    <>
+      <div className="space-y-1.5 mb-3">
+        {funcionario.saldos?.slice(0, 3).map((s) => {
+          const disp = s.dias_asignados - s.dias_usados - (s.dias_pendientes || 0);
+          return (
+            <div key={s.tipo_id} className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
+              <span className="text-xs text-dark-500 flex-1 truncate">{s.tipo_nombre}</span>
+              <span className="text-xs font-medium text-dark-700">{disp}/{s.dias_asignados}</span>
+            </div>
+          );
+        })}
+      </div>
+      <div>
+        <div className="flex justify-between text-xs text-dark-400 mb-1">
+          <span>Uso total</span>
+          <span>{totalUsado}/{totalAsignado} días ({porcentaje}%)</span>
+        </div>
+        <div className="h-1.5 bg-dark-100 rounded-full overflow-hidden">
+          <div className={`h-full ${cfg.barColor} rounded-full`} style={{ width: `${Math.min(porcentaje,100)}%` }} />
+        </div>
+      </div>
+      {onSolicitar && (
+        <button
+          onClick={() => onSolicitar(funcionario)}
+          className="mt-3 w-full text-xs text-brand-600 hover:text-brand-700 font-medium flex items-center justify-center gap-1 py-1.5 rounded-lg hover:bg-brand-50 transition-colors"
+        >
+          <Plus size={13} />Nueva solicitud
+        </button>
+      )}
+    </>
+  );
+}
+
+// ─── Tarjeta Honorarios (convenio / vigencia) ─────────────────────────────────
+function CardHonorarios({ funcionario, cfg }) {
+  const fechaTermino = funcionario.fecha_termino_contrato;
+  const diasRestantes = fechaTermino
+    ? differenceInDays(new Date(fechaTermino.toString().substring(0,10)), new Date())
+    : null;
+
+  let vigenciaClass = 'text-dark-500';
+  let vigenciaLabel = fechaTermino ? fmtFecha(fechaTermino) : 'Sin fecha término';
+  let alertaVigencia = null;
+
+  if (diasRestantes !== null) {
+    if (diasRestantes < 0) {
+      vigenciaClass = 'text-red-600 font-semibold';
+      alertaVigencia = 'Contrato vencido';
+    } else if (diasRestantes <= 30) {
+      vigenciaClass = 'text-amber-600 font-semibold';
+      alertaVigencia = `Vence en ${diasRestantes} días`;
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      {alertaVigencia && (
+        <div className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded-lg ${
+          diasRestantes !== null && diasRestantes < 0 ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'
+        }`}>
+          <AlertTriangle size={11} />
+          {alertaVigencia}
+        </div>
+      )}
+      {funcionario.convenio_honorarios && (
+        <div className="flex items-start gap-1.5">
+          <Briefcase size={12} className="text-amber-400 mt-0.5 flex-shrink-0" />
+          <span className="text-xs text-dark-600 truncate">{funcionario.convenio_honorarios}</span>
+        </div>
+      )}
+      {funcionario.prestacion && (
+        <p className="text-xs text-dark-400 truncate">{funcionario.prestacion}</p>
+      )}
+      <div className="flex items-center gap-1.5">
+        <Clock size={11} className={vigenciaClass} />
+        <span className={`text-xs ${vigenciaClass}`}>Vigencia: {vigenciaLabel}</span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Tarjeta Suplentes (info de reemplazo) ────────────────────────────────────
+function CardSuplentes({ funcionario }) {
+  const fechaTermino = funcionario.fecha_termino_contrato;
+  const diasRestantes = fechaTermino
+    ? differenceInDays(new Date(fechaTermino.toString().substring(0,10)), new Date())
+    : null;
+
+  return (
+    <div className="space-y-2">
+      {funcionario.reemplaza_nombres ? (
+        <div className="flex items-start gap-1.5">
+          <Users size={12} className="text-purple-400 mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="text-xs font-medium text-dark-700">
+              Reemplaza a: {funcionario.reemplaza_nombres} {funcionario.reemplaza_apellidos}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <p className="text-xs text-dark-400 italic">Sin reemplazo asignado</p>
+      )}
+      {fechaTermino && (
+        <div className={`flex items-center gap-1.5 text-xs ${
+          diasRestantes !== null && diasRestantes < 0 ? 'text-red-600 font-semibold' :
+          diasRestantes !== null && diasRestantes <= 14 ? 'text-amber-600 font-semibold' : 'text-dark-500'
+        }`}>
+          <Clock size={11} />
+          Término: {fmtFecha(fechaTermino)}
+          {diasRestantes !== null && diasRestantes >= 0 && diasRestantes <= 14 && (
+            <span className="ml-1">({diasRestantes}d)</span>
+          )}
+          {diasRestantes !== null && diasRestantes < 0 && (
+            <span className="ml-1">(vencido)</span>
+          )}
+        </div>
+      )}
+      <Link
+        to={`/funcionarios/${funcionario.id}#suplencias`}
+        className="text-xs text-purple-600 hover:text-purple-700 font-medium flex items-center gap-1"
+      >
+        Ver historial de suplencias →
+      </Link>
+    </div>
+  );
+}
+
+// ─── Tarjeta genérica ─────────────────────────────────────────────────────────
+function FuncionarioCard({ funcionario, index, onSolicitar, grupo }) {
+  const cfg = GRUPOS[grupo] || GRUPOS.contrata;
   const [generandoPDF, setGenerandoPDF] = useState(false);
 
   const descargarPDF = async (e) => {
@@ -30,7 +206,7 @@ function FuncionarioCard({ funcionario, index, onSolicitar }) {
       );
       generarReporteFuncionario(detalle.data, solsAnio);
     } catch {
-      alert('Error al generar el reporte');
+      toast.error('Error al generar el reporte');
     } finally {
       setGenerandoPDF(false);
     }
@@ -40,13 +216,15 @@ function FuncionarioCard({ funcionario, index, onSolicitar }) {
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.05 }}
+      transition={{ delay: index * 0.04 }}
       className="card-hover p-4"
     >
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3">
           <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 ${
-            funcionario.activo === false ? 'bg-dark-100 text-dark-400' : 'bg-brand-100 text-brand-700'
+            funcionario.activo === false
+              ? 'bg-dark-100 text-dark-400'
+              : `${cfg.avatarBg} ${cfg.avatarText}`
           }`}>
             {funcionario.activo === false
               ? <UserX size={16} />
@@ -61,27 +239,23 @@ function FuncionarioCard({ funcionario, index, onSolicitar }) {
               {funcionario.sector && (
                 <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${
                   { Verde: 'bg-green-100 text-green-700', Azul: 'bg-blue-100 text-blue-700', Amarillo: 'bg-yellow-100 text-yellow-700', Rojo: 'bg-red-100 text-red-700', Lila: 'bg-purple-100 text-purple-700', SAR: 'bg-cyan-100 text-cyan-700' }[funcionario.sector] || 'bg-dark-100 text-dark-600'
-                }`}>
-                  {funcionario.sector}
-                </span>
+                }`}>{funcionario.sector}</span>
               )}
-              {funcionario.area && (
-                <span className="text-xs px-1.5 py-0.5 rounded-full font-medium bg-indigo-100 text-indigo-700">
-                  {funcionario.area}
+              {funcionario.tipo_contrato && (
+                <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${cfg.badge}`}>
+                  {funcionario.tipo_contrato}
                 </span>
               )}
             </div>
             <p className="text-xs text-dark-500">{funcionario.cargo}</p>
-            {funcionario.servicio && (
-              <p className="text-xs text-dark-400">{funcionario.servicio}</p>
-            )}
+            {funcionario.servicio && <p className="text-xs text-dark-400">{funcionario.servicio}</p>}
           </div>
         </div>
         <div className="flex items-center gap-1">
           <button
             onClick={descargarPDF}
             disabled={generandoPDF}
-            title="Descargar reporte PDF"
+            title="Descargar PDF"
             className="p-1.5 rounded-lg hover:bg-emerald-50 text-dark-400 hover:text-emerald-600 transition-colors"
           >
             {generandoPDF
@@ -98,67 +272,49 @@ function FuncionarioCard({ funcionario, index, onSolicitar }) {
         </div>
       </div>
 
-      {/* Saldos mini */}
-      <div className="space-y-1.5 mb-3">
-        {funcionario.saldos?.slice(0, 3).map((s) => {
-          const disp = s.dias_asignados - s.dias_usados - (s.dias_pendientes || 0);
-          return (
-            <div key={s.tipo_id} className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
-              <span className="text-xs text-dark-500 flex-1 truncate">{s.tipo_nombre}</span>
-              <span className="text-xs font-medium text-dark-700">{disp}/{s.dias_asignados}</span>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Barra total */}
-      <div>
-        <div className="flex justify-between text-xs text-dark-400 mb-1">
-          <span>Uso total</span>
-          <span>{totalUsado}/{totalAsignado} días ({porcentaje}%)</span>
-        </div>
-        <div className="h-1.5 bg-dark-100 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-brand-500 rounded-full transition-all"
-            style={{ width: `${Math.min(porcentaje, 100)}%` }}
-          />
-        </div>
-      </div>
-
-      {onSolicitar && (
-        <button
-          onClick={() => onSolicitar(funcionario)}
-          className="mt-3 w-full text-xs text-brand-600 hover:text-brand-700 font-medium flex items-center justify-center gap-1 py-1.5 rounded-lg hover:bg-brand-50 transition-colors"
-        >
-          <Plus size={13} />
-          Nueva solicitud
-        </button>
+      {/* Contenido específico por grupo */}
+      {grupo === 'honorarios' ? (
+        <CardHonorarios funcionario={funcionario} cfg={cfg} />
+      ) : grupo === 'suplentes' ? (
+        <CardSuplentes funcionario={funcionario} />
+      ) : (
+        <CardContrata
+          funcionario={funcionario}
+          cfg={cfg}
+          onSolicitar={onSolicitar}
+          descargarPDF={descargarPDF}
+          generandoPDF={generandoPDF}
+        />
       )}
     </motion.div>
   );
 }
 
-export default function Funcionarios() {
+// ─── Página principal ─────────────────────────────────────────────────────────
+export default function Funcionarios({ grupo }) {
   const { esSupervisor, esAdmin } = useAuth();
+  const cfg = GRUPOS[grupo] || GRUPOS.contrata;
+
   const [funcionarios, setFuncionarios] = useState([]);
-  const [busqueda, setBusqueda] = useState('');
-  const [cargando, setCargando] = useState(true);
-  const [verPasivos, setVerPasivos] = useState(false);
+  const [busqueda, setBusqueda]         = useState('');
+  const [cargando, setCargando]         = useState(true);
+  const [verPasivos, setVerPasivos]     = useState(false);
   const [modalSolicitud, setModalSolicitud] = useState(null);
-  const [showNuevo, setShowNuevo] = useState(false);
-  const [showBulk, setShowBulk] = useState(false);
+  const [showNuevo, setShowNuevo]       = useState(false);
+  const [showBulk, setShowBulk]         = useState(false);
 
   const cargar = () => {
     setCargando(true);
-    const params = verPasivos ? { activo: 'false' } : {};
+    const params = {};
+    if (grupo) params.tipo_grupo = cfg.api_param;
+    if (verPasivos) params.activo = 'false';
     funcionariosApi.listar(params)
       .then(({ data }) => setFuncionarios(data))
       .catch(() => toast.error('Error al cargar funcionarios'))
       .finally(() => setCargando(false));
   };
 
-  useEffect(() => { cargar(); }, [verPasivos]);
+  useEffect(() => { cargar(); }, [verPasivos, grupo]);
 
   const filtrados = funcionarios.filter((f) => {
     if (verPasivos ? f.activo !== false : f.activo === false) return false;
@@ -168,19 +324,28 @@ export default function Funcionarios() {
       f.apellidos.toLowerCase().includes(q) ||
       f.rut?.toLowerCase().includes(q) ||
       f.cargo?.toLowerCase().includes(q) ||
-      f.servicio?.toLowerCase().includes(q)
+      f.servicio?.toLowerCase().includes(q) ||
+      f.convenio_honorarios?.toLowerCase().includes(q) ||
+      f.prestacion?.toLowerCase().includes(q)
     );
   });
+
+  // Alertas de vencimiento (solo Honorarios y Suplentes)
+  const conVencimiento = grupo !== 'contrata'
+    ? filtrados.filter(f => {
+        if (!f.fecha_termino_contrato) return false;
+        const d = differenceInDays(new Date(f.fecha_termino_contrato.toString().substring(0,10)), new Date());
+        return d <= 30;
+      })
+    : [];
 
   return (
     <div className="p-4 sm:p-6 space-y-5 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-dark-900">Funcionarios</h1>
-          <p className="text-dark-500 text-sm mt-0.5">
-            {funcionarios.length} funcionario(s) {verPasivos ? 'pasivo(s)' : 'activo(s)'}
-          </p>
+          <h1 className="text-2xl font-bold text-dark-900">{cfg.label}</h1>
+          <p className="text-dark-500 text-sm mt-0.5">{cfg.desc}</p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
           {esAdmin && (
@@ -214,6 +379,16 @@ export default function Funcionarios() {
         </div>
       </div>
 
+      {/* Alerta vencimientos */}
+      {conVencimiento.length > 0 && (
+        <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-xl border border-amber-200 text-sm text-amber-700">
+          <AlertTriangle size={16} className="flex-shrink-0" />
+          <span>
+            <strong>{conVencimiento.length}</strong> contrato{conVencimiento.length > 1 ? 's' : ''} vence{conVencimiento.length === 1 ? '' : 'n'} en los próximos 30 días.
+          </span>
+        </div>
+      )}
+
       {/* Búsqueda */}
       <div className="relative">
         <Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-dark-400" />
@@ -221,10 +396,17 @@ export default function Funcionarios() {
           type="text"
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
-          placeholder="Buscar por nombre, RUT, cargo o servicio..."
+          placeholder={`Buscar ${cfg.label.toLowerCase()} por nombre, RUT, cargo...`}
           className="input-field pl-10 bg-white"
         />
       </div>
+
+      {/* Contador */}
+      {!cargando && (
+        <p className="text-xs text-dark-400">
+          {filtrados.length} funcionario{filtrados.length !== 1 ? 's' : ''} {verPasivos ? 'pasivo(s)' : 'activo(s)'}
+        </p>
+      )}
 
       {/* Grid */}
       {cargando ? (
@@ -239,10 +421,10 @@ export default function Funcionarios() {
           <p className="font-medium">Sin resultados</p>
           <p className="text-sm mt-1">
             {busqueda
-              ? `No se encontraron funcionarios para "${busqueda}"`
+              ? `No se encontraron ${cfg.label.toLowerCase()} para "${busqueda}"`
               : verPasivos
-              ? 'No hay funcionarios pasivos registrados'
-              : 'No hay funcionarios registrados'}
+              ? `No hay ${cfg.label.toLowerCase()} pasivos registrados`
+              : `No hay ${cfg.label.toLowerCase()} registrados`}
           </p>
         </div>
       ) : (
@@ -252,7 +434,8 @@ export default function Funcionarios() {
               key={f.id}
               funcionario={f}
               index={i}
-              onSolicitar={esSupervisor ? setModalSolicitud : null}
+              grupo={grupo}
+              onSolicitar={esSupervisor && grupo !== 'honorarios' ? setModalSolicitud : null}
             />
           ))}
         </div>
@@ -270,6 +453,7 @@ export default function Funcionarios() {
         <FuncionarioModal
           onClose={() => setShowNuevo(false)}
           onSuccess={cargar}
+          grupoInicial={grupo}
         />
       )}
 

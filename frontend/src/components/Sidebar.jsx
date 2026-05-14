@@ -3,20 +3,24 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   LayoutDashboard, Users, FileText, Clock, LogOut,
-  ChevronRight, Settings, UserCircle, KeyRound, Hourglass, BarChart2, UserCheck,
+  ChevronRight, Settings, UserCircle, KeyRound, Hourglass, BarChart2, UserCheck, Briefcase, UserCog,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import CambiarPasswordModal from './CambiarPasswordModal';
 
 const NAV_SUPERVISOR = [
-  { to: '/dashboard',             label: 'Dashboard',        icon: LayoutDashboard },
-  { to: '/funcionarios',          label: 'Funcionarios',     icon: Users },
-  { to: '/solicitudes',           label: 'Solicitudes',      icon: FileText },
-  { to: '/horas-compensatorias',  label: 'Hrs. Compensat.',  icon: Hourglass },
-  { to: '/historial',             label: 'Historial',        icon: Clock },
-  { to: '/suplencias',            label: 'Suplencias',       icon: UserCheck },
-  { to: '/reportes',              label: 'Reportes',         icon: BarChart2 },
-  { to: '/configuracion',         label: 'Configuración',    icon: Settings },
+  { to: '/dashboard',            label: 'Dashboard',           icon: LayoutDashboard },
+  { header: 'Funcionarios' },
+  { to: '/funcionarios',         label: 'Planta / Contrata',   icon: Users,     groupColor: 'text-emerald-400' },
+  { to: '/honorarios',           label: 'Honorarios',          icon: Briefcase, groupColor: 'text-amber-400'   },
+  { to: '/suplentes',            label: 'Personal Suplente',   icon: UserCog,   groupColor: 'text-purple-400'  },
+  { header: 'Gestión' },
+  { to: '/solicitudes',          label: 'Solicitudes',         icon: FileText },
+  { to: '/horas-compensatorias', label: 'Hrs. Compensat.',     icon: Hourglass },
+  { to: '/historial',            label: 'Historial',           icon: Clock },
+  { to: '/suplencias',           label: 'Hist. Suplencias',    icon: UserCheck },
+  { to: '/reportes',             label: 'Reportes',            icon: BarChart2 },
+  { to: '/configuracion',        label: 'Configuración',       icon: Settings },
 ];
 
 export default function Sidebar({ mobile = false, onClose }) {
@@ -62,18 +66,28 @@ export default function Sidebar({ mobile = false, onClose }) {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-        {navItems.map(({ to, label, icon: Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            onClick={mobile ? onClose : undefined}
-            className={({ isActive }) => isActive ? 'sidebar-link-active' : 'sidebar-link'}
-          >
-            <Icon size={18} />
-            <span>{label}</span>
-          </NavLink>
-        ))}
+      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+        {navItems.map((item) => {
+          if (item.header) {
+            return (
+              <p key={item.header} className="px-3 pt-4 pb-1 text-xs font-semibold text-dark-500 uppercase tracking-wider">
+                {item.header}
+              </p>
+            );
+          }
+          const { to, label, icon: Icon, groupColor } = item;
+          return (
+            <NavLink
+              key={to}
+              to={to}
+              onClick={mobile ? onClose : undefined}
+              className={({ isActive }) => isActive ? 'sidebar-link-active' : 'sidebar-link'}
+            >
+              <Icon size={18} className={groupColor || ''} />
+              <span>{label}</span>
+            </NavLink>
+          );
+        })}
       </nav>
 
       {/* User */}

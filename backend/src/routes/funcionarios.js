@@ -30,10 +30,20 @@ router.get('/', async (req, res) => {
       }
     }
 
+    // Filtro por grupo contractual
+    if (req.query.tipo_grupo === 'contrata') {
+      whereParts.push(`f.tipo_contrato IN ('Indefinido', 'Plazo Fijo')`);
+    } else if (req.query.tipo_grupo === 'honorarios') {
+      whereParts.push(`f.tipo_contrato = 'Honorarios'`);
+    } else if (req.query.tipo_grupo === 'suplentes') {
+      whereParts.push(`f.tipo_contrato = 'Suplencia'`);
+    }
+
     const result = await pool.query(
       `SELECT
          f.id, f.rut, f.nombres, f.apellidos, f.cargo, f.fecha_ingreso, f.activo, f.sector, f.area,
-         f.tipo_contrato, f.horas_contrato, f.reemplaza_a,
+         f.tipo_contrato, f.horas_contrato, f.reemplaza_a, f.grupo_contractual,
+         f.convenio_honorarios, f.prestacion, f.fecha_termino_contrato,
          s.nombre AS servicio,
          d.nombre AS dispositivo, d.id AS dispositivo_id,
          remp.nombres AS reemplaza_nombres, remp.apellidos AS reemplaza_apellidos,
@@ -92,7 +102,11 @@ router.get('/:id', async (req, res) => {
               u.email AS usuario_email,
               u.rol AS usuario_rol,
               u.sector AS supervisor_sector,
-              u.area AS supervisor_area
+              u.area AS supervisor_area,
+              f.grupo_contractual,
+              f.convenio_honorarios,
+              f.prestacion,
+              f.fecha_termino_contrato
        FROM funcionarios f
        LEFT JOIN servicios s ON f.servicio_id = s.id
        LEFT JOIN dispositivos d ON f.dispositivo_id = d.id
@@ -167,11 +181,10 @@ router.post('/', soloAdmin, [
   const {
     rut, nombres, apellidos, cargo, servicio_id, fecha_ingreso, email, saldos_custom,
     sector, area,
-    rol_sistema,         // rol del usuario en el sistema
-    sector_supervisa,    // sector que gestiona si es Jefe de Sector
-    area_supervisa,      // área que gestiona si es Jefe de Área
+    rol_sistema, sector_supervisa, area_supervisa,
     tipo_contrato, horas_contrato, dispositivo_id, reemplaza_a,
     fecha_nacimiento, telefono, direccion_particular, numero_reloj,
+    convenio_honorarios, prestacion, fecha_termino_contrato,
   } = req.body;
   const client = await pool.connect();
 
@@ -182,8 +195,9 @@ router.post('/', soloAdmin, [
       `INSERT INTO funcionarios
          (rut, nombres, apellidos, cargo, servicio_id, fecha_ingreso,
           sector, area, tipo_contrato, horas_contrato, dispositivo_id, reemplaza_a,
-          fecha_nacimiento, telefono, direccion_particular, numero_reloj)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,
+          fecha_nacimiento, telefono, direccion_particular, numero_reloj,
+          convenio_honorarios, prestacion, fecha_termino_contrato)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING *`,
       [
         rut, nombres, apellidos, cargo,
         servicio_id || null, fecha_ingreso || null,
@@ -192,6 +206,7 @@ router.post('/', soloAdmin, [
         dispositivo_id || null, reemplaza_a || null,
         fecha_nacimiento || null, telefono || null,
         direccion_particular || null, numero_reloj ? parseInt(numero_reloj) : null,
+        convenio_honorarios || null, prestacion || null, fecha_termino_contrato || null,
       ]
     );
 
@@ -352,6 +367,7 @@ router.put('/:id', adminOSupervisor, async (req, res) => {
     tipo_contrato, horas_contrato, dispositivo_id, reemplaza_a, fecha_ingreso,
     fecha_nacimiento, telefono, direccion_particular, numero_reloj,
     rol_sistema, sector_supervisa, area_supervisa,
+    convenio_honorarios, prestacion, fecha_termino_contrato,
   } = req.body;
 
   if (activo === false && req.usuario.rol !== 'admin') {
@@ -369,8 +385,9 @@ router.put('/:id', adminOSupervisor, async (req, res) => {
            activo = COALESCE($5, activo),
            tipo_contrato=$6, horas_contrato=$7, dispositivo_id=$8, reemplaza_a=$9,
            fecha_ingreso=$10, sector=$11, area=$12,
-           fecha_nacimiento=$13, telefono=$14, direccion_particular=$15, numero_reloj=$16
-       WHERE id=$17 RETURNING *`,
+           fecha_nacimiento=$13, telefono=$14, direccion_particular=$15, numero_reloj=$16,
+           convenio_honorarios=$17, prestacion=$18, fecha_termino_contrato=$19
+       WHERE id=$20 RETURNING *`,
       [
         nombres, apellidos, cargo,
         servicio_id || null,
@@ -386,6 +403,9 @@ router.put('/:id', adminOSupervisor, async (req, res) => {
         telefono || null,
         direccion_particular || null,
         numero_reloj ? parseInt(numero_reloj) : null,
+        convenio_honorarios || null,
+        prestacion || null,
+        fecha_termino_contrato || null,
         req.params.id,
       ]
     );

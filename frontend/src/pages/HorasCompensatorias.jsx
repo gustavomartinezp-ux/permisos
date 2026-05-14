@@ -292,29 +292,28 @@ export default function HorasCompensatorias() {
   const cargar = useCallback(async () => {
     setCargando(true);
     try {
-      const [dataRes, solRes] = await Promise.all([
-        esFuncionario
-          ? horasCompensatoriasApi.porFuncionario(funcionarioId)
-          : horasCompensatoriasApi.listar(),
-        solicitudesCompensacionApi.listar(
-          esFuncionario ? { funcionario_id: funcionarioId } : {}
-        ),
-      ]);
+      const dataRes = await (esFuncionario
+        ? horasCompensatoriasApi.porFuncionario(funcionarioId)
+        : horasCompensatoriasApi.listar());
       setData(dataRes.data);
+    } catch (err) {
+      const msg = err?.response?.data?.error || err?.message || 'Error desconocido';
+      toast.error(`Horas: ${msg}`);
+      console.error('horas-compensatorias error:', err?.response?.status, err?.response?.data);
+    }
+
+    try {
+      const solRes = await solicitudesCompensacionApi.listar(
+        esFuncionario ? { funcionario_id: funcionarioId } : {}
+      );
       setSolicitudes(solRes.data);
     } catch (err) {
-      const status = err?.response?.status;
-      const msg    = err?.response?.data?.error;
-      if (status === 404) {
-        toast.error('Módulo no disponible aún — el servidor se está actualizando, intenta en 1-2 minutos');
-      } else if (msg) {
-        toast.error(`Error: ${msg}`);
-      } else {
-        toast.error('Error al cargar horas compensatorias');
-      }
-    } finally {
-      setCargando(false);
+      const msg = err?.response?.data?.error || err?.message || 'Error desconocido';
+      toast.error(`Solicitudes comp.: ${msg}`);
+      console.error('solicitudes-compensacion error:', err?.response?.status, err?.response?.data);
     }
+
+    setCargando(false);
   }, [esFuncionario, funcionarioId]);
 
   useEffect(() => {

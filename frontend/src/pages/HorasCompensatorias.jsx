@@ -302,8 +302,16 @@ export default function HorasCompensatorias() {
       ]);
       setData(dataRes.data);
       setSolicitudes(solRes.data);
-    } catch {
-      toast.error('Error al cargar horas compensatorias');
+    } catch (err) {
+      const status = err?.response?.status;
+      const msg    = err?.response?.data?.error;
+      if (status === 404) {
+        toast.error('Módulo no disponible aún — el servidor se está actualizando, intenta en 1-2 minutos');
+      } else if (msg) {
+        toast.error(`Error: ${msg}`);
+      } else {
+        toast.error('Error al cargar horas compensatorias');
+      }
     } finally {
       setCargando(false);
     }

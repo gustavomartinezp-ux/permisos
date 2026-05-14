@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   LayoutDashboard, Users, FileText, Clock, LogOut,
-  ChevronRight, Settings, UserCircle, KeyRound, Hourglass, BarChart2,
+  ChevronRight, Settings, UserCircle, KeyRound, Hourglass, BarChart2, UserCheck,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import CambiarPasswordModal from './CambiarPasswordModal';
@@ -14,6 +14,7 @@ const NAV_SUPERVISOR = [
   { to: '/solicitudes',           label: 'Solicitudes',      icon: FileText },
   { to: '/horas-compensatorias',  label: 'Hrs. Compensat.',  icon: Hourglass },
   { to: '/historial',             label: 'Historial',        icon: Clock },
+  { to: '/suplencias',            label: 'Suplencias',       icon: UserCheck },
   { to: '/reportes',              label: 'Reportes',         icon: BarChart2 },
   { to: '/configuracion',         label: 'Configuración',    icon: Settings },
 ];

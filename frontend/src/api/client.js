@@ -121,4 +121,14 @@ export const reportesApi = {
   ausentismo:   (params = {}) => api.get('/reportes/ausentismo',   { params }),
 };
 
+export const suplenciasApi = {
+  listar:          (params = {}) => api.get('/suplencias',                    { params }),
+  porFuncionario:  (id)          => api.get(`/suplencias/funcionario/${id}`),
+  stats:           ()            => api.get('/suplencias/stats'),
+  alertas:         ()            => api.get('/suplencias/alertas'),
+  crear:           (data)        => api.post('/suplencias', data),
+  prorrogar:       (id, data)    => api.patch(`/suplencias/${id}/prorrogar`, data),
+  finalizar:       (id, data)    => api.patch(`/suplencias/${id}/finalizar`, data),
+};
+
 export default api;

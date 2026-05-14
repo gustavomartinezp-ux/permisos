@@ -1,14 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { format, parseISO } from 'date-fns';
+import { motion, AnimatePresence } from 'framer-motion';
+import { format, parseISO, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
   ArrowLeft, User, Calendar, Briefcase, Plus, Clock, BarChart3,
   Edit2, Save, X, Building2, ArrowLeftRight, FileDown, Printer, Camera, Trash2,
-  KeyRound, Mail, ShieldAlert,
+  KeyRound, Mail, ShieldAlert, RefreshCw, CheckCircle2, AlertTriangle,
+  ArrowRight, History,
 } from 'lucide-react';
-import { funcionariosApi, historialApi, solicitudesApi, usuariosApi } from '../api/client';
+import { funcionariosApi, historialApi, solicitudesApi, usuariosApi, suplenciasApi } from '../api/client';
 import { generarReporteFuncionario, imprimirReporteFuncionario } from '../utils/reportePDF';
 import { useAuth } from '../context/AuthContext';
 import SaldoCard from '../components/SaldoCard';
@@ -18,11 +19,26 @@ import SolicitudModal from '../components/SolicitudModal';
 import FuncionarioModal from '../components/FuncionarioModal';
 import toast from 'react-hot-toast';
 
-const TABS = [
-  { id: 'saldos',      label: 'Saldos',      icon: BarChart3 },
-  { id: 'historial',   label: 'Historial',   icon: Clock },
-  { id: 'solicitudes', label: 'Solicitudes', icon: Calendar },
-];
+const MOTIVOS_SUP = {
+  licencia_medica:        'Licencia Médica',
+  feriado_legal:          'Feriado Legal',
+  permiso_administrativo: 'Permiso Administrativo',
+  permiso_sin_goce:       'Permiso Sin Goce',
+  vacancia:               'Vacancia',
+  otro:                   'Otro',
+};
+
+const ESTADO_SUP_STYLES = {
+  activa:     'bg-emerald-100 text-emerald-700 border-emerald-200',
+  prorrogada: 'bg-blue-100 text-blue-700 border-blue-200',
+  finalizada: 'bg-dark-100 text-dark-500 border-dark-200',
+};
+
+const fmtFechaSup = (d) => {
+  if (!d) return '—';
+  try { return format(parseISO(d.toString().substring(0,10)), 'd MMM yyyy', { locale: es }); }
+  catch { return d; }
+};
 
 const CONTRATO_COLORS = {
   'Indefinido': 'bg-green-100 text-green-700',
@@ -41,6 +57,21 @@ export default function FuncionarioDetalle() {
   const [cargando, setCargando] = useState(true);
   const [cargandoHistorial, setCargandoHistorial] = useState(false);
   const [tab, setTab] = useState('saldos');
+
+  // Suplencias
+  const [suplencias, setSuplencias]         = useState([]);
+  const [cargandoSup, setCargandoSup]       = useState(false);
+  const [showNuevaSup, setShowNuevaSup]     = useState(false);
+  const [prorrogarSup, setProrrogarSup]     = useState(null);
+  const [finalizarSup, setFinalizarSup]     = useState(null);
+  const [supForm, setSupForm]               = useState({
+    funcionario_reemplazado_id: '', nombre_reemplazado: '', rut_reemplazado: '',
+    cargo_reemplazado: '', unidad: '', motivo_reemplazo: '',
+    fecha_inicio: '', fecha_termino: '', observaciones: '', documento_respaldo: '',
+  });
+  const [supGuardando, setSupGuardando]     = useState(false);
+  const [prorrogaForm, setProrrogaForm]     = useState({ fecha: '', obs: '' });
+  const [finalizaObs, setFinalizaObs]       = useState('');
   const [showModal, setShowModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editandoSaldos, setEditandoSaldos] = useState(false);
@@ -73,10 +104,19 @@ export default function FuncionarioDetalle() {
       .finally(() => setCargandoHistorial(false));
   };
 
+  const cargarSuplencias = () => {
+    setCargandoSup(true);
+    suplenciasApi.porFuncionario(id)
+      .then(({ data }) => setSuplencias(data))
+      .catch(() => {})
+      .finally(() => setCargandoSup(false));
+  };
+
   useEffect(() => { cargarFuncionario(); }, [id]);
 
   useEffect(() => {
     if (tab === 'historial') cargarHistorial();
+    if (tab === 'suplencias') cargarSuplencias();
   }, [tab, id]);
 
   const iniciarEdicionSaldos = () => {
@@ -518,22 +558,31 @@ export default function FuncionarioDetalle() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-dark-100 p-1 rounded-xl w-fit">
-        {TABS.map(({ id: tid, label, icon: Icon }) => (
-          <button
-            key={tid}
-            onClick={() => setTab(tid)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
-              tab === tid
-                ? 'bg-white text-dark-900 shadow-sm'
-                : 'text-dark-500 hover:text-dark-700'
-            }`}
-          >
-            <Icon size={15} />
-            {label}
-          </button>
-        ))}
-      </div>
+      {(() => {
+        const mostrarSuplencias = funcionario?.tipo_contrato === 'Suplencia' || (esAdmin || esSupervisor);
+        const tabs = [
+          { id: 'saldos',      label: 'Saldos',      icon: BarChart3 },
+          { id: 'historial',   label: 'Historial',   icon: Clock },
+          { id: 'solicitudes', label: 'Solicitudes', icon: Calendar },
+          ...(mostrarSuplencias ? [{ id: 'suplencias', label: 'Suplencias', icon: History }] : []),
+        ];
+        return (
+          <div className="flex gap-1 bg-dark-100 p-1 rounded-xl w-fit flex-wrap">
+            {tabs.map(({ id: tid, label, icon: Icon }) => (
+              <button
+                key={tid}
+                onClick={() => setTab(tid)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
+                  tab === tid ? 'bg-white text-dark-900 shadow-sm' : 'text-dark-500 hover:text-dark-700'
+                }`}
+              >
+                <Icon size={15} />
+                {label}
+              </button>
+            ))}
+          </div>
+        );
+      })()}
 
       {/* Tab: Saldos */}
       {tab === 'saldos' && (
@@ -685,6 +734,155 @@ export default function FuncionarioDetalle() {
         </div>
       )}
 
+      {/* Tab: Suplencias */}
+      {tab === 'suplencias' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-dark-500">
+              Historial completo de suplencias realizadas por este funcionario
+            </p>
+            {esAdmin && (
+              <button
+                onClick={() => { setSupForm({ funcionario_reemplazado_id: '', nombre_reemplazado: '', rut_reemplazado: '', cargo_reemplazado: '', unidad: '', motivo_reemplazo: '', fecha_inicio: '', fecha_termino: '', observaciones: '', documento_respaldo: '' }); setShowNuevaSup(true); }}
+                className="btn-primary"
+              >
+                <Plus size={15} />
+                Nueva suplencia
+              </button>
+            )}
+          </div>
+
+          {cargandoSup ? (
+            <div className="py-10 flex justify-center">
+              <span className="animate-spin h-5 w-5 border-2 border-brand-500 border-t-transparent rounded-full" />
+            </div>
+          ) : suplencias.length === 0 ? (
+            <div className="card py-12 text-center text-dark-400 text-sm">
+              Sin suplencias registradas
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {suplencias.map((s) => {
+                const today = new Date().toISOString().split('T')[0];
+                const estaVencida = s.estado !== 'finalizada' && s.fecha_termino?.toString().substring(0,10) < today;
+                const reemplazadoNombre = s.funcionario_reemplazado_id
+                  ? `${s.reemplazado_nombres_fn || ''} ${s.reemplazado_apellidos_fn || ''}`.trim()
+                  : s.nombre_reemplazado || '—';
+                const diasRestantes = s.estado !== 'finalizada'
+                  ? differenceInDays(new Date(s.fecha_termino), new Date())
+                  : null;
+
+                return (
+                  <motion.div
+                    key={s.id}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`card p-5 space-y-3 ${estaVencida ? 'border-red-200 bg-red-50/30' : ''}`}
+                  >
+                    {/* Header de la suplencia */}
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border ${ESTADO_SUP_STYLES[s.estado]}`}>
+                          {s.estado === 'activa'     && <CheckCircle2 size={11} />}
+                          {s.estado === 'prorrogada' && <RefreshCw size={11} />}
+                          {s.estado === 'finalizada' && <Clock size={11} />}
+                          {s.estado === 'activa' ? 'Activa' : s.estado === 'prorrogada' ? 'Prorrogada' : 'Finalizada'}
+                        </span>
+                        {estaVencida && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-600 border border-red-200">
+                            <AlertTriangle size={10} />Vencida sin cerrar
+                          </span>
+                        )}
+                        {s.prorrogas?.length > 0 && (
+                          <span className="text-xs text-blue-600 font-medium px-2 py-0.5 bg-blue-50 rounded-full">
+                            {s.prorrogas.length}× prorrogada
+                          </span>
+                        )}
+                      </div>
+                      {esAdmin && s.estado !== 'finalizada' && (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => { setProrrogaForm({ fecha: '', obs: '' }); setProrrogarSup(s); }}
+                            className="text-xs px-3 py-1.5 rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50 font-medium"
+                          >
+                            <RefreshCw size={11} className="inline mr-1" />Prorrogar
+                          </button>
+                          <button
+                            onClick={() => { setFinalizaObs(''); setFinalizarSup(s); }}
+                            className="text-xs px-3 py-1.5 rounded-lg border border-dark-200 text-dark-600 hover:bg-dark-100 font-medium"
+                          >
+                            Finalizar
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Info principal */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2 text-sm">
+                      <div>
+                        <p className="text-xs text-dark-400">Reemplaza a</p>
+                        <p className="font-medium text-dark-800">{reemplazadoNombre}</p>
+                        {s.rut_reemplazado && <p className="text-xs text-dark-400">{s.rut_reemplazado}</p>}
+                      </div>
+                      <div>
+                        <p className="text-xs text-dark-400">Cargo reemplazado</p>
+                        <p className="font-medium text-dark-800">{s.cargo_reemplazado}</p>
+                        {s.unidad && <p className="text-xs text-dark-400">{s.unidad}</p>}
+                      </div>
+                      <div>
+                        <p className="text-xs text-dark-400">Motivo</p>
+                        <p className="font-medium text-dark-800">{MOTIVOS_SUP[s.motivo_reemplazo] || s.motivo_reemplazo}</p>
+                      </div>
+                    </div>
+
+                    {/* Fechas */}
+                    <div className="flex items-center gap-3 py-2 px-3 bg-dark-50 rounded-xl text-sm">
+                      <Calendar size={14} className="text-dark-400 flex-shrink-0" />
+                      <span className="text-dark-600">{fmtFechaSup(s.fecha_inicio)}</span>
+                      <ArrowRight size={13} className="text-dark-300" />
+                      <span className={`font-medium ${estaVencida ? 'text-red-600' : 'text-dark-800'}`}>
+                        {fmtFechaSup(s.fecha_termino)}
+                      </span>
+                      {diasRestantes !== null && !estaVencida && (
+                        <span className={`ml-auto text-xs ${diasRestantes <= 7 ? 'text-amber-600 font-medium' : 'text-dark-400'}`}>
+                          {diasRestantes === 0 ? 'Vence hoy' : diasRestantes > 0 ? `${diasRestantes} días restantes` : ''}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Prórrogas */}
+                    {s.prorrogas?.length > 0 && (
+                      <div className="pl-3 border-l-2 border-blue-200 space-y-1">
+                        <p className="text-xs font-medium text-blue-600">Historial de prórrogas</p>
+                        {s.prorrogas.map((p, i) => (
+                          <p key={i} className="text-xs text-dark-500 flex items-center gap-1">
+                            #{i+1}: {fmtFechaSup(p.fecha_termino_anterior)}
+                            <ArrowRight size={10} className="text-dark-300" />
+                            {fmtFechaSup(p.nueva_fecha_termino)}
+                            {p.observaciones && <span className="text-dark-400">— {p.observaciones}</span>}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Observaciones */}
+                    {s.observaciones && (
+                      <p className="text-xs text-dark-500 italic">{s.observaciones}</p>
+                    )}
+
+                    {/* Footer */}
+                    <p className="text-xs text-dark-400">
+                      Registrada {s.creador_nombres ? `por ${s.creador_nombres} ${s.creador_apellidos}` : ''} el {fmtFechaSup(s.created_at)}
+                      {s.documento_respaldo && ` · Doc: ${s.documento_respaldo}`}
+                    </p>
+                  </motion.div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {showModal && (
         <SolicitudModal
           funcionario={funcionario}
@@ -700,6 +898,245 @@ export default function FuncionarioDetalle() {
           onSuccess={cargarFuncionario}
         />
       )}
+
+      {/* Modal: Nueva suplencia (desde ficha del funcionario) */}
+      <AnimatePresence>
+        {showNuevaSup && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.97 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.97 }}
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between px-6 py-4 border-b border-dark-100">
+                <div>
+                  <h2 className="text-lg font-semibold text-dark-900">Nueva Suplencia</h2>
+                  <p className="text-xs text-dark-500">{funcionario.nombres} {funcionario.apellidos}</p>
+                </div>
+                <button onClick={() => setShowNuevaSup(false)} className="p-2 rounded-lg hover:bg-dark-100"><X size={18} /></button>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-medium text-dark-700 mb-1">Nombre reemplazado</label>
+                    <input type="text" value={supForm.nombre_reemplazado}
+                      onChange={e => setSupForm(p => ({ ...p, nombre_reemplazado: e.target.value }))}
+                      className="input-field text-sm" placeholder="Nombre completo" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-dark-700 mb-1">RUT reemplazado</label>
+                    <input type="text" value={supForm.rut_reemplazado}
+                      onChange={e => setSupForm(p => ({ ...p, rut_reemplazado: e.target.value }))}
+                      className="input-field text-sm" placeholder="12.345.678-9" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-dark-700 mb-1">
+                      Cargo reemplazado <span className="text-red-500">*</span>
+                    </label>
+                    <input type="text" value={supForm.cargo_reemplazado}
+                      onChange={e => setSupForm(p => ({ ...p, cargo_reemplazado: e.target.value }))}
+                      className="input-field text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-dark-700 mb-1">Unidad / CESFAM</label>
+                    <input type="text" value={supForm.unidad}
+                      onChange={e => setSupForm(p => ({ ...p, unidad: e.target.value }))}
+                      className="input-field text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-dark-700 mb-1">
+                      Motivo <span className="text-red-500">*</span>
+                    </label>
+                    <select value={supForm.motivo_reemplazo}
+                      onChange={e => setSupForm(p => ({ ...p, motivo_reemplazo: e.target.value }))}
+                      className="input-field text-sm">
+                      <option value="">— Seleccionar —</option>
+                      {Object.entries(MOTIVOS_SUP).map(([k, v]) => (
+                        <option key={k} value={k}>{v}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-dark-700 mb-1">
+                      Fecha inicio <span className="text-red-500">*</span>
+                    </label>
+                    <input type="date" value={supForm.fecha_inicio}
+                      onChange={e => setSupForm(p => ({ ...p, fecha_inicio: e.target.value }))}
+                      className="input-field text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-dark-700 mb-1">
+                      Fecha término <span className="text-red-500">*</span>
+                    </label>
+                    <input type="date" value={supForm.fecha_termino} min={supForm.fecha_inicio}
+                      onChange={e => setSupForm(p => ({ ...p, fecha_termino: e.target.value }))}
+                      className="input-field text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-dark-700 mb-1">Documento respaldo</label>
+                    <input type="text" value={supForm.documento_respaldo}
+                      onChange={e => setSupForm(p => ({ ...p, documento_respaldo: e.target.value }))}
+                      className="input-field text-sm" placeholder="Resolución N° ..." />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-dark-700 mb-1">Observaciones</label>
+                    <input type="text" value={supForm.observaciones}
+                      onChange={e => setSupForm(p => ({ ...p, observaciones: e.target.value }))}
+                      className="input-field text-sm" />
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-3 px-6 py-4 border-t border-dark-100">
+                <button onClick={() => setShowNuevaSup(false)} className="btn-secondary flex-1 justify-center">Cancelar</button>
+                <button
+                  disabled={supGuardando}
+                  onClick={async () => {
+                    if (!supForm.cargo_reemplazado.trim()) return toast.error('Cargo reemplazado obligatorio');
+                    if (!supForm.motivo_reemplazo) return toast.error('Selecciona el motivo');
+                    if (!supForm.fecha_inicio || !supForm.fecha_termino) return toast.error('Las fechas son obligatorias');
+                    if (supForm.fecha_inicio > supForm.fecha_termino) return toast.error('Fecha inicio debe ser anterior al término');
+                    setSupGuardando(true);
+                    try {
+                      await suplenciasApi.crear({ ...supForm, funcionario_suplente_id: parseInt(id) });
+                      toast.success('Suplencia registrada');
+                      setShowNuevaSup(false);
+                      cargarSuplencias();
+                    } catch (err) {
+                      toast.error(err?.response?.data?.error || 'Error al registrar');
+                    } finally { setSupGuardando(false); }
+                  }}
+                  className="btn-primary flex-1 justify-center"
+                >
+                  {supGuardando
+                    ? <span className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                    : <><Plus size={15} className="mr-1" />Registrar</>
+                  }
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Modal: Prorrogar (desde ficha) */}
+        {prorrogarSup && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.97 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.97 }}
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-md"
+            >
+              <div className="flex items-center justify-between px-6 py-4 border-b border-dark-100">
+                <h2 className="text-lg font-semibold text-dark-900">Prorrogar Suplencia</h2>
+                <button onClick={() => setProrrogarSup(null)} className="p-2 rounded-lg hover:bg-dark-100"><X size={18} /></button>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="p-3 bg-blue-50 rounded-xl border border-blue-100 text-sm text-blue-800">
+                  <p className="text-xs">Término actual: <span className="font-semibold">{fmtFechaSup(prorrogarSup.fecha_termino)}</span></p>
+                </div>
+                {prorrogarSup.prorrogas?.length > 0 && (
+                  <div className="p-3 bg-dark-50 rounded-xl text-xs text-dark-500 space-y-1">
+                    {prorrogarSup.prorrogas.map((p, i) => (
+                      <p key={i}>#{i+1}: {fmtFechaSup(p.fecha_termino_anterior)} → {fmtFechaSup(p.nueva_fecha_termino)}</p>
+                    ))}
+                  </div>
+                )}
+                <div>
+                  <label className="block text-sm font-medium text-dark-700 mb-1">Nueva fecha término <span className="text-red-500">*</span></label>
+                  <input type="date" value={prorrogaForm.fecha}
+                    min={prorrogarSup.fecha_termino?.toString().substring(0,10)}
+                    onChange={e => setProrrogaForm(p => ({ ...p, fecha: e.target.value }))}
+                    className="input-field" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-dark-700 mb-1">Observaciones</label>
+                  <textarea value={prorrogaForm.obs}
+                    onChange={e => setProrrogaForm(p => ({ ...p, obs: e.target.value }))}
+                    className="input-field resize-none" rows={2} />
+                </div>
+              </div>
+              <div className="flex gap-3 px-6 py-4 border-t border-dark-100">
+                <button onClick={() => setProrrogarSup(null)} className="btn-secondary flex-1 justify-center">Cancelar</button>
+                <button
+                  disabled={supGuardando}
+                  onClick={async () => {
+                    const fechaActual = prorrogarSup.fecha_termino?.toString().substring(0,10);
+                    if (!prorrogaForm.fecha) return toast.error('La nueva fecha es obligatoria');
+                    if (prorrogaForm.fecha <= fechaActual) return toast.error('La nueva fecha debe ser posterior a la actual');
+                    setSupGuardando(true);
+                    try {
+                      await suplenciasApi.prorrogar(prorrogarSup.id, { nueva_fecha_termino: prorrogaForm.fecha, observaciones: prorrogaForm.obs });
+                      toast.success('Suplencia prorrogada');
+                      setProrrogarSup(null);
+                      cargarSuplencias();
+                    } catch (err) {
+                      toast.error(err?.response?.data?.error || 'Error al prorrogar');
+                    } finally { setSupGuardando(false); }
+                  }}
+                  className="btn-primary flex-1 justify-center"
+                >
+                  {supGuardando
+                    ? <span className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                    : <><RefreshCw size={15} className="mr-1" />Prorrogar</>
+                  }
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Modal: Finalizar (desde ficha) */}
+        {finalizarSup && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.97 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.97 }}
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-md"
+            >
+              <div className="flex items-center justify-between px-6 py-4 border-b border-dark-100">
+                <h2 className="text-lg font-semibold text-dark-900">Finalizar Suplencia</h2>
+                <button onClick={() => setFinalizarSup(null)} className="p-2 rounded-lg hover:bg-dark-100"><X size={18} /></button>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="p-3 bg-amber-50 rounded-xl border border-amber-100 text-sm text-amber-800">
+                  Esta acción marca la suplencia como FINALIZADA y bloquea modificaciones posteriores.
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-dark-700 mb-1">Observaciones (opcional)</label>
+                  <textarea value={finalizaObs}
+                    onChange={e => setFinalizaObs(e.target.value)}
+                    className="input-field resize-none" rows={2} />
+                </div>
+              </div>
+              <div className="flex gap-3 px-6 py-4 border-t border-dark-100">
+                <button onClick={() => setFinalizarSup(null)} className="btn-secondary flex-1 justify-center">Cancelar</button>
+                <button
+                  disabled={supGuardando}
+                  onClick={async () => {
+                    setSupGuardando(true);
+                    try {
+                      await suplenciasApi.finalizar(finalizarSup.id, { observaciones: finalizaObs });
+                      toast.success('Suplencia finalizada');
+                      setFinalizarSup(null);
+                      cargarSuplencias();
+                    } catch (err) {
+                      toast.error(err?.response?.data?.error || 'Error al finalizar');
+                    } finally { setSupGuardando(false); }
+                  }}
+                  className="flex-1 justify-center inline-flex items-center gap-2 font-medium rounded-xl border px-4 py-2 text-sm bg-dark-800 text-white hover:bg-dark-900 border-dark-800 transition-all"
+                >
+                  {supGuardando
+                    ? <span className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                    : <><CheckCircle2 size={15} className="mr-1" />Finalizar</>
+                  }
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

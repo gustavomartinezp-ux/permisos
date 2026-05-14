@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Calendar, FileText, AlertCircle, ArrowLeftRight, Info } from 'lucide-react';
+import { X, Calendar, FileText, AlertCircle, ArrowLeftRight, Info, Download, Printer, CheckCircle2 } from 'lucide-react';
 import { solicitudesApi, saldosApi } from '../api/client';
+import { descargarFormatoPermiso, imprimirFormatoPermiso } from '../utils/reportePDF';
 import toast from 'react-hot-toast';
 
 // Feriados Chile 2025-2026 (espejo del backend para preview instantáneo)
@@ -56,6 +57,7 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
   const [jornadaMedioDia, setJornadaMedioDia] = useState('AM');
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
+  const [solicitudCreada, setSolicitudCreada] = useState(null);
 
   useEffect(() => {
     if (funcionario) {
@@ -110,7 +112,7 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
 
     setCargando(true);
     try {
-      await solicitudesApi.crear({
+      const { data } = await solicitudesApi.crear({
         funcionario_id: funcionario.id,
         tipo_permiso_id: parseInt(form.tipo_permiso_id),
         fecha_inicio: form.fecha_inicio,
@@ -121,13 +123,78 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
       });
       toast.success('Solicitud registrada exitosamente');
       onSuccess?.();
-      onClose();
+      setSolicitudCreada({
+        ...data,
+        tipo_nombre: saldoSel?.tipo_nombre,
+        jornada_medio_dia: medioDia ? jornadaMedioDia : null,
+      });
     } catch (err) {
       setError(err.response?.data?.error || 'Error al registrar solicitud');
     } finally {
       setCargando(false);
     }
   };
+
+  if (solicitudCreada) {
+    return (
+      <AnimatePresence>
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+        >
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 text-center"
+          >
+            <div className="flex justify-center mb-4">
+              <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
+                <CheckCircle2 size={36} className="text-green-600" />
+              </div>
+            </div>
+            <h2 className="text-xl font-semibold text-dark-900 mb-1">Solicitud registrada</h2>
+            <p className="text-sm text-dark-500 mb-1">
+              {funcionario?.nombres} {funcionario?.apellidos}
+            </p>
+            <p className="text-sm text-dark-500 mb-6">
+              <span className="font-medium text-dark-700">{solicitudCreada.tipo_nombre}</span>
+              {' · '}N° {String(solicitudCreada.id || '').padStart(5, '0')}
+            </p>
+
+            <p className="text-sm text-dark-600 mb-5">
+              Descarga o imprime el formato oficial precargado con los datos registrados para obtener las firmas correspondientes.
+            </p>
+
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => descargarFormatoPermiso(solicitudCreada, funcionario)}
+                className="btn-primary justify-center gap-2 py-3"
+              >
+                <Download size={17} />
+                Descargar formato oficial (PDF)
+              </button>
+              <button
+                onClick={() => imprimirFormatoPermiso(solicitudCreada, funcionario)}
+                className="btn-secondary justify-center gap-2 py-3"
+              >
+                <Printer size={17} />
+                Imprimir formato oficial
+              </button>
+              <button
+                onClick={onClose}
+                className="text-sm text-dark-400 hover:text-dark-600 transition-colors py-2"
+              >
+                Cerrar sin imprimir
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      </AnimatePresence>
+    );
+  }
 
   return (
     <AnimatePresence>

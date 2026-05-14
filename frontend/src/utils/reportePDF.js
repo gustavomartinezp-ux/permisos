@@ -324,3 +324,258 @@ export function imprimirReporteFuncionario(funcionario, solicitudes = []) {
   doc.autoPrint();
   window.open(doc.output('bloburl'), '_blank');
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Formato oficial de solicitud de permiso (para imprimir / firmar)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function construirFormatoPermiso(solicitud, funcionario) {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const ancho = doc.internal.pageSize.getWidth();
+  const alto  = doc.internal.pageSize.getHeight();
+  const margen = 18;
+  const anchoUtil = ancho - margen * 2;
+
+  // ── Borde exterior ──────────────────────────────────────────────────────────
+  doc.setDrawColor(30, 64, 175);
+  doc.setLineWidth(0.8);
+  doc.rect(margen - 4, 10, anchoUtil + 8, alto - 20);
+
+  // ── Encabezado ──────────────────────────────────────────────────────────────
+  doc.setFillColor(...COLOR_PRIMARIO);
+  doc.rect(margen - 4, 10, anchoUtil + 8, 32, 'F');
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(15);
+  doc.setFont('helvetica', 'bold');
+  doc.text('CESFAM LOS CERROS', ancho / 2, 22, { align: 'center' });
+
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'normal');
+  doc.text('SOLICITUD DE PERMISO ADMINISTRATIVO', ancho / 2, 30, { align: 'center' });
+
+  doc.setFontSize(8);
+  const fechaSolicitud = solicitud.fecha_solicitud
+    ? format(parseISO(String(solicitud.fecha_solicitud).split('T')[0]), "d 'de' MMMM 'de' yyyy", { locale: es })
+    : format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es });
+  doc.text(`Fecha: ${fechaSolicitud}`, ancho / 2, 38, { align: 'center' });
+
+  // Número de solicitud (esquina superior derecha del encabezado)
+  if (solicitud.id) {
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`N° ${String(solicitud.id).padStart(5, '0')}`, ancho - margen - 2, 18, { align: 'right' });
+  }
+
+  let y = 52;
+
+  // ── Sección: Datos del funcionario ─────────────────────────────────────────
+  doc.setFillColor(235, 240, 255);
+  doc.rect(margen - 4, y - 5, anchoUtil + 8, 7, 'F');
+  doc.setTextColor(...COLOR_PRIMARIO);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.text('DATOS DEL FUNCIONARIO/A', margen, y);
+  y += 7;
+
+  const drawCampo = (label, valor, x, yPos, labelW = 30, totalW = 80) => {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(...COLOR_GRIS);
+    doc.text(label + ':', x, yPos);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(20, 20, 20);
+    doc.text(valor || '—', x + labelW, yPos);
+    doc.setDrawColor(180, 190, 210);
+    doc.setLineWidth(0.3);
+    doc.line(x + labelW, yPos + 0.8, x + totalW, yPos + 0.8);
+  };
+
+  drawCampo('Nombre completo', `${funcionario.nombres || ''} ${funcionario.apellidos || ''}`, margen, y, 36, anchoUtil);
+  y += 9;
+  drawCampo('RUT', funcionario.rut || '—', margen, y, 18, 65);
+  drawCampo('Cargo', funcionario.cargo || '—', margen + 70, y, 16, anchoUtil - 70);
+  y += 9;
+  drawCampo('Servicio / Unidad', funcionario.servicio || '—', margen, y, 36, anchoUtil * 0.55);
+  drawCampo('Contrato', funcionario.tipo_contrato || '—', margen + anchoUtil * 0.6, y, 22, anchoUtil * 0.4);
+  y += 14;
+
+  // ── Sección: Datos del permiso ─────────────────────────────────────────────
+  doc.setFillColor(235, 240, 255);
+  doc.rect(margen - 4, y - 5, anchoUtil + 8, 7, 'F');
+  doc.setTextColor(...COLOR_PRIMARIO);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.text('DATOS DEL PERMISO SOLICITADO', margen, y);
+  y += 7;
+
+  drawCampo('Tipo de permiso', solicitud.tipo_nombre || '—', margen, y, 36, anchoUtil);
+  y += 10;
+
+  const fechaInicio = fmt(solicitud.fecha_inicio);
+  const fechaFin    = fmt(solicitud.fecha_fin);
+  const diasLabel   = solicitud.dias_solicitados === 0.5 ? '0.5 (medio día)' : String(solicitud.dias_solicitados);
+
+  drawCampo('Fecha de inicio', fechaInicio, margen, y, 30, 70);
+  drawCampo('Fecha de término', fechaFin, margen + 75, y, 33, 75);
+  y += 10;
+  drawCampo('N° de días hábiles', diasLabel, margen, y, 36, 65);
+
+  // Jornada (checkboxes visuales)
+  const xJorn = margen + 75;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(...COLOR_GRIS);
+  doc.text('Jornada:', xJorn, y);
+  const jornada = solicitud.jornada_medio_dia;
+  const opciones = [
+    { label: 'AM', activo: jornada === 'AM' },
+    { label: 'PM', activo: jornada === 'PM' },
+    { label: 'Día completo', activo: !jornada },
+  ];
+  let xOp = xJorn + 22;
+  opciones.forEach(({ label, activo }) => {
+    doc.setDrawColor(30, 64, 175);
+    doc.setLineWidth(0.5);
+    doc.rect(xOp, y - 3.5, 4, 4);
+    if (activo) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(...COLOR_PRIMARIO);
+      doc.text('✓', xOp + 0.5, y - 0.2);
+    }
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(20, 20, 20);
+    doc.text(label, xOp + 5.5, y);
+    xOp += label.length * 2.2 + 12;
+  });
+
+  y += 10;
+
+  // Horario si es medio día
+  if (jornada && solicitud.fecha_inicio) {
+    const dow = new Date(solicitud.fecha_inicio + 'T12:00:00').getDay();
+    const horario = jornada === 'AM'
+      ? (dow === 5 ? '08:00 – 12:00 hrs' : '08:00 – 12:30 hrs')
+      : (dow === 5 ? '12:00 – 16:00 hrs' : '12:30 – 17:00 hrs');
+    drawCampo('Horario', horario, margen, y, 20, 80);
+    y += 10;
+  }
+
+  // Motivo
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(...COLOR_GRIS);
+  doc.text('Motivo:', margen, y);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(20, 20, 20);
+
+  const motivoTexto = solicitud.motivo || '';
+  const motivoLineas = doc.splitTextToSize(motivoTexto || '(sin especificar)', anchoUtil - 20);
+  doc.text(motivoLineas, margen + 20, y);
+  doc.setDrawColor(180, 190, 210);
+  doc.setLineWidth(0.3);
+  for (let li = 0; li < Math.max(motivoLineas.length, 3); li++) {
+    doc.line(margen + 20, y + 0.8 + li * 5.5, margen + anchoUtil, y + 0.8 + li * 5.5);
+  }
+  y += Math.max(motivoLineas.length, 3) * 5.5 + 5;
+
+  // Distribución arrastre si aplica
+  if (solicitud.dias_arrastre > 0 || solicitud.dias_periodo_actual > 0) {
+    doc.setFillColor(254, 252, 232);
+    doc.roundedRect(margen - 4, y - 3, anchoUtil + 8, 12, 1, 1, 'F');
+    doc.setDrawColor(202, 138, 4);
+    doc.setLineWidth(0.4);
+    doc.roundedRect(margen - 4, y - 3, anchoUtil + 8, 12, 1, 1, 'S');
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(120, 80, 0);
+    doc.text('Distribución Feriado Legal:', margen, y + 3);
+    doc.setFont('helvetica', 'normal');
+    const partes = [];
+    if (solicitud.dias_arrastre > 0) partes.push(`${solicitud.dias_arrastre} día(s) de arrastre`);
+    if (solicitud.dias_periodo_actual > 0) partes.push(`${solicitud.dias_periodo_actual} día(s) período actual`);
+    doc.text(partes.join(' + '), margen + 50, y + 3);
+    y += 17;
+  }
+
+  y += 5;
+
+  // ── Sección: Firmas ─────────────────────────────────────────────────────────
+  if (y > alto - 75) { y = alto - 75; }
+
+  doc.setFillColor(235, 240, 255);
+  doc.rect(margen - 4, y - 5, anchoUtil + 8, 7, 'F');
+  doc.setTextColor(...COLOR_PRIMARIO);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.text('VISACIONES Y FIRMAS', margen, y);
+  y += 8;
+
+  const firmas = [
+    { titulo: 'Funcionario/a',    nombre: `${funcionario.nombres || ''} ${funcionario.apellidos || ''}` },
+    { titulo: 'Jefe/a Directo/a', nombre: '' },
+    { titulo: 'Director/a',       nombre: '' },
+  ];
+
+  const anchoFirma = anchoUtil / firmas.length;
+  firmas.forEach((firma, i) => {
+    const xF = margen + i * anchoFirma;
+    const lineaFirma = y + 20;
+
+    doc.setDrawColor(80, 80, 120);
+    doc.setLineWidth(0.5);
+    doc.line(xF + 4, lineaFirma, xF + anchoFirma - 4, lineaFirma);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(...COLOR_PRIMARIO);
+    doc.text(firma.titulo, xF + anchoFirma / 2, lineaFirma + 5, { align: 'center' });
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(50, 50, 50);
+    if (firma.nombre) {
+      doc.text(firma.nombre, xF + anchoFirma / 2, lineaFirma + 10, { align: 'center' });
+    }
+
+    doc.setTextColor(...COLOR_GRIS);
+    doc.setFontSize(7);
+    doc.text('Nombre y firma', xF + anchoFirma / 2, lineaFirma + 15, { align: 'center' });
+
+    doc.setDrawColor(200, 205, 220);
+    doc.setLineWidth(0.3);
+    doc.line(xF + 4, lineaFirma + 22, xF + anchoFirma - 4, lineaFirma + 22);
+    doc.setFontSize(7);
+    doc.setTextColor(...COLOR_GRIS);
+    doc.text('Fecha', xF + anchoFirma / 2, lineaFirma + 27, { align: 'center' });
+  });
+
+  y += 38;
+
+  // ── Pie de página ───────────────────────────────────────────────────────────
+  doc.setFillColor(240, 242, 247);
+  doc.rect(margen - 4, alto - 15, anchoUtil + 8, 8, 'F');
+  doc.setFontSize(6.5);
+  doc.setTextColor(...COLOR_GRIS);
+  doc.setFont('helvetica', 'normal');
+  doc.text(
+    'Documento generado por el Sistema de Gestión de Permisos — CESFAM Los Cerros — Confidencial',
+    ancho / 2, alto - 10, { align: 'center' }
+  );
+
+  return doc;
+}
+
+export function descargarFormatoPermiso(solicitud, funcionario) {
+  const doc = construirFormatoPermiso(solicitud, funcionario);
+  const nombre = `permiso_${String(solicitud.id || 'nuevo').padStart(5, '0')}_${(funcionario.apellidos || 'funcionario').toLowerCase().replace(/\s+/g, '_')}.pdf`;
+  doc.save(nombre);
+}
+
+export function imprimirFormatoPermiso(solicitud, funcionario) {
+  const doc = construirFormatoPermiso(solicitud, funcionario);
+  doc.autoPrint();
+  window.open(doc.output('bloburl'), '_blank');
+}

@@ -94,10 +94,11 @@ router.get('/', async (req, res) => {
     const result = await pool.query(
       `SELECT hc.*,
               f.nombres, f.apellidos, f.rut, f.cargo,
-              u.nombres AS creado_por_nombre, u.apellidos AS creado_por_apellido
+              uf.nombres AS creado_por_nombre, uf.apellidos AS creado_por_apellido
        FROM horas_compensatorias hc
        JOIN funcionarios f ON hc.funcionario_id = f.id
        LEFT JOIN usuarios u ON hc.creado_por = u.id
+       LEFT JOIN funcionarios uf ON u.funcionario_id = uf.id
        WHERE ${whereClause}
        ORDER BY hc.fecha_realizacion DESC, hc.created_at DESC`,
       params
@@ -119,9 +120,10 @@ router.get('/funcionario/:id', async (req, res) => {
     const [saldo, registros] = await Promise.all([
       calcularSaldo(id),
       pool.query(
-        `SELECT hc.*, u.nombres AS creado_por_nombre, u.apellidos AS creado_por_apellido
+        `SELECT hc.*, uf.nombres AS creado_por_nombre, uf.apellidos AS creado_por_apellido
          FROM horas_compensatorias hc
          LEFT JOIN usuarios u ON hc.creado_por = u.id
+         LEFT JOIN funcionarios uf ON u.funcionario_id = uf.id
          WHERE hc.funcionario_id = $1
          ORDER BY hc.fecha_realizacion DESC`,
         [id]

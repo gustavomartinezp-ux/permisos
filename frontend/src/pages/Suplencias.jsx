@@ -120,27 +120,34 @@ function NuevaSuplenciaModal({ funcionarios, onClose, onSuccess }) {
           {/* Funcionario suplente */}
           <div>
             <label className="block text-sm font-medium text-dark-700 mb-1">
-              Funcionario suplente <span className="text-red-500">*</span>
+              Funcionario suplente{' '}
+              <span className="text-red-500">*</span>
+              <span className="ml-1 text-xs font-normal text-dark-400">(solo contratos de Suplencia)</span>
             </label>
-            <select
-              value={form.funcionario_suplente_id}
-              onChange={e => set('funcionario_suplente_id', e.target.value)}
-              className="input-field"
-            >
-              <option value="">— Seleccionar funcionario —</option>
-              {suplentes.map(f => (
-                <option key={f.id} value={f.id}>{f.apellidos} {f.nombres} — {f.rut}</option>
-              ))}
-              {suplentes.length === 0 && (
-                <optgroup label="Todos los funcionarios">
-                  {reemplazados.map(f => (
-                    <option key={f.id} value={f.id}>{f.apellidos} {f.nombres} — {f.rut}</option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
-            {suplentes.length === 0 && (
-              <p className="text-xs text-amber-600 mt-1">No hay funcionarios con contrato Suplencia. Mostrando todos.</p>
+            {suplentes.length === 0 ? (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-xl">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle size={14} className="text-red-600 flex-shrink-0" />
+                  <p className="text-xs font-semibold text-red-700">
+                    No hay funcionarios con contrato de Suplencia registrados.
+                  </p>
+                </div>
+                <p className="text-xs text-red-600 mt-1 ml-5">
+                  Solo pueden actuar como suplentes los funcionarios con calidad contractual "Suplencia".
+                  Registre un funcionario con ese tipo de contrato para continuar.
+                </p>
+              </div>
+            ) : (
+              <select
+                value={form.funcionario_suplente_id}
+                onChange={e => set('funcionario_suplente_id', e.target.value)}
+                className="input-field"
+              >
+                <option value="">— Seleccionar funcionario suplente —</option>
+                {suplentes.map(f => (
+                  <option key={f.id} value={f.id}>{f.apellidos} {f.nombres} — {f.rut}</option>
+                ))}
+              </select>
             )}
           </div>
 
@@ -521,18 +528,19 @@ function FilaSuplencia({ s, esAdmin, onProrrogar, onFinalizar }) {
 
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function Suplencias() {
-  const { esAdmin } = useAuth();
-  const [suplencias, setSuplencias]       = useState([]);
-  const [alertas, setAlertas]             = useState([]);
-  const [stats, setStats]                 = useState(null);
-  const [funcionarios, setFuncionarios]   = useState([]);
-  const [cargando, setCargando]           = useState(true);
-  const [tab, setTab]                     = useState('activas');
-  const [q, setQ]                         = useState('');
-  const [filtroEstado, setFiltroEstado]   = useState('');
-  const [showNueva, setShowNueva]         = useState(false);
-  const [prorrogarSup, setProrrogarSup]   = useState(null);
-  const [finalizarSup, setFinalizarSup]   = useState(null);
+  const { esAdmin, esSupervisor } = useAuth();
+  const [suplencias, setSuplencias]               = useState([]);
+  const [alertas, setAlertas]                     = useState([]);
+  const [alertasContractuales, setAlertasContr]   = useState([]);
+  const [stats, setStats]                         = useState(null);
+  const [funcionarios, setFuncionarios]           = useState([]);
+  const [cargando, setCargando]                   = useState(true);
+  const [tab, setTab]                             = useState('activas');
+  const [q, setQ]                                 = useState('');
+  const [filtroEstado, setFiltroEstado]           = useState('');
+  const [showNueva, setShowNueva]                 = useState(false);
+  const [prorrogarSup, setProrrogarSup]           = useState(null);
+  const [finalizarSup, setFinalizarSup]           = useState(null);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -541,16 +549,18 @@ export default function Suplencias() {
       if (filtroEstado) params.estado = filtroEstado;
       if (q.trim()) params.q = q.trim();
 
-      const [supRes, statsRes, alertasRes, funRes] = await Promise.allSettled([
+      const [supRes, statsRes, alertasRes, alertasContrRes, funRes] = await Promise.allSettled([
         suplenciasApi.listar(params),
         suplenciasApi.stats(),
         suplenciasApi.alertas(),
+        suplenciasApi.alertasContractuales(),
         funcionariosApi.listar(),
       ]);
-      if (supRes.status === 'fulfilled')    setSuplencias(supRes.value.data);
-      if (statsRes.status === 'fulfilled')  setStats(statsRes.value.data);
-      if (alertasRes.status === 'fulfilled') setAlertas(alertasRes.value.data);
-      if (funRes.status === 'fulfilled')    setFuncionarios(funRes.value.data);
+      if (supRes.status === 'fulfilled')         setSuplencias(supRes.value.data);
+      if (statsRes.status === 'fulfilled')       setStats(statsRes.value.data);
+      if (alertasRes.status === 'fulfilled')     setAlertas(alertasRes.value.data);
+      if (alertasContrRes.status === 'fulfilled') setAlertasContr(alertasContrRes.value.data);
+      if (funRes.status === 'fulfilled')         setFuncionarios(funRes.value.data);
     } finally {
       setCargando(false);
     }
@@ -616,6 +626,39 @@ export default function Suplencias() {
           <span>
             Hay <strong>{stats.vencidas_sin_cierre}</strong> suplencia{stats.vencidas_sin_cierre > 1 ? 's' : ''} vencida{stats.vencidas_sin_cierre > 1 ? 's' : ''} sin cerrar. Revisa la pestaña Alertas.
           </span>
+        </div>
+      )}
+
+      {/* Alerta de inconsistencias contractuales (históricas) */}
+      {esSupervisor && alertasContractuales.length > 0 && (
+        <div className="p-4 bg-amber-50 rounded-xl border border-amber-200">
+          <div className="flex items-start gap-3">
+            <AlertTriangle size={16} className="text-amber-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-amber-800">
+                Inconsistencia contractual detectada — {alertasContractuales.length} registro{alertasContractuales.length > 1 ? 's' : ''} afectado{alertasContractuales.length > 1 ? 's' : ''}
+              </p>
+              <p className="text-xs text-amber-700 mt-0.5">
+                Los siguientes funcionarios tienen suplencias registradas pero su calidad contractual actual no corresponde a "Suplencia".
+                Los registros históricos se conservan, pero no podrán asignarse nuevas suplencias hasta regularizar su contrato.
+              </p>
+              <div className="mt-2 space-y-1">
+                {alertasContractuales.slice(0, 5).map(a => (
+                  <p key={a.id} className="text-xs text-amber-700">
+                    · <span className="font-medium">{a.suplente_apellidos} {a.suplente_nombres}</span>
+                    {' '}({a.suplente_rut}){' '}
+                    — contrato: <span className="font-medium">{a.tipo_contrato || 'Planta/Indefinido'}</span>
+                    {' '}· suplencia: <span className="capitalize">{a.estado}</span>
+                  </p>
+                ))}
+                {alertasContractuales.length > 5 && (
+                  <p className="text-xs text-amber-600 font-medium">
+                    … y {alertasContractuales.length - 5} más.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

@@ -11,6 +11,9 @@ const MOTIVOS_VALIDOS = [
   'permiso_sin_goce', 'vacancia', 'otro',
 ];
 
+// Solo funcionarios con estos contratos pueden ser asignados como suplentes
+const TIPOS_CONTRATO_SUPLENCIA_PERMITIDOS = ['Suplencia'];
+
 // Helper: adjuntar prórrogas a un array de suplencias
 async function adjuntarProrrogas(suplencias) {
   if (!suplencias.length) return suplencias;
@@ -201,6 +204,27 @@ router.get('/:id', adminOSupervisor, async (req, res) => {
   }
 });
 
+// ─── GET /alertas-contractuales ───────────────────────────────────────────────
+router.get('/alertas-contractuales', adminOSupervisor, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT hs.id, hs.estado, hs.fecha_inicio, hs.fecha_termino,
+              hs.nombre_reemplazado, hs.cargo_reemplazado,
+              f.nombres AS suplente_nombres, f.apellidos AS suplente_apellidos,
+              f.rut AS suplente_rut, f.tipo_contrato
+       FROM historial_suplencias hs
+       JOIN funcionarios f ON hs.funcionario_suplente_id = f.id
+       WHERE f.tipo_contrato IS DISTINCT FROM 'Suplencia'
+       ORDER BY CASE WHEN hs.estado = 'activa' THEN 0 WHEN hs.estado = 'prorrogada' THEN 1 ELSE 2 END,
+                hs.fecha_inicio DESC`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al obtener alertas contractuales' });
+  }
+});
+
 // ─── POST / ───────────────────────────────────────────────────────────────────
 router.post('/', soloAdmin, async (req, res) => {
   const {
@@ -218,6 +242,23 @@ router.post('/', soloAdmin, async (req, res) => {
   if (fecha_inicio > fecha_termino) return res.status(400).json({ error: 'La fecha de inicio debe ser anterior al término' });
 
   try {
+    // ── Validación contractual: solo contratos autorizados pueden suplantar ──
+    const suplente = await pool.query(
+      `SELECT tipo_contrato, nombres, apellidos FROM funcionarios WHERE id = $1 AND activo = true`,
+      [parseInt(funcionario_suplente_id)]
+    );
+    if (!suplente.rows.length) {
+      return res.status(404).json({ error: 'Funcionario suplente no encontrado o inactivo' });
+    }
+    const tipoContrato = suplente.rows[0].tipo_contrato;
+    if (!TIPOS_CONTRATO_SUPLENCIA_PERMITIDOS.includes(tipoContrato)) {
+      return res.status(422).json({
+        error: `Los funcionarios con calidad contractual "${tipoContrato || 'Planta/Indefinido'}" no pueden realizar suplencias ni ser asignados como reemplazantes. Solo están autorizados funcionarios con contrato de Suplencia.`,
+        codigo: 'CONTRATO_NO_AUTORIZADO',
+        tipo_contrato: tipoContrato,
+      });
+    }
+
     const { rows } = await pool.query(
       `INSERT INTO historial_suplencias
          (funcionario_suplente_id, funcionario_reemplazado_id, rut_reemplazado, nombre_reemplazado,

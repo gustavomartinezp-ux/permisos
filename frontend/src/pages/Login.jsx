@@ -136,7 +136,7 @@ export default function Login() {
               <span className="font-semibold text-dark-700">{SISTEMA.autor}</span>
             </p>
             <p className="text-xs text-dark-400 mt-0.5">
-              CESFAM Los Cerros · v{SISTEMA.version} · {SISTEMA.anio}
+              v{SISTEMA.version} · {SISTEMA.anio}
             </p>
           </div>
         </div>

@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   LayoutDashboard, Users, FileText, Clock, LogOut,
-  ChevronRight, Settings, UserCircle, KeyRound, Hourglass, BarChart2, UserCheck, Briefcase, UserCog,
+  ChevronRight, Settings, UserCircle, KeyRound, Hourglass, BarChart2, UserCheck, Briefcase, UserCog, Info,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import CambiarPasswordModal from './CambiarPasswordModal';
@@ -21,6 +21,8 @@ const NAV_SUPERVISOR = [
   { to: '/suplencias',           label: 'Hist. Suplencias',    icon: UserCheck },
   { to: '/reportes',             label: 'Reportes',            icon: BarChart2 },
   { to: '/configuracion',        label: 'Configuración',       icon: Settings },
+  { header: 'Información' },
+  { to: '/acerca',               label: 'Acerca del Sistema',  icon: Info },
 ];
 
 export default function Sidebar({ mobile = false, onClose }) {
@@ -43,6 +45,8 @@ export default function Sidebar({ mobile = false, onClose }) {
     { to: '/solicitudes',            label: 'Mis Solicitudes',    icon: FileText },
     { to: '/horas-compensatorias',   label: 'Hrs. Compensatorias',icon: Hourglass },
     { to: '/historial',              label: 'Mi Historial',       icon: Clock },
+    { header: 'Información' },
+    { to: '/acerca',                 label: 'Acerca del Sistema',  icon: Info },
   ];
 
   const navItems = esFuncionario ? navFuncionario : NAV_SUPERVISOR;

@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Cross, Eye, EyeOff, Lock, Mail, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { SISTEMA } from '../config/sistema';
 
 export default function Login() {
   const { login } = useAuth();
@@ -126,6 +127,17 @@ export default function Login() {
               </button>
             </form>
 
+          </div>
+
+          {/* Créditos institucionales */}
+          <div className="px-8 py-3 border-t border-gray-100 bg-gray-50/80 rounded-b-2xl text-center">
+            <p className="text-xs text-dark-500">
+              Desarrollado por{' '}
+              <span className="font-semibold text-dark-700">{SISTEMA.autor}</span>
+            </p>
+            <p className="text-xs text-dark-400 mt-0.5">
+              {SISTEMA.institucion} · v{SISTEMA.version} · {SISTEMA.anio}
+            </p>
           </div>
         </div>
       </motion.div>

@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, X } from 'lucide-react';
 import Sidebar from './Sidebar';
+import { SISTEMA } from '../config/sistema';
 
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -65,6 +66,15 @@ export default function Layout() {
             <Outlet />
           </motion.div>
         </main>
+
+        {/* Footer global institucional */}
+        <footer className="flex-shrink-0 border-t border-dark-200 bg-white px-4 py-2 text-center">
+          <p className="text-xs text-dark-400">
+            Sistema desarrollado por{' '}
+            <span className="font-medium text-dark-600">{SISTEMA.autor}</span>
+            {' '}&middot;{' '}{SISTEMA.institucion} © {SISTEMA.anio}
+          </p>
+        </footer>
       </div>
     </div>
   );

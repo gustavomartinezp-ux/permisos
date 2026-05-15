@@ -42,12 +42,13 @@ export function AuthProvider({ children }) {
     setUsuario(null);
   }, []);
 
-  const esAdmin      = usuario?.rol === 'admin';
-  const esSupervisor = ['admin', 'supervisor'].includes(usuario?.rol);
-  const esFuncionario = usuario?.rol === 'funcionario';
+  const esAdmin        = usuario?.rol === 'admin';
+  const esSupervisor   = ['admin', 'supervisor'].includes(usuario?.rol);
+  const esSupervisorPuro = usuario?.rol === 'supervisor';
+  const esFuncionario  = usuario?.rol === 'funcionario';
 
   return (
-    <AuthContext.Provider value={{ usuario, cargando, login, logout, esAdmin, esSupervisor, esFuncionario }}>
+    <AuthContext.Provider value={{ usuario, cargando, login, logout, esAdmin, esSupervisor, esSupervisorPuro, esFuncionario }}>
       {children}
     </AuthContext.Provider>
   );

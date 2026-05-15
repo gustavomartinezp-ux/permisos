@@ -92,6 +92,21 @@ router.get('/:id', async (req, res) => {
       return res.status(403).json({ error: 'Acceso denegado' });
     }
 
+    // Supervisor solo puede ver funcionarios de su sector/área o su propio perfil
+    if (req.usuario.rol === 'supervisor' && req.usuario.funcionario_id != id) {
+      const check = await pool.query(
+        'SELECT sector, area FROM funcionarios WHERE id = $1 AND activo = true', [id]
+      );
+      if (check.rows.length > 0) {
+        const f = check.rows[0];
+        const inSector = req.usuario.sector && f.sector === req.usuario.sector;
+        const inArea   = req.usuario.area   && f.area   === req.usuario.area;
+        if (!inSector && !inArea) {
+          return res.status(403).json({ error: 'Acceso denegado: funcionario fuera de su ámbito' });
+        }
+      }
+    }
+
     const funcionario = await pool.query(
       `SELECT f.*,
               s.nombre AS servicio,
@@ -519,7 +534,7 @@ router.delete('/:id/foto', async (req, res) => {
 });
 
 // Actualizar saldos manualmente (cambio de grado + ajuste arrastre feriado legal)
-router.put('/:id/saldos', adminOSupervisor, async (req, res) => {
+router.put('/:id/saldos', soloAdmin, async (req, res) => {
   const { saldos, arrastres, anio, motivo } = req.body;
   const funcId = req.params.id;
   const client = await pool.connect();

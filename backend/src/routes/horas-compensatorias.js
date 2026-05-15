@@ -86,6 +86,20 @@ router.get('/', async (req, res) => {
     if (req.usuario.rol === 'funcionario') {
       whereClause += ` AND hc.funcionario_id = $${params.length + 1}`;
       params.push(req.usuario.funcionario_id);
+    } else if (req.usuario.rol === 'supervisor') {
+      // Supervisor solo ve horas de funcionarios de su sector/área
+      if (req.usuario.sector) {
+        whereClause += ` AND f.sector = $${params.length + 1}`;
+        params.push(req.usuario.sector);
+      } else if (req.usuario.area) {
+        whereClause += ` AND f.area = $${params.length + 1}`;
+        params.push(req.usuario.area);
+      } else if (req.usuario.funcionario_id) {
+        whereClause += ` AND hc.funcionario_id = $${params.length + 1}`;
+        params.push(req.usuario.funcionario_id);
+      } else {
+        whereClause += ' AND 1=0';
+      }
     } else if (req.query.funcionario_id) {
       whereClause += ` AND hc.funcionario_id = $${params.length + 1}`;
       params.push(parseInt(req.query.funcionario_id));
@@ -115,6 +129,18 @@ router.get('/funcionario/:id', async (req, res) => {
   const id = parseInt(req.params.id);
   if (req.usuario.rol === 'funcionario' && req.usuario.funcionario_id != id) {
     return res.status(403).json({ error: 'Acceso denegado' });
+  }
+  // Supervisor solo puede ver funcionarios de su sector/área o su propio perfil
+  if (req.usuario.rol === 'supervisor' && req.usuario.funcionario_id != id) {
+    const check = await pool.query('SELECT sector, area FROM funcionarios WHERE id = $1', [id]);
+    if (check.rows.length > 0) {
+      const f = check.rows[0];
+      const inSector = req.usuario.sector && f.sector === req.usuario.sector;
+      const inArea   = req.usuario.area   && f.area   === req.usuario.area;
+      if (!inSector && !inArea) {
+        return res.status(403).json({ error: 'Acceso denegado' });
+      }
+    }
   }
   try {
     const [saldo, registros] = await Promise.all([

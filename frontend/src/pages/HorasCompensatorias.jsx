@@ -380,7 +380,7 @@ function SolicitarCompModal({ funcionario, saldo, registros = [], onClose, onSuc
 
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function HorasCompensatorias() {
-  const { esAdmin, esFuncionario, usuario } = useAuth();
+  const { esAdmin, esFuncionario, esSupervisorPuro, usuario } = useAuth();
 
   const [data, setData]               = useState(null);
   const [solicitudes, setSolicitudes] = useState([]);
@@ -390,8 +390,10 @@ export default function HorasCompensatorias() {
   const [modalSolicitar, setModalSolicitar]   = useState(false);
   const [procesando, setProcesando]   = useState(null);
   const [expandido, setExpandido]     = useState({});
+  const [saldoPropio, setSaldoPropio] = useState(null); // saldo personal del supervisor
 
-  const funcionarioId = esFuncionario ? usuario?.funcionario_id : null;
+  // funcionarioId aplica tanto para funcionario como para supervisor con perfil propio
+  const funcionarioId = (esFuncionario || esSupervisorPuro) ? usuario?.funcionario_id : null;
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -406,6 +408,16 @@ export default function HorasCompensatorias() {
       console.error('horas-compensatorias error:', err?.response?.status, err?.response?.data);
     }
 
+    // Supervisor: cargar también su saldo personal si tiene funcionario_id
+    if (esSupervisorPuro && funcionarioId) {
+      try {
+        const propioRes = await horasCompensatoriasApi.porFuncionario(funcionarioId);
+        setSaldoPropio(propioRes.data.saldo || null);
+      } catch {
+        setSaldoPropio(null);
+      }
+    }
+
     try {
       const solRes = await solicitudesCompensacionApi.listar(
         esFuncionario ? { funcionario_id: funcionarioId } : {}
@@ -418,7 +430,7 @@ export default function HorasCompensatorias() {
     }
 
     setCargando(false);
-  }, [esFuncionario, funcionarioId]);
+  }, [esFuncionario, esSupervisorPuro, funcionarioId]);
 
   useEffect(() => {
     cargar();
@@ -479,10 +491,10 @@ export default function HorasCompensatorias() {
     }
   };
 
-  // Saldo del funcionario logueado (para vista funcionario)
-  const saldo = esFuncionario ? (data?.saldo || null) : null;
+  // Saldo personal: funcionario usa data.saldo, supervisor usa saldoPropio
+  const saldo = esFuncionario ? (data?.saldo || null) : (esSupervisorPuro ? saldoPropio : null);
 
-  // Para vista admin: agrupar registros por funcionario
+  // Para vista admin/supervisor: agrupar registros por funcionario
   const registrosAdmin = !esFuncionario ? (Array.isArray(data) ? data : []) : [];
 
   // Para vista funcionario: los registros están en data.registros
@@ -503,7 +515,11 @@ export default function HorasCompensatorias() {
         <div>
           <h1 className="text-2xl font-bold text-dark-900">Horas Compensatorias</h1>
           <p className="text-dark-500 text-sm mt-0.5">
-            {esFuncionario ? 'Tu saldo y solicitudes de compensación' : 'Gestión institucional de horas extraordinarias'}
+            {esFuncionario
+              ? 'Tu saldo y solicitudes de compensación'
+              : esSupervisorPuro
+              ? 'Tu saldo personal y gestión de tu equipo'
+              : 'Gestión institucional de horas extraordinarias'}
           </p>
         </div>
         <div className="flex gap-2">
@@ -513,7 +529,8 @@ export default function HorasCompensatorias() {
               Registrar Horas
             </button>
           )}
-          {esFuncionario && saldo && (
+          {/* Funcionario y supervisor (con perfil propio) pueden solicitar compensación */}
+          {(esFuncionario || (esSupervisorPuro && funcionarioId)) && saldo && (
             <button onClick={() => setModalSolicitar(true)} className="btn-primary"
               disabled={saldo.saldo_disponible <= 0}>
               <Plus size={16} />
@@ -523,8 +540,8 @@ export default function HorasCompensatorias() {
         </div>
       </div>
 
-      {/* ── Vista funcionario: tarjetas de saldo ── */}
-      {esFuncionario && saldo && (
+      {/* ── Tarjetas de saldo: funcionario y supervisor con perfil propio ── */}
+      {(esFuncionario || (esSupervisorPuro && funcionarioId)) && saldo && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {[
             { label: 'Horas ganadas',   value: saldo.horas_ganadas,    color: 'bg-teal-500',   icon: TrendingUp },

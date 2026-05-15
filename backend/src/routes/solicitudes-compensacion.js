@@ -46,6 +46,25 @@ router.get('/', async (req, res) => {
     if (req.usuario.rol === 'funcionario') {
       where += ` AND sc.funcionario_id = $${params.length + 1}`;
       params.push(req.usuario.funcionario_id);
+    } else if (req.usuario.rol === 'supervisor') {
+      // Supervisor ve sus propias solicitudes + las de su sector/área
+      const condiciones = [];
+      if (req.usuario.funcionario_id) {
+        params.push(req.usuario.funcionario_id);
+        condiciones.push(`sc.funcionario_id = $${params.length}`);
+      }
+      if (req.usuario.sector) {
+        params.push(req.usuario.sector);
+        condiciones.push(`f.sector = $${params.length}`);
+      } else if (req.usuario.area) {
+        params.push(req.usuario.area);
+        condiciones.push(`f.area = $${params.length}`);
+      }
+      if (condiciones.length > 0) {
+        where += ` AND (${condiciones.join(' OR ')})`;
+      } else {
+        where += ' AND 1=0';
+      }
     } else if (req.query.funcionario_id) {
       where += ` AND sc.funcionario_id = $${params.length + 1}`;
       params.push(parseInt(req.query.funcionario_id));

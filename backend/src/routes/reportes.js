@@ -8,39 +8,63 @@ const router = express.Router();
 router.use(verificarToken, adminOSupervisor);
 
 // ─── Estadísticas generales ───────────────────────────────────────────────────
+const SECTORES_VALIDOS = ['Verde','Azul','Amarillo','Rojo','Lila','SAR'];
+const AREAS_VALIDAS = [
+  'Técnica','Administrativa','Salud Familiar','SOME','Estadística','Servicios Generales',
+  'Programa Infantil','Programa Adolescente','Programa Salud Reproductiva',
+  'Programa del Adulto','Programa Adulto Mayor','Programa Salud Dental',
+  'Programa de Salud Mental','Programa Comunitario','Referente OIRS','Médico Gestor',
+];
+
 router.get('/estadisticas', async (req, res) => {
   try {
     const anio = parseInt(req.query.anio) || new Date().getFullYear();
     const hoy  = new Date().toISOString().split('T')[0];
 
+    // Filtro por sector/área para supervisor
+    let fp = null; // filterParam
+    let ff = null; // filterField
+    if (req.usuario.rol === 'supervisor') {
+      if (SECTORES_VALIDOS.includes(req.usuario.sector)) { fp = req.usuario.sector; ff = 'f.sector'; }
+      else if (AREAS_VALIDAS.includes(req.usuario.area)) { fp = req.usuario.area;   ff = 'f.area'; }
+    }
+    const joinF  = fp ? 'JOIN funcionarios f ON s.funcionario_id=f.id' : '';
+    const andFp  = fp ? `AND ${ff} = $2` : '';
+    const andFp1 = fp ? `AND ${ff} = $1` : '';
+    const pAnio  = fp ? [anio, fp] : [anio];
+    const pHoy   = fp ? [hoy, fp]  : [hoy];
+    const pFp    = fp ? [fp] : [];
+
     const [funcRes, estRes, activosRes, horasRes, ausRes] = await Promise.all([
       pool.query(
-        `SELECT COUNT(*) FILTER (WHERE activo=TRUE)  AS activos,
-                COUNT(*) FILTER (WHERE activo=FALSE) AS inactivos
-         FROM funcionarios`
+        `SELECT COUNT(*) FILTER (WHERE f.activo=TRUE)  AS activos,
+                COUNT(*) FILTER (WHERE f.activo=FALSE) AS inactivos
+         FROM funcionarios f ${fp ? `WHERE ${ff} = $1` : ''}`, pFp
       ),
       pool.query(
         `SELECT estado, COUNT(*) AS total
-         FROM solicitudes
-         WHERE EXTRACT(YEAR FROM fecha_inicio)=$1
-         GROUP BY estado`,
-        [anio]
+         FROM solicitudes s ${joinF}
+         WHERE EXTRACT(YEAR FROM s.fecha_inicio)=$1 ${andFp}
+         GROUP BY estado`, pAnio
       ),
       pool.query(
-        `SELECT COUNT(*) AS total FROM solicitudes
-         WHERE estado='aprobado' AND fecha_inicio<=$1 AND fecha_fin>=$1`,
-        [hoy]
+        `SELECT COUNT(*) AS total FROM solicitudes s ${joinF}
+         WHERE s.estado='aprobado' AND s.fecha_inicio<=$1 AND s.fecha_fin>=$1 ${andFp}`,
+        pHoy
       ),
       pool.query(
-        `SELECT COALESCE(SUM(horas_compensatorias),0) AS total
-         FROM horas_compensatorias WHERE estado='activo'`
+        `SELECT COALESCE(SUM(hc.horas_compensatorias),0) AS total
+         FROM horas_compensatorias hc
+         ${fp ? 'JOIN funcionarios f ON hc.funcionario_id=f.id' : ''}
+         WHERE hc.estado='activo' ${andFp1}`, pFp
       ),
       pool.query(
         `SELECT COUNT(DISTINCT s.funcionario_id) AS funcionarios,
                 COALESCE(SUM(s.dias_solicitados),0) AS dias,
                 COUNT(s.id) AS solicitudes
-         FROM solicitudes s
-         WHERE s.estado='aprobado' AND s.fecha_inicio >= NOW()-INTERVAL '180 days'`
+         FROM solicitudes s ${joinF}
+         WHERE s.estado='aprobado' AND s.fecha_inicio >= NOW()-INTERVAL '180 days' ${andFp1}`,
+        pFp
       ),
     ]);
 
@@ -136,9 +160,20 @@ router.get('/permisos', async (req, res) => {
 // ─── Ausentismo últimos 180 días ─────────────────────────────────────────────
 router.get('/ausentismo', async (req, res) => {
   try {
-    const sector = req.query.sector || null;
+    let sector = req.query.sector || null;
+    let area   = null;
+    // Supervisor: forzar su propio sector/área, ignorar query param
+    if (req.usuario.rol === 'supervisor') {
+      if (SECTORES_VALIDOS.includes(req.usuario.sector)) { sector = req.usuario.sector; area = null; }
+      else if (AREAS_VALIDAS.includes(req.usuario.area)) { sector = null; area = req.usuario.area; }
+      else { sector = null; }
+    }
     const params = [];
-    const sw = sector ? (params.push(sector), `AND f.sector = $${params.length}`) : '';
+    const sw = sector
+      ? (params.push(sector), `AND f.sector = $${params.length}`)
+      : area
+      ? (params.push(area), `AND f.area = $${params.length}`)
+      : '';
 
     const [porFuncionario, porTipo, porMes, resumen] = await Promise.all([
       pool.query(

@@ -51,7 +51,7 @@ export default function AcercaDel() {
               <img src="/logo.png" alt="Logo CESFAM" className="w-10 h-10 object-contain" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white">{SISTEMA.institucion}</h2>
+              <h2 className="text-lg font-bold text-white">CESFAM Los Cerros</h2>
               <p className="text-brand-200 text-sm">{SISTEMA.nombre}</p>
             </div>
           </div>
@@ -60,7 +60,7 @@ export default function AcercaDel() {
         <div className="px-6 divide-y divide-dark-100">
           <InfoRow label="Versión"          value={`v${SISTEMA.version}`} />
           <InfoRow label="Año"              value={SISTEMA.anio} />
-          <InfoRow label="Institución"      value={SISTEMA.institucion} />
+          <InfoRow label="Institución"      value="CESFAM Los Cerros" />
         </div>
       </motion.div>
 
@@ -82,7 +82,7 @@ export default function AcercaDel() {
             <p className="text-xl font-bold text-dark-900">{SISTEMA.autor}</p>
             <p className="text-sm text-dark-500 mt-1">
               Diseño, desarrollo e implementación del sistema institucional de gestión de
-              permisos y recursos humanos para {SISTEMA.institucion}.
+              permisos y recursos humanos para CESFAM Los Cerros.
             </p>
           </div>
         </div>

@@ -3,7 +3,6 @@ export const SISTEMA = {
   version: '1.0.0',
   autor: 'Gustavo Martínez Parra',
   anio: '2026',
-  institucion: 'CESFAM Los Cerros',
   stack: [
     { nombre: 'React 18',      rol: 'Interfaz de usuario' },
     { nombre: 'Vite',          rol: 'Empaquetador frontend' },

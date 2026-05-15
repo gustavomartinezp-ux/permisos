@@ -72,7 +72,7 @@ export default function Layout() {
           <p className="text-xs text-dark-400">
             Sistema desarrollado por{' '}
             <span className="font-medium text-dark-600">{SISTEMA.autor}</span>
-            {' '}&middot;{' '}{SISTEMA.institucion} © {SISTEMA.anio}
+            {' '}&middot;{' '}CESFAM Los Cerros © {SISTEMA.anio}
           </p>
         </footer>
       </div>

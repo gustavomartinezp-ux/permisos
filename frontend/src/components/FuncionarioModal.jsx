@@ -59,7 +59,7 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
     tipo_contrato: tipoContratoInicial,
     horas_contrato: '', dispositivo_id: '', reemplaza_a: '',
     sector: '', area: '', activo: true,
-    convenio_honorarios: '', prestacion: '', fecha_termino_contrato: '',
+    convenio_honorarios: '', prestacion: '',
     ...(funcEdit || {}),
     fecha_ingreso: normFecha(funcEdit?.fecha_ingreso),
     fecha_nacimiento: normFecha(funcEdit?.fecha_nacimiento),

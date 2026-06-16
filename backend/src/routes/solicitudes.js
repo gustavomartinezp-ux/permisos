@@ -362,7 +362,7 @@ router.patch('/:id/pre-aprobar', adminOSupervisor, async (req, res) => {
 
   try {
     const check = await pool.query(
-      `SELECT sol.id, sol.funcionario_id, f.sector
+      `SELECT sol.id, sol.funcionario_id, f.sector, f.area
        FROM solicitudes sol
        JOIN funcionarios f ON sol.funcionario_id = f.id
        WHERE sol.id = $1 AND sol.estado = 'pendiente'`,
@@ -373,12 +373,17 @@ router.patch('/:id/pre-aprobar', adminOSupervisor, async (req, res) => {
       return res.status(404).json({ error: 'Solicitud no encontrada o ya procesada' });
     }
 
-    if (req.usuario.funcionario_id && check.rows[0].funcionario_id == req.usuario.funcionario_id) {
+    const solCheck = check.rows[0];
+
+    if (req.usuario.funcionario_id && solCheck.funcionario_id == req.usuario.funcionario_id) {
       return res.status(403).json({ error: 'No puede pre-aprobar su propia solicitud. Será aprobada directamente por el Administrador.' });
     }
 
-    if (req.usuario.sector && check.rows[0].sector !== req.usuario.sector) {
+    if (req.usuario.sector && solCheck.sector !== req.usuario.sector) {
       return res.status(403).json({ error: 'No puede pre-aprobar solicitudes de otro sector' });
+    }
+    if (!req.usuario.sector && req.usuario.area && solCheck.area !== req.usuario.area) {
+      return res.status(403).json({ error: 'No puede pre-aprobar solicitudes de otra área' });
     }
 
     await pool.query(

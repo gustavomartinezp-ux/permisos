@@ -187,6 +187,25 @@ router.patch('/:id/aprobar', adminOSupervisor, async (req, res) => {
     }
 
     const s = sol.rows[0];
+
+    // Supervisor no puede aprobar su propia solicitud de horas compensatorias
+    if (req.usuario.rol === 'supervisor' && req.usuario.funcionario_id && s.funcionario_id == req.usuario.funcionario_id) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'No puede aprobar su propia solicitud de horas compensatorias. Debe ser procesada por el Administrador.' });
+    }
+
+    // Supervisor solo puede aprobar solicitudes de funcionarios bajo su cargo
+    if (req.usuario.rol === 'supervisor') {
+      const funcCheck = await client.query('SELECT sector, area FROM funcionarios WHERE id = $1', [s.funcionario_id]);
+      const f = funcCheck.rows[0];
+      const inSector = req.usuario.sector && f?.sector === req.usuario.sector;
+      const inArea   = req.usuario.area   && f?.area   === req.usuario.area;
+      if (!inSector && !inArea) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({ error: 'Solo puede aprobar solicitudes de funcionarios bajo su cargo directo' });
+      }
+    }
+
     const saldo = await calcularSaldo(s.funcionario_id);
     if (saldo.saldo_disponible < parseFloat(s.horas_solicitadas)) {
       await client.query('ROLLBACK');
@@ -225,6 +244,31 @@ router.patch('/:id/aprobar', adminOSupervisor, async (req, res) => {
 router.patch('/:id/rechazar', adminOSupervisor, async (req, res) => {
   const { observaciones } = req.body;
   try {
+    // Verificar existencia y scope antes de rechazar
+    if (req.usuario.rol === 'supervisor') {
+      const solCheck = await pool.query(
+        `SELECT sc.funcionario_id, f.sector, f.area
+         FROM solicitudes_compensacion sc
+         JOIN funcionarios f ON sc.funcionario_id = f.id
+         WHERE sc.id = $1 AND sc.estado = 'pendiente'`,
+        [req.params.id]
+      );
+      if (!solCheck.rows.length) {
+        return res.status(404).json({ error: 'Solicitud no encontrada o ya procesada' });
+      }
+      const s = solCheck.rows[0];
+
+      if (req.usuario.funcionario_id && s.funcionario_id == req.usuario.funcionario_id) {
+        return res.status(403).json({ error: 'No puede rechazar su propia solicitud de horas compensatorias. Solo el Administrador puede hacerlo.' });
+      }
+
+      const inSector = req.usuario.sector && s.sector === req.usuario.sector;
+      const inArea   = req.usuario.area   && s.area   === req.usuario.area;
+      if (!inSector && !inArea) {
+        return res.status(403).json({ error: 'Solo puede gestionar solicitudes de funcionarios bajo su cargo directo' });
+      }
+    }
+
     const result = await pool.query(
       `UPDATE solicitudes_compensacion
        SET estado = 'rechazado', aprobado_por = $1, fecha_resolucion = NOW(), observaciones = $2

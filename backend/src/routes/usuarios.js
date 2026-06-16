@@ -3,17 +3,16 @@ const bcrypt = require('bcryptjs');
 const { body, validationResult } = require('express-validator');
 const { pool } = require('../db');
 const { verificarToken, soloAdmin } = require('../middleware/auth');
+const { SECTORES_VALIDOS, AREAS_VALIDAS } = require('../config/catalogos');
 
 const router = express.Router();
 router.use(verificarToken, soloAdmin);
-
-const SECTORES_VALIDOS = ['Verde', 'Azul', 'Amarillo', 'Rojo', 'Lila'];
 
 // Listar todos los usuarios (admin)
 router.get('/', async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT u.id, u.email, u.rol, u.activo, u.sector,
+      `SELECT u.id, u.email, u.rol, u.activo, u.sector, u.area,
               f.nombres, f.apellidos, f.cargo, f.rut
        FROM usuarios u
        LEFT JOIN funcionarios f ON u.funcionario_id = f.id
@@ -26,13 +25,16 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Actualizar sector y rol de un usuario
+// Actualizar sector, área y rol de un usuario
 router.put('/:id', async (req, res) => {
-  const { sector, rol } = req.body;
+  const { sector, area, rol } = req.body;
   const { id } = req.params;
 
   if (sector && !SECTORES_VALIDOS.includes(sector)) {
     return res.status(400).json({ error: 'Sector inválido' });
+  }
+  if (area && !AREAS_VALIDAS.includes(area)) {
+    return res.status(400).json({ error: 'Área inválida' });
   }
   if (rol && !['admin', 'supervisor', 'funcionario'].includes(rol)) {
     return res.status(400).json({ error: 'Rol inválido' });
@@ -42,10 +44,11 @@ router.put('/:id', async (req, res) => {
     const result = await pool.query(
       `UPDATE usuarios
        SET sector = COALESCE($1, sector),
-           rol    = COALESCE($2, rol)
-       WHERE id = $3
-       RETURNING id, email, rol, sector, activo`,
-      [sector || null, rol || null, id]
+           area   = COALESCE($2, area),
+           rol    = COALESCE($3, rol)
+       WHERE id = $4
+       RETURNING id, email, rol, sector, area, activo`,
+      [sector || null, area || null, rol || null, id]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Usuario no encontrado' });
     res.json(result.rows[0]);

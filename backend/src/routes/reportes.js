@@ -3,18 +3,10 @@ const express = require('express');
 const ExcelJS = require('exceljs');
 const { pool } = require('../db');
 const { verificarToken, soloAdmin, adminOSupervisor } = require('../middleware/auth');
+const { SECTORES_VALIDOS, AREAS_VALIDAS } = require('../config/catalogos');
 
 const router = express.Router();
 router.use(verificarToken, adminOSupervisor);
-
-// ─── Estadísticas generales ───────────────────────────────────────────────────
-const SECTORES_VALIDOS = ['Verde','Azul','Amarillo','Rojo','Lila','SAR'];
-const AREAS_VALIDAS = [
-  'Técnica','Administrativa','Salud Familiar','SOME','Estadística','Servicios Generales',
-  'Programa Infantil','Programa Adolescente','Programa Salud Reproductiva',
-  'Programa del Adulto','Programa Adulto Mayor','Programa Salud Dental',
-  'Programa de Salud Mental','Programa Comunitario','Referente OIRS','Médico Gestor',
-];
 
 router.get('/estadisticas', async (req, res) => {
   try {
@@ -81,7 +73,7 @@ router.get('/estadisticas', async (req, res) => {
         pre_aprobadas: estadoMap.pre_aprobado || 0,
         aprobadas:     estadoMap.aprobado     || 0,
         rechazadas:    estadoMap.rechazado    || 0,
-        reintegradas:  estadoMap.reintegrado  || 0,
+        reintegradas:  estadoMap.cancelado    || 0,
       },
       permisos_activos_hoy: parseInt(activosRes.rows[0].total),
       horas_compensatorias: parseFloat(horasRes.rows[0].total),

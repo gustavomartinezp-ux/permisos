@@ -1,6 +1,7 @@
 const express = require('express');
 const { pool } = require('../db');
 const { verificarToken } = require('../middleware/auth');
+const { SECTORES_VALIDOS, AREAS_VALIDAS } = require('../config/catalogos');
 
 const router = express.Router();
 router.use(verificarToken);
@@ -15,13 +16,6 @@ router.get('/stats', async (req, res) => {
   const areaFiltro   = esSupervisor && !req.usuario.sector && req.usuario.area ? req.usuario.area : null;
 
   try {
-    const SECTORES_VALIDOS = ['Verde', 'Azul', 'Amarillo', 'Rojo', 'Lila', 'SAR'];
-    const AREAS_VALIDAS = [
-      'Técnica', 'Administrativa', 'Salud Familiar', 'SOME', 'Estadística', 'Servicios Generales',
-      'Programa Infantil', 'Programa Adolescente', 'Programa Salud Reproductiva',
-      'Programa del Adulto', 'Programa Adulto Mayor', 'Programa Salud Dental',
-      'Programa de Salud Mental', 'Programa Comunitario', 'Referente OIRS', 'Médico Gestor',
-    ];
     const sectorSeguro = SECTORES_VALIDOS.includes(sectorFiltro) ? sectorFiltro : null;
     const areaSegura   = AREAS_VALIDAS.includes(areaFiltro) ? areaFiltro : null;
     const filterWhere  = sectorSeguro

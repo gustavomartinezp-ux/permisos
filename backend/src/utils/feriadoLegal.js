@@ -163,6 +163,7 @@ function calcularFechaFinEspecial(fechaInicio, diasFijos, tipoDias) {
 }
 
 module.exports = {
+  FERIADOS_CHILE,
   esDiaHabil,
   calcularDiasHabiles,
   calcularDistribucion,

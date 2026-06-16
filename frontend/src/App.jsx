@@ -61,19 +61,18 @@ function AppRoutes() {
 
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         {/* Solo supervisores/admin */}
-        <Route path="/dashboard"    element={<SoloSupervisor><Dashboard /></SoloSupervisor>} />
-        <Route path="/funcionarios" element={<SoloSupervisor><Funcionarios /></SoloSupervisor>} />
-        <Route path="/configuracion" element={<SoloSupervisor><Configuracion /></SoloSupervisor>} />
+        <Route path="/dashboard"      element={<SoloSupervisor><Dashboard /></SoloSupervisor>} />
+        <Route path="/configuracion"  element={<SoloSupervisor><Configuracion /></SoloSupervisor>} />
         <Route path="/tipos-permisos" element={<SoloSupervisor><TiposPermisos /></SoloSupervisor>} />
 
         {/* Accesibles a todos (backend filtra por funcionario_id) */}
-        <Route path="/reportes"                element={<SoloSupervisor><Reportes /></SoloSupervisor>} />
-        <Route path="/suplencias"              element={<SoloSupervisor><Suplencias /></SoloSupervisor>} />
+        <Route path="/reportes"   element={<SoloSupervisor><Reportes /></SoloSupervisor>} />
+        <Route path="/suplencias" element={<SoloSupervisor><Suplencias /></SoloSupervisor>} />
 
-        {/* Grupos contractuales */}
-        <Route path="/funcionarios"            element={<SoloSupervisor><Funcionarios grupo="contrata" /></SoloSupervisor>} />
-        <Route path="/honorarios"              element={<SoloSupervisor><Funcionarios grupo="honorarios" /></SoloSupervisor>} />
-        <Route path="/suplentes"               element={<SoloSupervisor><Funcionarios grupo="suplentes" /></SoloSupervisor>} />
+        {/* Grupos contractuales — segmentación estricta por calidad jurídica */}
+        <Route path="/funcionarios" element={<SoloSupervisor><Funcionarios grupo="contrata"   /></SoloSupervisor>} />
+        <Route path="/honorarios"   element={<SoloSupervisor><Funcionarios grupo="honorarios" /></SoloSupervisor>} />
+        <Route path="/suplentes"    element={<SoloSupervisor><Funcionarios grupo="suplentes"  /></SoloSupervisor>} />
 
         {/* Accesibles a todos (backend filtra por funcionario_id) */}
         <Route path="/funcionarios/:id"        element={<FuncionarioDetalle />} />

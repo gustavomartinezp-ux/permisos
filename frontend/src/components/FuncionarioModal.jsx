@@ -290,62 +290,60 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
                 </div>
               </section>
 
-              {/* Datos de escalafón — solo Planta y Contrata */}
-              {esPlantaContrata && (
-                <section>
-                  <p className="text-xs font-semibold text-brand-600 uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                    <Award size={12} />Datos de escalafón
-                  </p>
-                  <div className="p-4 bg-brand-50 rounded-xl border border-brand-100 space-y-3">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="col-span-2">
-                        <label className="block text-xs font-medium text-dark-700 mb-1.5">Escalafón</label>
-                        <select
-                          value={form.escalafon || ''}
-                          onChange={e => set('escalafon', e.target.value)}
-                          className="input-field"
-                        >
-                          <option value="">Sin especificar</option>
-                          {ESCALAFONES.map(esc => <option key={esc} value={esc}>{esc}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-dark-700 mb-1.5">Categoría</label>
-                        <input
-                          type="text"
-                          value={form.categoria || ''}
-                          onChange={e => set('categoria', e.target.value)}
-                          className="input-field"
-                          placeholder="Ej: A, B, C..."
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-dark-700 mb-1.5">Nivel / Grado</label>
-                        <input
-                          type="text"
-                          value={form.nivel || ''}
-                          onChange={e => set('nivel', e.target.value)}
-                          className="input-field"
-                          placeholder="Ej: Grado 13"
-                        />
-                      </div>
-                      {form.fecha_ingreso && (
-                        <div className="col-span-2">
-                          <label className="block text-xs font-medium text-dark-700 mb-1.5">
-                            <Clock size={12} className="inline mr-1" />Antigüedad
-                          </label>
-                          <div className="flex items-center gap-3 px-3 py-2.5 bg-white border border-brand-200 rounded-lg">
-                            <span className="text-sm font-semibold text-dark-800">
-                              {calcularAntiguedad(form.fecha_ingreso)}
-                            </span>
-                            <span className="text-xs text-dark-400">calculada desde la fecha de ingreso</span>
-                          </div>
-                        </div>
-                      )}
+              {/* Datos de escalafón */}
+              <section>
+                <p className="text-xs font-semibold text-brand-600 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                  <Award size={12} />Datos de escalafón
+                </p>
+                <div className="p-4 bg-brand-50 rounded-xl border border-brand-100 space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="col-span-2">
+                      <label className="block text-xs font-medium text-dark-700 mb-1.5">Escalafón</label>
+                      <select
+                        value={form.escalafon || ''}
+                        onChange={e => set('escalafon', e.target.value)}
+                        className="input-field"
+                      >
+                        <option value="">Sin especificar</option>
+                        {ESCALAFONES.map(esc => <option key={esc} value={esc}>{esc}</option>)}
+                      </select>
                     </div>
+                    <div>
+                      <label className="block text-xs font-medium text-dark-700 mb-1.5">Categoría</label>
+                      <input
+                        type="text"
+                        value={form.categoria || ''}
+                        onChange={e => set('categoria', e.target.value)}
+                        className="input-field"
+                        placeholder="Ej: A, B, C..."
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-dark-700 mb-1.5">Nivel / Grado</label>
+                      <input
+                        type="text"
+                        value={form.nivel || ''}
+                        onChange={e => set('nivel', e.target.value)}
+                        className="input-field"
+                        placeholder="Ej: Grado 13"
+                      />
+                    </div>
+                    {form.fecha_ingreso && (
+                      <div className="col-span-2">
+                        <label className="block text-xs font-medium text-dark-700 mb-1.5">
+                          <Clock size={12} className="inline mr-1" />Antigüedad
+                        </label>
+                        <div className="flex items-center gap-3 px-3 py-2.5 bg-white border border-brand-200 rounded-lg">
+                          <span className="text-sm font-semibold text-dark-800">
+                            {calcularAntiguedad(form.fecha_ingreso)}
+                          </span>
+                          <span className="text-xs text-dark-400">calculada desde la fecha de ingreso</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </section>
-              )}
+                </div>
+              </section>
 
               {/* Datos específicos Honorarios */}
               {form.tipo_contrato === 'Honorarios' && (

@@ -13,11 +13,13 @@ function generarTemplate() {
     'RUT', 'Nombres', 'Apellidos', 'Correo', 'Cargo',
     'Establecimiento', 'Tipo Contrato', 'Horas',
     'Fecha Ingreso', 'Fecha Nacimiento', 'Telefono',
+    'Escalafon', 'Nivel/Grado',
   ];
   const ejemplo = [
     '12.345.678-9', 'María', 'González', 'maria@cesfam.cl',
     'Médico General', 'CESFAM LOS CERROS',
     'Indefinido', 44, '2020-03-15', '1985-06-20', '+56912345678',
+    'Profesional', 'Grado 13',
   ];
   const instrucciones = [
     '', '', '', '', '', '',
@@ -26,6 +28,8 @@ function generarTemplate() {
     'Formato: AAAA-MM-DD',
     'Formato: AAAA-MM-DD',
     'Ej: +56912345678',
+    'Directivo | Profesional | Técnico | Administrativo | Auxiliar',
+    'Ej: Grado 13',
   ];
 
   const ws = XLSX.utils.aoa_to_sheet([encabezados, instrucciones, ejemplo]);
@@ -67,6 +71,8 @@ function parsearExcel(file) {
           const fechaIngreso     = normFecha(r['fecha ingreso']    || r['fecha_ingreso']    || '');
           const fechaNacimiento  = normFecha(r['fecha nacimiento'] || r['fecha_nacimiento'] || '');
           const telefono         = String(r['telefono'] || r['teléfono'] || r['fono'] || '').trim();
+          const escalafon        = String(r['escalafon'] || r['escalafón'] || '').trim();
+          const nivel            = String(r['nivel/grado'] || r['nivel'] || r['grado'] || '').trim();
 
           // Tipo contrato — normalizar capitalización
           const tipoContratoRaw = String(r['tipo contrato'] || r['tipo_contrato'] || '').trim();
@@ -99,6 +105,8 @@ function parsearExcel(file) {
             fecha_ingreso:   fechaIngreso,
             fecha_nacimiento: fechaNacimiento,
             telefono,
+            escalafon,
+            nivel,
             saldos:          {},
             valido:          !invalido,
             error:           invalido,
@@ -164,6 +172,7 @@ export default function CargaMasivaModal({ onClose, onSuccess }) {
     'RUT', 'Nombres', 'Apellidos', 'Correo', 'Cargo',
     'Establecimiento', 'Tipo Contrato', 'Horas',
     'Fecha Ingreso', 'Fecha Nacimiento', 'Telefono',
+    'Escalafon', 'Nivel/Grado',
   ];
 
   return (
@@ -275,6 +284,8 @@ export default function CargaMasivaModal({ onClose, onSuccess }) {
                           <th className="px-3 py-2 text-left text-dark-500 font-medium">F. Ingreso</th>
                           <th className="px-3 py-2 text-left text-dark-500 font-medium">F. Nacimiento</th>
                           <th className="px-3 py-2 text-left text-dark-500 font-medium">Teléfono</th>
+                          <th className="px-3 py-2 text-left text-dark-500 font-medium">Escalafón</th>
+                          <th className="px-3 py-2 text-left text-dark-500 font-medium">Nivel/Grado</th>
                           <th className="px-3 py-2 text-left text-dark-500 font-medium">Estado</th>
                         </tr>
                       </thead>
@@ -303,6 +314,8 @@ export default function CargaMasivaModal({ onClose, onSuccess }) {
                             <td className="px-3 py-2 text-dark-500">{f.fecha_ingreso || '—'}</td>
                             <td className="px-3 py-2 text-dark-500">{f.fecha_nacimiento || '—'}</td>
                             <td className="px-3 py-2 text-dark-500">{f.telefono || '—'}</td>
+                            <td className="px-3 py-2 text-dark-500">{f.escalafon || '—'}</td>
+                            <td className="px-3 py-2 text-dark-500">{f.nivel || '—'}</td>
                             <td className="px-3 py-2">
                               {f.valido
                                 ? <CheckCircle2 size={14} className="text-emerald-500" />

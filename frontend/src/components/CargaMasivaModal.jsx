@@ -11,16 +11,16 @@ const TIPOS_CONTRATO = ['Indefinido', 'Plazo Fijo', 'Honorarios', 'Suplencia'];
 function generarTemplate() {
   const encabezados = [
     'RUT', 'Nombres', 'Apellidos', 'Correo', 'Cargo',
-    'Servicio', 'Establecimiento', 'Tipo Contrato', 'Horas',
+    'Establecimiento', 'Tipo Contrato', 'Horas',
     'Fecha Ingreso', 'Fecha Nacimiento', 'Telefono',
   ];
   const ejemplo = [
     '12.345.678-9', 'María', 'González', 'maria@cesfam.cl',
-    'Médico General', 'Medicina General', 'CESFAM LOS CERROS',
+    'Médico General', 'CESFAM LOS CERROS',
     'Indefinido', 44, '2020-03-15', '1985-06-20', '+56912345678',
   ];
   const instrucciones = [
-    '', '', '', '', '', '', '',
+    '', '', '', '', '', '',
     `Opciones: ${TIPOS_CONTRATO.join(' | ')}`,
     'Número entero',
     'Formato: AAAA-MM-DD',
@@ -93,7 +93,6 @@ function parsearExcel(file) {
             apellidos:       String(r['apellidos']     || '').trim(),
             email:           String(r['correo'] || r['email'] || '').trim(),
             cargo:           String(r['cargo']         || '').trim(),
-            servicio:        String(r['servicio']      || '').trim(),
             dispositivo:     String(r['establecimiento'] || r['dispositivo'] || '').trim(),
             tipo_contrato:   tipoContrato,
             horas_contrato:  horasNum,
@@ -163,7 +162,7 @@ export default function CargaMasivaModal({ onClose, onSuccess }) {
 
   const columnasFijas = [
     'RUT', 'Nombres', 'Apellidos', 'Correo', 'Cargo',
-    'Servicio', 'Establecimiento', 'Tipo Contrato', 'Horas',
+    'Establecimiento', 'Tipo Contrato', 'Horas',
     'Fecha Ingreso', 'Fecha Nacimiento', 'Telefono',
   ];
 
@@ -234,7 +233,6 @@ export default function CargaMasivaModal({ onClose, onSuccess }) {
                   <ul className="text-xs text-amber-700 space-y-0.5 list-disc list-inside">
                     <li><strong>Tipo Contrato</strong>: {TIPOS_CONTRATO.join(', ')}</li>
                     <li><strong>Establecimiento</strong>: debe coincidir (parcialmente) con un establecimiento registrado</li>
-                    <li><strong>Servicio</strong>: debe coincidir con un servicio/unidad registrado</li>
                     <li>El correo crea acceso al sistema con contraseña inicial <strong>cesfam2026</strong></li>
                     <li>Si el RUT ya existe, los datos se actualizan (no se duplica)</li>
                   </ul>
@@ -271,7 +269,6 @@ export default function CargaMasivaModal({ onClose, onSuccess }) {
                           <th className="px-3 py-2 text-left text-dark-500 font-medium">Nombres</th>
                           <th className="px-3 py-2 text-left text-dark-500 font-medium">Apellidos</th>
                           <th className="px-3 py-2 text-left text-dark-500 font-medium">Cargo</th>
-                          <th className="px-3 py-2 text-left text-dark-500 font-medium">Servicio</th>
                           <th className="px-3 py-2 text-left text-dark-500 font-medium">Establecimiento</th>
                           <th className="px-3 py-2 text-left text-dark-500 font-medium">Contrato</th>
                           <th className="px-3 py-2 text-center text-dark-500 font-medium">Horas</th>
@@ -289,7 +286,6 @@ export default function CargaMasivaModal({ onClose, onSuccess }) {
                             <td className="px-3 py-2 text-dark-700">{f.nombres || '—'}</td>
                             <td className="px-3 py-2 text-dark-700">{f.apellidos || '—'}</td>
                             <td className="px-3 py-2 text-dark-500">{f.cargo || '—'}</td>
-                            <td className="px-3 py-2 text-dark-500">{f.servicio || '—'}</td>
                             <td className="px-3 py-2 text-dark-500">{f.dispositivo || '—'}</td>
                             <td className="px-3 py-2">
                               {f.tipo_contrato

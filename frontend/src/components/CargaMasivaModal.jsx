@@ -12,13 +12,13 @@ function generarTemplate(tipos) {
   const encabezados = [
     'RUT', 'Nombres', 'Apellidos', 'Correo', 'Cargo',
     'Servicio', 'Establecimiento', 'Tipo Contrato', 'Horas',
-    'Fecha Ingreso',
+    'Fecha Ingreso', 'Fecha Nacimiento', 'Telefono',
     ...tipos.map(t => `Días ${t.nombre}`),
   ];
   const ejemplo = [
     '12.345.678-9', 'María', 'González', 'maria@cesfam.cl',
     'Médico General', 'Medicina General', 'CESFAM LOS CERROS',
-    'Indefinido', 44, '2020-03-15',
+    'Indefinido', 44, '2020-03-15', '1985-06-20', '+56912345678',
     ...tipos.map(t => t.dias_anuales_max),
   ];
 
@@ -28,13 +28,15 @@ function generarTemplate(tipos) {
     `Opciones: ${TIPOS_CONTRATO.join(' | ')}`,
     'Número entero',
     'Formato: AAAA-MM-DD',
+    'Formato: AAAA-MM-DD',
+    'Ej: +56912345678',
     ...tipos.map(() => 'Número entero'),
   ];
 
   const ws = XLSX.utils.aoa_to_sheet([encabezados, instrucciones, ejemplo]);
 
   // Estilo ancho de columnas
-  ws['!cols'] = encabezados.map((_, i) => ({ wch: i < 10 ? 22 : 18 }));
+  ws['!cols'] = encabezados.map((_, i) => ({ wch: i < 12 ? 22 : 18 }));
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Funcionarios');
@@ -73,16 +75,19 @@ function parsearExcel(file, tipos) {
             if (val !== undefined && val !== '') saldos[tipoId] = parseInt(val) || 0;
           });
 
+          // Helper para normalizar fechas (Date object, número serial Excel, o string)
+          const normFecha = (val) => {
+            if (!val && val !== 0) return '';
+            if (val instanceof Date) return val.toISOString().split('T')[0];
+            if (typeof val === 'number') {
+              const d = new Date(Math.round((val - 25569) * 86400 * 1000));
+              return d.toISOString().split('T')[0];
+            }
+            return String(val).trim();
+          };
+
           // Normalizar fecha
-          let fechaIngreso = r['fecha ingreso'] || r['fecha_ingreso'] || '';
-          if (fechaIngreso instanceof Date) {
-            fechaIngreso = fechaIngreso.toISOString().split('T')[0];
-          } else if (typeof fechaIngreso === 'number') {
-            const d = new Date(Math.round((fechaIngreso - 25569) * 86400 * 1000));
-            fechaIngreso = d.toISOString().split('T')[0];
-          } else {
-            fechaIngreso = String(fechaIngreso).trim();
-          }
+          const fechaIngreso = normFecha(r['fecha ingreso'] || r['fecha_ingreso'] || '');
 
           // Tipo contrato — normalizar capitalización
           const tipoContratoRaw = String(r['tipo contrato'] || r['tipo_contrato'] || '').trim();
@@ -102,18 +107,23 @@ function parsearExcel(file, tipos) {
               ? `Tipo contrato inválido: "${tipoContratoRaw}"`
               : null;
 
+          const fechaNacimiento = normFecha(r['fecha nacimiento'] || r['fecha_nacimiento'] || '');
+          const telefono = String(r['telefono'] || r['teléfono'] || r['fono'] || '').trim();
+
           return {
             fila: i + 2,
-            rut:           String(r['rut']          || '').trim(),
-            nombres:       String(r['nombres']       || '').trim(),
-            apellidos:     String(r['apellidos']     || '').trim(),
-            email:         String(r['correo'] || r['email'] || '').trim(),
-            cargo:         String(r['cargo']         || '').trim(),
-            servicio:      String(r['servicio']      || '').trim(),
-            dispositivo:   String(r['establecimiento'] || r['dispositivo'] || '').trim(),
-            tipo_contrato: tipoContrato,
-            horas_contrato: horasNum,
-            fecha_ingreso: fechaIngreso,
+            rut:             String(r['rut']          || '').trim(),
+            nombres:         String(r['nombres']       || '').trim(),
+            apellidos:       String(r['apellidos']     || '').trim(),
+            email:           String(r['correo'] || r['email'] || '').trim(),
+            cargo:           String(r['cargo']         || '').trim(),
+            servicio:        String(r['servicio']      || '').trim(),
+            dispositivo:     String(r['establecimiento'] || r['dispositivo'] || '').trim(),
+            tipo_contrato:   tipoContrato,
+            horas_contrato:  horasNum,
+            fecha_ingreso:   fechaIngreso,
+            fecha_nacimiento: fechaNacimiento,
+            telefono,
             saldos,
             valido: !invalido,
             error: invalido,
@@ -184,7 +194,8 @@ export default function CargaMasivaModal({ onClose, onSuccess }) {
 
   const columnasFijas = [
     'RUT', 'Nombres', 'Apellidos', 'Correo', 'Cargo',
-    'Servicio', 'Establecimiento', 'Tipo Contrato', 'Horas', 'Fecha Ingreso',
+    'Servicio', 'Establecimiento', 'Tipo Contrato', 'Horas',
+    'Fecha Ingreso', 'Fecha Nacimiento', 'Telefono',
   ];
 
   return (

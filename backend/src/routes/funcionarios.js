@@ -310,15 +310,18 @@ router.post('/bulk', soloAdmin, async (req, res) => {
         const nuevo = await client.query(
           `INSERT INTO funcionarios
              (rut, nombres, apellidos, cargo, servicio_id, fecha_ingreso,
-              tipo_contrato, horas_contrato, dispositivo_id)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+              tipo_contrato, horas_contrato, dispositivo_id,
+              fecha_nacimiento, telefono)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
            ON CONFLICT (rut) DO UPDATE SET
              nombres=EXCLUDED.nombres, apellidos=EXCLUDED.apellidos,
              cargo=EXCLUDED.cargo, servicio_id=EXCLUDED.servicio_id,
              fecha_ingreso=EXCLUDED.fecha_ingreso,
              tipo_contrato=EXCLUDED.tipo_contrato,
              horas_contrato=EXCLUDED.horas_contrato,
-             dispositivo_id=EXCLUDED.dispositivo_id
+             dispositivo_id=EXCLUDED.dispositivo_id,
+             fecha_nacimiento=EXCLUDED.fecha_nacimiento,
+             telefono=EXCLUDED.telefono
            RETURNING id, rut`,
           [
             f.rut.trim(),
@@ -330,6 +333,8 @@ router.post('/bulk', soloAdmin, async (req, res) => {
             tipoContrato,
             horasContrato,
             dispositivoResult.rows[0]?.id || null,
+            f.fecha_nacimiento || null,
+            f.telefono?.trim() || null,
           ]
         );
 

@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, User, Mail, Calendar, Briefcase, AlertCircle, Info, Clock, Building2, MapPin, Shield, Phone, Hash, AlertTriangle } from 'lucide-react';
+import { X, User, Mail, Calendar, Briefcase, AlertCircle, Info, Clock, Building2, MapPin, Shield, Phone, Hash, AlertTriangle, Award } from 'lucide-react';
 import { funcionariosApi, tiposPermisosApi, serviciosApi, dispositivosApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 
-const TIPOS_CONTRATO = ['Indefinido', 'Plazo Fijo', 'Honorarios', 'Suplencia'];
+const TIPOS_CONTRATO = ['Planta', 'Contrata', 'Indefinido', 'Plazo Fijo', 'Honorarios', 'Suplencia'];
 const HORAS_OPCIONES = [44, 33, 28, 22, 11];
 const SECTORES = ['Verde', 'Azul', 'Amarillo', 'Rojo', 'Lila', 'SAR'];
 const SECTOR_COLORS = {
@@ -22,6 +22,13 @@ const PROGRAMAS = [
   'Programa del Adulto', 'Programa Adulto Mayor', 'Programa Salud Dental',
   'Programa de Salud Mental', 'Programa Comunitario', 'Referente OIRS', 'Médico Gestor',
 ];
+const ESCALAFONES = ['Directivo', 'Profesional', 'Técnico', 'Administrativo', 'Auxiliar de Servicios Menores'];
+
+const TIPOS_CONTRATO_POR_GRUPO = {
+  contrata:   ['Planta', 'Contrata', 'Indefinido', 'Plazo Fijo'],
+  honorarios: ['Honorarios'],
+  suplentes:  ['Suplencia'],
+};
 
 const formatRut = (value) => {
   const clean = value.replace(/[^0-9kK]/g, '').toUpperCase();
@@ -32,10 +39,18 @@ const formatRut = (value) => {
   return `${formatted}-${dv}`;
 };
 
-const TIPOS_CONTRATO_POR_GRUPO = {
-  contrata:   ['Indefinido', 'Plazo Fijo'],
-  honorarios: ['Honorarios'],
-  suplentes:  ['Suplencia'],
+const calcularAntiguedad = (fechaIngreso) => {
+  if (!fechaIngreso) return null;
+  const desde = new Date(fechaIngreso + 'T00:00:00');
+  const hoy = new Date();
+  const totalMeses = (hoy.getFullYear() - desde.getFullYear()) * 12 + (hoy.getMonth() - desde.getMonth());
+  if (totalMeses < 0) return null;
+  const anos = Math.floor(totalMeses / 12);
+  const meses = totalMeses % 12;
+  const partes = [];
+  if (anos > 0) partes.push(`${anos} año${anos !== 1 ? 's' : ''}`);
+  if (meses > 0) partes.push(`${meses} mes${meses !== 1 ? 'es' : ''}`);
+  return partes.length > 0 ? partes.join(', ') : 'Menos de 1 mes';
 };
 
 export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuccess, grupoInicial }) {
@@ -60,6 +75,7 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
     horas_contrato: '', dispositivo_id: '', reemplaza_a: '',
     sector: '', area: '', activo: true,
     convenio_honorarios: '', prestacion: '',
+    escalafon: '', categoria: '', nivel: '',
     ...(funcEdit || {}),
     fecha_ingreso: normFecha(funcEdit?.fecha_ingreso),
     fecha_nacimiento: normFecha(funcEdit?.fecha_nacimiento),
@@ -101,6 +117,8 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
 
   const set = (key, val) => setForm(f => ({ ...f, [key]: val }));
 
+  const esPlantaContrata = form.tipo_contrato === 'Planta' || form.tipo_contrato === 'Contrata';
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -116,7 +134,6 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
       } else if (tipo_supervisor === 'sector') {
         payload.area_supervisa = null;
       } else {
-        // 'area' or 'programa' both use area_supervisa
         payload.sector_supervisa = null;
       }
       if (esEdicion) {
@@ -177,16 +194,6 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
                     <input value={form.apellidos} onChange={e => set('apellidos', e.target.value)} className="input-field" required />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-dark-700 mb-1.5">Cargo <span className="text-red-500">*</span></label>
-                    <input value={form.cargo} onChange={e => set('cargo', e.target.value)} className="input-field" placeholder="Médico General" required />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-dark-700 mb-1.5">
-                      <Calendar size={12} className="inline mr-1" />Fecha de ingreso
-                    </label>
-                    <input type="date" value={form.fecha_ingreso || ''} onChange={e => set('fecha_ingreso', e.target.value)} className="input-field" />
-                  </div>
-                  <div>
                     <label className="block text-xs font-medium text-dark-700 mb-1.5">
                       <Calendar size={12} className="inline mr-1" />Fecha de nacimiento
                     </label>
@@ -197,6 +204,10 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
                       <Phone size={12} className="inline mr-1" />Teléfono
                     </label>
                     <input type="tel" value={form.telefono || ''} onChange={e => set('telefono', e.target.value)} className="input-field" placeholder="+56 9 1234 5678" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-dark-700 mb-1.5">Cargo <span className="text-red-500">*</span></label>
+                    <input value={form.cargo} onChange={e => set('cargo', e.target.value)} className="input-field" placeholder="Médico General" required />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-dark-700 mb-1.5">
@@ -242,7 +253,14 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
                     </div>
                   )}
 
-                  {/* Fecha término contrato — Honorarios y Suplencia */}
+                  <div>
+                    <label className="block text-xs font-medium text-dark-700 mb-1.5">
+                      <Calendar size={12} className="inline mr-1" />Fecha de ingreso
+                    </label>
+                    <input type="date" value={form.fecha_ingreso || ''} onChange={e => set('fecha_ingreso', e.target.value)} className="input-field" />
+                  </div>
+
+                  {/* Fecha término — Honorarios, Suplencia y Plazo Fijo */}
                   {(form.tipo_contrato === 'Honorarios' || form.tipo_contrato === 'Suplencia' || form.tipo_contrato === 'Plazo Fijo') && (
                     <div>
                       <label className="block text-xs font-medium text-dark-700 mb-1.5">
@@ -257,7 +275,7 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
                     </div>
                   )}
 
-                  {/* Reemplaza a — solo si tipo es Suplencia */}
+                  {/* Reemplaza a — solo Suplencia */}
                   {form.tipo_contrato === 'Suplencia' && (
                     <div className="col-span-2">
                       <label className="block text-xs font-medium text-dark-700 mb-1.5">Reemplaza a</label>
@@ -271,6 +289,63 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
                   )}
                 </div>
               </section>
+
+              {/* Datos de escalafón — solo Planta y Contrata */}
+              {esPlantaContrata && (
+                <section>
+                  <p className="text-xs font-semibold text-brand-600 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                    <Award size={12} />Datos de escalafón
+                  </p>
+                  <div className="p-4 bg-brand-50 rounded-xl border border-brand-100 space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="col-span-2">
+                        <label className="block text-xs font-medium text-dark-700 mb-1.5">Escalafón</label>
+                        <select
+                          value={form.escalafon || ''}
+                          onChange={e => set('escalafon', e.target.value)}
+                          className="input-field"
+                        >
+                          <option value="">Sin especificar</option>
+                          {ESCALAFONES.map(esc => <option key={esc} value={esc}>{esc}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-dark-700 mb-1.5">Categoría</label>
+                        <input
+                          type="text"
+                          value={form.categoria || ''}
+                          onChange={e => set('categoria', e.target.value)}
+                          className="input-field"
+                          placeholder="Ej: A, B, C..."
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-dark-700 mb-1.5">Nivel / Grado</label>
+                        <input
+                          type="text"
+                          value={form.nivel || ''}
+                          onChange={e => set('nivel', e.target.value)}
+                          className="input-field"
+                          placeholder="Ej: Grado 13"
+                        />
+                      </div>
+                      {form.fecha_ingreso && (
+                        <div className="col-span-2">
+                          <label className="block text-xs font-medium text-dark-700 mb-1.5">
+                            <Clock size={12} className="inline mr-1" />Antigüedad
+                          </label>
+                          <div className="flex items-center gap-3 px-3 py-2.5 bg-white border border-brand-200 rounded-lg">
+                            <span className="text-sm font-semibold text-dark-800">
+                              {calcularAntiguedad(form.fecha_ingreso)}
+                            </span>
+                            <span className="text-xs text-dark-400">calculada desde la fecha de ingreso</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </section>
+              )}
 
               {/* Datos específicos Honorarios */}
               {form.tipo_contrato === 'Honorarios' && (

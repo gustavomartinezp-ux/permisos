@@ -5,7 +5,7 @@ import * as XLSX from 'xlsx';
 import { funcionariosApi } from '../api/client';
 import toast from 'react-hot-toast';
 
-const TIPOS_CONTRATO = ['Indefinido', 'Plazo Fijo', 'Honorarios', 'Suplencia'];
+const TIPOS_CONTRATO = ['Planta', 'Contrata', 'Indefinido', 'Plazo Fijo', 'Honorarios', 'Suplencia'];
 
 // ── Genera plantilla Excel ───────────────────────────────────────────────────
 function generarTemplate() {

@@ -32,7 +32,7 @@ router.get('/', async (req, res) => {
 
     // Filtro por grupo contractual
     if (req.query.tipo_grupo === 'contrata') {
-      whereParts.push(`f.tipo_contrato IN ('Indefinido', 'Plazo Fijo')`);
+      whereParts.push(`f.tipo_contrato IN ('Indefinido', 'Plazo Fijo', 'Planta', 'Contrata')`);
     } else if (req.query.tipo_grupo === 'honorarios') {
       whereParts.push(`f.tipo_contrato = 'Honorarios'`);
     } else if (req.query.tipo_grupo === 'suplentes') {
@@ -200,6 +200,7 @@ router.post('/', soloAdmin, [
     tipo_contrato, horas_contrato, dispositivo_id, reemplaza_a,
     fecha_nacimiento, telefono, direccion_particular, numero_reloj,
     convenio_honorarios, prestacion, fecha_termino_contrato,
+    escalafon, categoria, nivel,
   } = req.body;
   const client = await pool.connect();
 
@@ -211,8 +212,9 @@ router.post('/', soloAdmin, [
          (rut, nombres, apellidos, cargo, servicio_id, fecha_ingreso,
           sector, area, tipo_contrato, horas_contrato, dispositivo_id, reemplaza_a,
           fecha_nacimiento, telefono, direccion_particular, numero_reloj,
-          convenio_honorarios, prestacion, fecha_termino_contrato)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING *`,
+          convenio_honorarios, prestacion, fecha_termino_contrato,
+          escalafon, categoria, nivel)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22) RETURNING *`,
       [
         rut, nombres, apellidos, cargo,
         servicio_id || null, fecha_ingreso || null,
@@ -222,6 +224,7 @@ router.post('/', soloAdmin, [
         fecha_nacimiento || null, telefono || null,
         direccion_particular || null, numero_reloj ? parseInt(numero_reloj) : null,
         convenio_honorarios || null, prestacion || null, fecha_termino_contrato || null,
+        escalafon || null, categoria || null, nivel || null,
       ]
     );
 
@@ -303,7 +306,7 @@ router.post('/bulk', soloAdmin, async (req, res) => {
           ? await client.query(`SELECT id FROM dispositivos WHERE LOWER(nombre) LIKE LOWER($1) LIMIT 1`, [`%${f.dispositivo}%`])
           : { rows: [] };
 
-        const TIPOS_CONTRATO = ['Indefinido', 'Plazo Fijo', 'Honorarios', 'Suplencia'];
+        const TIPOS_CONTRATO = ['Indefinido', 'Plazo Fijo', 'Honorarios', 'Suplencia', 'Planta', 'Contrata'];
         const tipoContrato = TIPOS_CONTRATO.includes(f.tipo_contrato) ? f.tipo_contrato : null;
         const horasContrato = f.horas_contrato ? parseInt(f.horas_contrato) || null : null;
 
@@ -396,6 +399,7 @@ router.put('/:id', adminOSupervisor, async (req, res) => {
     fecha_nacimiento, telefono, direccion_particular, numero_reloj,
     rol_sistema, sector_supervisa, area_supervisa,
     convenio_honorarios, prestacion, fecha_termino_contrato,
+    escalafon, categoria, nivel,
   } = req.body;
 
   if (activo === false && req.usuario.rol !== 'admin') {
@@ -414,8 +418,9 @@ router.put('/:id', adminOSupervisor, async (req, res) => {
            tipo_contrato=$6, horas_contrato=$7, dispositivo_id=$8, reemplaza_a=$9,
            fecha_ingreso=$10, sector=$11, area=$12,
            fecha_nacimiento=$13, telefono=$14, direccion_particular=$15, numero_reloj=$16,
-           convenio_honorarios=$17, prestacion=$18, fecha_termino_contrato=$19
-       WHERE id=$20 RETURNING *`,
+           convenio_honorarios=$17, prestacion=$18, fecha_termino_contrato=$19,
+           escalafon=$20, categoria=$21, nivel=$22
+       WHERE id=$23 RETURNING *`,
       [
         nombres, apellidos, cargo,
         servicio_id || null,
@@ -434,6 +439,9 @@ router.put('/:id', adminOSupervisor, async (req, res) => {
         convenio_honorarios || null,
         prestacion || null,
         fecha_termino_contrato || null,
+        escalafon || null,
+        categoria || null,
+        nivel || null,
         req.params.id,
       ]
     );

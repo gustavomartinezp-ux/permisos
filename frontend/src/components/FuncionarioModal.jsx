@@ -399,15 +399,6 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
                       {dispositivos.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
                     </select>
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-dark-700 mb-1.5">
-                      <Briefcase size={12} className="inline mr-1" />Servicio/Unidad
-                    </label>
-                    <select value={form.servicio_id || ''} onChange={e => set('servicio_id', e.target.value)} className="input-field">
-                      <option value="">Sin asignar</option>
-                      {servicios.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-                    </select>
-                  </div>
                   <div className="col-span-2">
                     <label className="block text-xs font-medium text-dark-700 mb-1.5">
                       <MapPin size={12} className="inline mr-1" />Sector

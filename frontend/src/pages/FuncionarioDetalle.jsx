@@ -771,9 +771,11 @@ export default function FuncionarioDetalle() {
             <div className="card py-12 text-center text-dark-400 text-sm">
               Sin suplencias registradas
             </div>
-          ) : (
-            <div className="space-y-3">
-              {suplencias.map((s) => {
+          ) : (() => {
+            const vigentes    = suplencias.filter(s => s.estado !== 'finalizada');
+            const historialSup = suplencias.filter(s => s.estado === 'finalizada');
+
+            const renderCard = (s, destacada = false) => {
                 const today = new Date().toISOString().split('T')[0];
                 const estaVencida = s.estado !== 'finalizada' && s.fecha_termino?.toString().substring(0,10) < today;
                 const reemplazadoNombre = s.funcionario_reemplazado_id
@@ -793,7 +795,7 @@ export default function FuncionarioDetalle() {
                     key={s.id}
                     initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className={`card p-5 space-y-3 ${estaVencida ? 'border-red-200 bg-red-50/30' : ''}`}
+                    className={`card p-5 space-y-3 ${destacada ? 'border-2 border-emerald-300 bg-emerald-50/20' : ''} ${estaVencida ? 'border-red-200 bg-red-50/30' : ''}`}
                   >
                     {/* Header de la suplencia */}
                     <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -919,9 +921,43 @@ export default function FuncionarioDetalle() {
                     </p>
                   </motion.div>
                 );
-              })}
-            </div>
-          )}
+            };
+
+            return (
+              <div className="space-y-5">
+                {/* ── Suplencia vigente ── */}
+                {vigentes.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 size={14} className="text-emerald-600" />
+                      <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">
+                        Suplencia vigente
+                      </p>
+                    </div>
+                    {vigentes.map(s => renderCard(s, true))}
+                  </div>
+                )}
+
+                {/* ── Historial de suplencias pasadas ── */}
+                {historialSup.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <History size={14} className="text-dark-400" />
+                      <p className="text-xs font-semibold text-dark-500 uppercase tracking-wide">
+                        Historial ({historialSup.length})
+                      </p>
+                    </div>
+                    {historialSup.map(s => renderCard(s, false))}
+                  </div>
+                )}
+
+                {/* Si solo hay vigentes y no hay historial */}
+                {vigentes.length > 0 && historialSup.length === 0 && (
+                  <p className="text-xs text-dark-400 text-center py-2">Sin suplencias finalizadas anteriores</p>
+                )}
+              </div>
+            );
+          })()}
         </div>
       )}
 

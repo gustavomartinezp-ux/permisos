@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, parseISO, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -7,7 +7,7 @@ import {
   ArrowLeft, User, Calendar, Briefcase, Plus, Clock, BarChart3,
   Edit2, Save, X, Building2, ArrowLeftRight, FileDown, Printer, Camera, Trash2,
   KeyRound, Mail, ShieldAlert, RefreshCw, CheckCircle2, AlertTriangle,
-  ArrowRight, History,
+  ArrowRight, History, CalendarRange,
 } from 'lucide-react';
 import { funcionariosApi, historialApi, solicitudesApi, usuariosApi, suplenciasApi } from '../api/client';
 import { generarReporteFuncionario, imprimirReporteFuncionario } from '../utils/reportePDF';
@@ -47,8 +47,11 @@ const CONTRATO_COLORS = {
   'Suplencia':  'bg-purple-100 text-purple-700',
 };
 
+const TABS_VALIDOS = ['saldos', 'historial', 'solicitudes', 'suplencias'];
+
 export default function FuncionarioDetalle() {
   const { id } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const { esAdmin, esSupervisor, esFuncionario, usuario } = useAuth();
   const esPropioFuncionario = esFuncionario && String(usuario?.funcionario_id) === String(id);
@@ -56,7 +59,15 @@ export default function FuncionarioDetalle() {
   const [historial, setHistorial] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [cargandoHistorial, setCargandoHistorial] = useState(false);
-  const [tab, setTab] = useState('saldos');
+  const [tab, setTab] = useState(() => {
+    const h = window.location.hash.replace('#', '');
+    return TABS_VALIDOS.includes(h) ? h : 'saldos';
+  });
+
+  useEffect(() => {
+    const h = location.hash.replace('#', '');
+    if (TABS_VALIDOS.includes(h)) setTab(h);
+  }, [location.hash]);
 
   // Suplencias
   const [suplencias, setSuplencias]         = useState([]);
@@ -771,6 +782,11 @@ export default function FuncionarioDetalle() {
                 const diasRestantes = s.estado !== 'finalizada'
                   ? differenceInDays(new Date(s.fecha_termino), new Date())
                   : null;
+                const diasTotales = differenceInDays(
+                  new Date(s.fecha_termino.toString().substring(0,10) + 'T00:00:00'),
+                  new Date(s.fecha_inicio.toString().substring(0,10) + 'T00:00:00')
+                ) + 1;
+                const esVigente = s.estado !== 'finalizada';
 
                 return (
                   <motion.div
@@ -843,12 +859,38 @@ export default function FuncionarioDetalle() {
                       <span className={`font-medium ${estaVencida ? 'text-red-600' : 'text-dark-800'}`}>
                         {fmtFechaSup(s.fecha_termino)}
                       </span>
-                      {diasRestantes !== null && !estaVencida && (
-                        <span className={`ml-auto text-xs ${diasRestantes <= 7 ? 'text-amber-600 font-medium' : 'text-dark-400'}`}>
-                          {diasRestantes === 0 ? 'Vence hoy' : diasRestantes > 0 ? `${diasRestantes} días restantes` : ''}
-                        </span>
-                      )}
+                      <span className="ml-auto text-xs text-dark-400">{diasTotales} días</span>
                     </div>
+
+                    {/* Badges de estado vigente: duración total + alerta días restantes */}
+                    {esVigente && (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-50 border border-purple-200 text-purple-700 text-xs font-semibold">
+                          <CalendarRange size={12} />
+                          {diasTotales} días totales de suplencia
+                        </span>
+                        {diasRestantes !== null && (
+                          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border ${
+                            estaVencida || diasRestantes < 0
+                              ? 'bg-red-100 text-red-700 border-red-200'
+                              : diasRestantes === 0
+                              ? 'bg-red-100 text-red-700 border-red-200'
+                              : diasRestantes <= 7
+                              ? 'bg-amber-100 text-amber-700 border-amber-200'
+                              : diasRestantes <= 30
+                              ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          }`}>
+                            <AlertTriangle size={11} />
+                            {diasRestantes < 0
+                              ? `Vencida hace ${Math.abs(diasRestantes)} días`
+                              : diasRestantes === 0
+                              ? 'Vence hoy'
+                              : `${diasRestantes} días restantes`}
+                          </span>
+                        )}
+                      </div>
+                    )}
 
                     {/* Prórrogas */}
                     {s.prorrogas?.length > 0 && (

@@ -768,9 +768,145 @@ export default function FuncionarioDetalle() {
               <span className="animate-spin h-5 w-5 border-2 border-brand-500 border-t-transparent rounded-full" />
             </div>
           ) : suplencias.length === 0 ? (
-            <div className="card py-12 text-center text-dark-400 text-sm">
-              Sin suplencias registradas
-            </div>
+            (() => {
+              const tieneDatosContractuales =
+                funcionario?.tipo_contrato === 'Suplencia' && funcionario?.reemplaza_nombres;
+              const fechaTerminoContrato = funcionario?.fecha_termino_contrato;
+              const diasRestantesContrato = fechaTerminoContrato
+                ? differenceInDays(
+                    new Date(fechaTerminoContrato.toString().substring(0,10) + 'T00:00:00'),
+                    new Date()
+                  )
+                : null;
+              const diasTotalesContrato = fechaTerminoContrato && funcionario?.fecha_ingreso
+                ? differenceInDays(
+                    new Date(fechaTerminoContrato.toString().substring(0,10) + 'T00:00:00'),
+                    new Date(funcionario.fecha_ingreso.toString().substring(0,10) + 'T00:00:00')
+                  ) + 1
+                : null;
+
+              if (!tieneDatosContractuales) {
+                return (
+                  <div className="card py-12 text-center text-dark-400 text-sm">
+                    Sin suplencias registradas
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-3">
+                  {/* Banner informativo */}
+                  <div className="flex items-start gap-3 p-3 bg-amber-50 rounded-xl border border-amber-200 text-sm">
+                    <AlertTriangle size={15} className="text-amber-600 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="font-semibold text-amber-800">Suplencia vigente sin registro formal</p>
+                      <p className="text-xs text-amber-700 mt-0.5">
+                        Los datos contractuales indican suplencia activa, pero no existe un registro
+                        en el historial institucional. Use "Nueva suplencia" para formalizarlo.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Card sintetizado desde datos contractuales */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="card p-5 space-y-3 border-2 border-emerald-300 bg-emerald-50/20"
+                  >
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border bg-emerald-100 text-emerald-700 border-emerald-200">
+                          <CheckCircle2 size={11} /> Activa (desde contrato)
+                        </span>
+                        <span className="text-xs text-dark-400 italic">Sin registro formal en historial</span>
+                      </div>
+                      {esAdmin && (
+                        <button
+                          onClick={() => {
+                            setSupForm({
+                              funcionario_reemplazado_id: funcionario.reemplaza_a || '',
+                              nombre_reemplazado: `${funcionario.reemplaza_nombres} ${funcionario.reemplaza_apellidos || ''}`.trim(),
+                              rut_reemplazado: '',
+                              cargo_reemplazado: '',
+                              unidad: funcionario.dispositivo || '',
+                              motivo_reemplazo: '',
+                              fecha_inicio: funcionario.fecha_ingreso?.toString().substring(0,10) || '',
+                              fecha_termino: fechaTerminoContrato?.toString().substring(0,10) || '',
+                              observaciones: '',
+                              documento_respaldo: '',
+                            });
+                            setShowNuevaSup(true);
+                          }}
+                          className="text-xs px-3 py-1.5 rounded-lg border border-emerald-300 text-emerald-700 hover:bg-emerald-50 font-medium"
+                        >
+                          <Plus size={11} className="inline mr-1" />Registrar en historial
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-2 text-sm">
+                      <div>
+                        <p className="text-xs text-dark-400">Reemplaza a</p>
+                        <p className="font-medium text-dark-800">
+                          {funcionario.reemplaza_nombres} {funcionario.reemplaza_apellidos}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-dark-400">Dispositivo / Unidad</p>
+                        <p className="font-medium text-dark-800">{funcionario.dispositivo || '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-dark-400">Cargo</p>
+                        <p className="font-medium text-dark-800">{funcionario.cargo}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3 py-2 px-3 bg-dark-50 rounded-xl text-sm">
+                      <Calendar size={14} className="text-dark-400 flex-shrink-0" />
+                      <span className="text-dark-600">
+                        {funcionario.fecha_ingreso ? fmtFechaSup(funcionario.fecha_ingreso) : '—'}
+                      </span>
+                      <ArrowRight size={13} className="text-dark-300" />
+                      <span className={`font-medium ${diasRestantesContrato !== null && diasRestantesContrato < 0 ? 'text-red-600' : 'text-dark-800'}`}>
+                        {fechaTerminoContrato ? fmtFechaSup(fechaTerminoContrato) : '—'}
+                      </span>
+                      {diasTotalesContrato !== null && (
+                        <span className="ml-auto text-xs text-dark-400">{diasTotalesContrato} días</span>
+                      )}
+                    </div>
+
+                    {diasRestantesContrato !== null && (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {diasTotalesContrato !== null && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-50 border border-purple-200 text-purple-700 text-xs font-semibold">
+                            <CalendarRange size={12} />
+                            {diasTotalesContrato} días totales de suplencia
+                          </span>
+                        )}
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border ${
+                          diasRestantesContrato < 0
+                            ? 'bg-red-100 text-red-700 border-red-200'
+                            : diasRestantesContrato === 0
+                            ? 'bg-red-100 text-red-700 border-red-200'
+                            : diasRestantesContrato <= 7
+                            ? 'bg-amber-100 text-amber-700 border-amber-200'
+                            : diasRestantesContrato <= 30
+                            ? 'bg-yellow-50 text-yellow-700 border-yellow-200'
+                            : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                        }`}>
+                          <AlertTriangle size={11} />
+                          {diasRestantesContrato < 0
+                            ? `Vencida hace ${Math.abs(diasRestantesContrato)} días`
+                            : diasRestantesContrato === 0
+                            ? 'Vence hoy'
+                            : `${diasRestantesContrato} días restantes`}
+                        </span>
+                      </div>
+                    )}
+                  </motion.div>
+                </div>
+              );
+            })()
           ) : (() => {
             const vigentes    = suplencias.filter(s => s.estado !== 'finalizada');
             const historialSup = suplencias.filter(s => s.estado === 'finalizada');

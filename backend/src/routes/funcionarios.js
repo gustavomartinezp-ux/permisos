@@ -230,19 +230,23 @@ router.post('/', soloAdmin, [
 
     // Crear saldos: usa custom si viene, si no usa el máximo del tipo
     const tipos = await client.query('SELECT id, dias_anuales_max FROM tipos_permisos WHERE activo = true');
-    for (const tipo of tipos.rows) {
-      const diasCustom = saldos_custom?.[tipo.id];
-      const dias = diasCustom !== undefined ? parseInt(diasCustom) : tipo.dias_anuales_max;
+    if (tipos.rows.length > 0) {
+      const tipoIds = tipos.rows.map(t => t.id);
+      const diasArr = tipos.rows.map(t => {
+        const diasCustom = saldos_custom?.[t.id];
+        return diasCustom !== undefined ? parseInt(diasCustom) : t.dias_anuales_max;
+      });
       await client.query(
         `INSERT INTO saldos_funcionarios (funcionario_id, tipo_permiso_id, anio, dias_asignados)
-         VALUES ($1, $2, $3, $4)`,
-        [funcId, tipo.id, anio, dias]
+         SELECT $1, tipo_id, $2, dias
+         FROM unnest($3::int[], $4::int[]) AS t(tipo_id, dias)`,
+        [funcId, anio, tipoIds, diasArr]
       );
     }
 
     // Crear cuenta de usuario si se provee email
     if (email && email.trim()) {
-      const hash = bcrypt.hashSync('cesfam2026', 10);
+      const hash = await bcrypt.hash(process.env.INITIAL_PASSWORD || 'cesfam2026', 10);
       const rolUsuario = ['admin', 'supervisor', 'funcionario'].includes(rol_sistema) ? rol_sistema : 'funcionario';
       const sectorUser = rolUsuario === 'supervisor' ? (sector_supervisa || null) : null;
       const areaUser   = rolUsuario === 'supervisor' ? (area_supervisa   || null) : null;
@@ -332,22 +336,26 @@ router.post('/bulk', soloAdmin, async (req, res) => {
         const funcId = nuevo.rows[0].id;
 
         // Saldos: cada tipo puede tener días específicos en el Excel
-        for (const tipo of tipos.rows) {
-          const diasClave = tipo.codigo.toLowerCase();
-          const diasCustom = f.saldos?.[tipo.id] ?? f.saldos?.[diasClave];
-          const dias = diasCustom !== undefined && diasCustom !== '' ? parseInt(diasCustom) : tipo.dias_anuales_max;
+        if (tipos.rows.length > 0) {
+          const tipoIds = tipos.rows.map(t => t.id);
+          const diasArr = tipos.rows.map(t => {
+            const diasClave  = t.codigo.toLowerCase();
+            const diasCustom = f.saldos?.[t.id] ?? f.saldos?.[diasClave];
+            return diasCustom !== undefined && diasCustom !== '' ? parseInt(diasCustom) : t.dias_anuales_max;
+          });
           await client.query(
             `INSERT INTO saldos_funcionarios (funcionario_id, tipo_permiso_id, anio, dias_asignados)
-             VALUES ($1, $2, $3, $4)
+             SELECT $1, tipo_id, $2, dias
+             FROM unnest($3::int[], $4::int[]) AS t(tipo_id, dias)
              ON CONFLICT (funcionario_id, tipo_permiso_id, anio)
              DO UPDATE SET dias_asignados = EXCLUDED.dias_asignados`,
-            [funcId, tipo.id, anio, dias]
+            [funcId, anio, tipoIds, diasArr]
           );
         }
 
         // Crear usuario si tiene email
         if (f.email && f.email.trim()) {
-          const hash = bcrypt.hashSync('cesfam2026', 10);
+          const hash = await bcrypt.hash(process.env.INITIAL_PASSWORD || 'cesfam2026', 10);
           await client.query(
             `INSERT INTO usuarios (email, password_hash, rol, funcionario_id)
              VALUES ($1, $2, 'funcionario', $3)

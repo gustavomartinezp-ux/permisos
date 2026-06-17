@@ -2,12 +2,21 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
+const rateLimit = require('express-rate-limit');
 const { pool } = require('../db');
 const { verificarToken } = require('../middleware/auth');
 
 const router = express.Router();
 
-router.post('/login', [
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiados intentos de inicio de sesión. Intente nuevamente en 15 minutos.' },
+});
+
+router.post('/login', loginLimiter, [
   body('email').isEmail().withMessage('Email inválido'),
   body('password').notEmpty().withMessage('Contraseña requerida'),
 ], async (req, res) => {

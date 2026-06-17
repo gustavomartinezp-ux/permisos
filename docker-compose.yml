@@ -5,9 +5,9 @@ services:
     image: postgres:15-alpine
     container_name: cesfam_db
     environment:
-      POSTGRES_DB: cesfam_permisos
-      POSTGRES_USER: cesfam_admin
-      POSTGRES_PASSWORD: cesfam_2026_secure
+      POSTGRES_DB: ${POSTGRES_DB:-cesfam_permisos}
+      POSTGRES_USER: ${POSTGRES_USER:-cesfam_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "5432:5432"
     volumes:
@@ -15,7 +15,7 @@ services:
       - ./backend/src/db/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
       - ./backend/src/db/seed.sql:/docker-entrypoint-initdb.d/02_seed.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U cesfam_admin -d cesfam_permisos"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
       timeout: 5s
       retries: 5

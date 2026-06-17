@@ -16,42 +16,49 @@ router.get('/stats', async (req, res) => {
   const areaFiltro   = esSupervisor && !req.usuario.sector && req.usuario.area ? req.usuario.area : null;
 
   try {
-    const sectorSeguro = SECTORES_VALIDOS.includes(sectorFiltro) ? sectorFiltro : null;
-    const areaSegura   = AREAS_VALIDAS.includes(areaFiltro) ? areaFiltro : null;
-    const filterWhere  = sectorSeguro
-      ? `AND f.sector = '${sectorSeguro}'`
-      : areaSegura
-      ? `AND f.area = '${areaSegura}'`
-      : '';
-    const filterParam  = sectorSeguro || areaSegura;
-    const filterField  = sectorSeguro ? 'f.sector' : 'f.area';
-    const sectorWhere  = filterWhere;
+    // Validar el valor del filtro contra los catálogos antes de usarlo en SQL
+    const filterParam = SECTORES_VALIDOS.includes(sectorFiltro) ? sectorFiltro
+                      : AREAS_VALIDAS.includes(areaFiltro)      ? areaFiltro
+                      : null;
+    // Nombre de columna — viene de nuestra lógica, no de input del usuario
+    const filterField = SECTORES_VALIDOS.includes(sectorFiltro) ? 'f.sector' : 'f.area';
+
+    // Condición parametrizada según posición del placeholder en cada query
+    const fCond1 = filterParam ? `AND ${filterField} = $1` : '';  // sin otros params
+    const fCond2 = filterParam ? `AND ${filterField} = $2` : '';  // anio ocupa $1
+    const pFilt  = filterParam ? [filterParam] : [];
+    const pAnio  = filterParam ? [anio, filterParam] : [anio];
 
     const [totalFunc, pendientes, preAprobadas, aprobadas, rechazadas] = await Promise.all([
-      pool.query(`SELECT COUNT(*) FROM funcionarios f WHERE f.activo = true ${sectorWhere}`),
       pool.query(
-        `SELECT COUNT(*) FROM solicitudes sol
-         JOIN funcionarios f ON sol.funcionario_id = f.id
-         WHERE sol.estado = 'pendiente' ${sectorWhere}`
+        `SELECT COUNT(*) FROM funcionarios f WHERE f.activo = true ${fCond1}`,
+        pFilt
       ),
       pool.query(
         `SELECT COUNT(*) FROM solicitudes sol
          JOIN funcionarios f ON sol.funcionario_id = f.id
-         WHERE sol.estado = 'pre_aprobado' ${sectorWhere}`
+         WHERE sol.estado = 'pendiente' ${fCond1}`,
+        pFilt
+      ),
+      pool.query(
+        `SELECT COUNT(*) FROM solicitudes sol
+         JOIN funcionarios f ON sol.funcionario_id = f.id
+         WHERE sol.estado = 'pre_aprobado' ${fCond1}`,
+        pFilt
       ),
       pool.query(
         `SELECT COUNT(*) FROM solicitudes sol
          JOIN funcionarios f ON sol.funcionario_id = f.id
          WHERE sol.estado = 'aprobado'
-           AND EXTRACT(YEAR FROM sol.fecha_solicitud) = $1 ${sectorWhere}`,
-        [anio]
+           AND EXTRACT(YEAR FROM sol.fecha_solicitud) = $1 ${fCond2}`,
+        pAnio
       ),
       pool.query(
         `SELECT COUNT(*) FROM solicitudes sol
          JOIN funcionarios f ON sol.funcionario_id = f.id
          WHERE sol.estado = 'rechazado'
-           AND EXTRACT(YEAR FROM sol.fecha_solicitud) = $1 ${sectorWhere}`,
-        [anio]
+           AND EXTRACT(YEAR FROM sol.fecha_solicitud) = $1 ${fCond2}`,
+        pAnio
       ),
     ]);
 
@@ -67,8 +74,9 @@ router.get('/stats', async (req, res) => {
        JOIN tipos_permisos tp ON sol.tipo_permiso_id = tp.id
        WHERE sol.estado = 'aprobado'
          AND CURRENT_DATE BETWEEN sol.fecha_inicio AND sol.fecha_fin
-         ${sectorWhere}
-       ORDER BY f.sector NULLS LAST, f.apellidos`
+         ${fCond1}
+       ORDER BY f.sector NULLS LAST, f.apellidos`,
+      pFilt
     );
 
     // ── Próximas ausencias (7 días) ──────────────────────────────────────────
@@ -80,9 +88,10 @@ router.get('/stats', async (req, res) => {
        WHERE sol.estado = 'aprobado'
          AND sol.fecha_inicio > CURRENT_DATE
          AND sol.fecha_inicio <= CURRENT_DATE + INTERVAL '7 days'
-         ${sectorWhere}
+         ${fCond1}
        ORDER BY sol.fecha_inicio ASC
-       LIMIT 5`
+       LIMIT 5`,
+      pFilt
     );
 
     // ── Top funcionarios con más días usados ─────────────────────────────────
@@ -92,11 +101,11 @@ router.get('/stats', async (req, res) => {
               SUM(sf.dias_asignados) AS total_asignados
        FROM funcionarios f
        JOIN saldos_funcionarios sf ON f.id = sf.funcionario_id
-       WHERE sf.anio = $1 AND f.activo = true ${sectorWhere}
+       WHERE sf.anio = $1 AND f.activo = true ${fCond2}
        GROUP BY f.id
        ORDER BY total_usados DESC
        LIMIT 5`,
-      [anio]
+      pAnio
     );
 
     // ── Actividad reciente ───────────────────────────────────────────────────
@@ -108,12 +117,10 @@ router.get('/stats', async (req, res) => {
        ${filterParam ? `WHERE ${filterField} = $1` : ''}
        ORDER BY hm.created_at DESC
        LIMIT 8`,
-      filterParam ? [filterParam] : []
+      pFilt
     );
 
     // ── Solicitudes para acción según rol ────────────────────────────────────
-    // Supervisor: pendiente de su sector/área (para pre-aprobar)
-    // Admin: pre_aprobado (flujo normal) + pendiente de supervisores/directos
     let solicitudesPendientes;
     let estadoAccion;
 
@@ -126,9 +133,10 @@ router.get('/stats', async (req, res) => {
          JOIN funcionarios f ON sol.funcionario_id = f.id
          LEFT JOIN servicios s ON f.servicio_id = s.id
          JOIN tipos_permisos tp ON sol.tipo_permiso_id = tp.id
-         WHERE sol.estado = 'pendiente' ${filterWhere}
+         WHERE sol.estado = 'pendiente' ${fCond1}
          ORDER BY sol.fecha_solicitud ASC
-         LIMIT 10`
+         LIMIT 10`,
+        pFilt
       );
     } else {
       estadoAccion = 'mixed';

@@ -13,6 +13,29 @@ const {
 const router = express.Router();
 router.use(verificarToken);
 
+async function registrarMovimiento(client, {
+  funcionarioId, solicitudId = null, tipoPermisoId, tipoMovimiento,
+  diasMovimiento, saldoAnterior, saldoNuevo, descripcion, usuarioId,
+}) {
+  await client.query(
+    `INSERT INTO historial_movimientos
+       (funcionario_id, solicitud_id, tipo_permiso_id, tipo_movimiento,
+        dias_movimiento, saldo_anterior, saldo_nuevo, descripcion, usuario_responsable)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    [funcionarioId, solicitudId, tipoPermisoId, tipoMovimiento,
+     diasMovimiento, saldoAnterior, saldoNuevo, descripcion, usuarioId]
+  );
+}
+
+async function actualizarEstadoSolicitud(client, id, estado, usuarioId, observaciones) {
+  await client.query(
+    `UPDATE solicitudes
+     SET estado = $1, aprobado_por = $2, fecha_resolucion = NOW(), observaciones = $3
+     WHERE id = $4`,
+    [estado, usuarioId, observaciones || null, id]
+  );
+}
+
 router.get('/', async (req, res) => {
   try {
     const { estado, funcionario_id, limit = 50, offset = 0 } = req.query;
@@ -159,17 +182,13 @@ router.post('/', [
         [funcionario_id, tipo_permiso_id, fecha_inicio, fechaFinCalc, diasFijos, motivo]
       );
 
-      await client.query(
-        `INSERT INTO historial_movimientos
-           (funcionario_id, solicitud_id, tipo_permiso_id, tipo_movimiento,
-            dias_movimiento, saldo_anterior, saldo_nuevo, descripcion, usuario_responsable)
-         VALUES ($1,$2,$3,'reserva',$4,0,0,$5,$6)`,
-        [
-          funcionario_id, nuevaSolicitud.rows[0].id, tipo_permiso_id, diasFijos,
-          `Permiso especial: ${tipo.nombre} — ${diasFijos} día(s) ${tipoDias} (sin descuento de saldo)`,
-          req.usuario.id,
-        ]
-      );
+      await registrarMovimiento(client, {
+        funcionarioId: funcionario_id, solicitudId: nuevaSolicitud.rows[0].id,
+        tipoPermisoId: tipo_permiso_id, tipoMovimiento: 'reserva',
+        diasMovimiento: diasFijos, saldoAnterior: 0, saldoNuevo: 0,
+        descripcion: `Permiso especial: ${tipo.nombre} — ${diasFijos} día(s) ${tipoDias} (sin descuento de saldo)`,
+        usuarioId: req.usuario.id,
+      });
 
       await client.query('COMMIT');
       return res.status(201).json({
@@ -273,22 +292,15 @@ router.post('/', [
       );
 
       const saldoAnteriorDisponible = totalDisponible;
-      await client.query(
-        `INSERT INTO historial_movimientos
-           (funcionario_id, solicitud_id, tipo_permiso_id, tipo_movimiento,
-            dias_movimiento, saldo_anterior, saldo_nuevo, descripcion, usuario_responsable)
-         VALUES ($1, $2, $3, 'reserva', $4, $5, $6, $7, $8)`,
-        [
-          funcionario_id,
-          nuevaSolicitud.rows[0].id,
-          tipo_permiso_id,
-          dias_solicitados,
-          saldoAnteriorDisponible,
-          saldoAnteriorDisponible - dias_solicitados,
-          `Solicitud feriado legal: ${fromArrastre} día(s) arrastre + ${fromActual} día(s) período actual en trámite`,
-          req.usuario.id,
-        ]
-      );
+      await registrarMovimiento(client, {
+        funcionarioId: funcionario_id, solicitudId: nuevaSolicitud.rows[0].id,
+        tipoPermisoId: tipo_permiso_id, tipoMovimiento: 'reserva',
+        diasMovimiento: dias_solicitados,
+        saldoAnterior: saldoAnteriorDisponible,
+        saldoNuevo: saldoAnteriorDisponible - dias_solicitados,
+        descripcion: `Solicitud feriado legal: ${fromArrastre} día(s) arrastre + ${fromActual} día(s) período actual en trámite`,
+        usuarioId: req.usuario.id,
+      });
 
       await client.query('COMMIT');
       return res.status(201).json({
@@ -324,22 +336,15 @@ router.post('/', [
       [funcionario_id, tipo_permiso_id, fecha_inicio, fecha_fin, dias_solicitados, motivo, jornadaMedioDiaFinal]
     );
 
-    await client.query(
-      `INSERT INTO historial_movimientos
-         (funcionario_id, solicitud_id, tipo_permiso_id, tipo_movimiento,
-          dias_movimiento, saldo_anterior, saldo_nuevo, descripcion, usuario_responsable)
-       VALUES ($1, $2, $3, 'reserva', $4, $5, $6, $7, $8)`,
-      [
-        funcionario_id,
-        nuevaSolicitud.rows[0].id,
-        tipo_permiso_id,
-        dias_solicitados,
-        diasDisponibles,
-        diasDisponibles - dias_solicitados,
-        `Solicitud de permiso registrada — ${dias_solicitados} día(s) en trámite`,
-        req.usuario.id,
-      ]
-    );
+    await registrarMovimiento(client, {
+      funcionarioId: funcionario_id, solicitudId: nuevaSolicitud.rows[0].id,
+      tipoPermisoId: tipo_permiso_id, tipoMovimiento: 'reserva',
+      diasMovimiento: dias_solicitados,
+      saldoAnterior: diasDisponibles,
+      saldoNuevo: diasDisponibles - dias_solicitados,
+      descripcion: `Solicitud de permiso registrada — ${dias_solicitados} día(s) en trámite`,
+      usuarioId: req.usuario.id,
+    });
 
     await client.query('COMMIT');
     res.status(201).json(nuevaSolicitud.rows[0]);
@@ -430,21 +435,14 @@ router.patch('/:id/aprobar', soloAdmin, async (req, res) => {
 
     // ── Aprobar permiso especial (sin movimiento de saldo) ────────────────
     if (sol.es_especial) {
-      await client.query(
-        `UPDATE solicitudes SET estado='aprobado', aprobado_por=$1, fecha_resolucion=NOW(), observaciones=$2 WHERE id=$3`,
-        [req.usuario.id, observaciones || null, id]
-      );
-      await client.query(
-        `INSERT INTO historial_movimientos
-           (funcionario_id, solicitud_id, tipo_permiso_id, tipo_movimiento,
-            dias_movimiento, saldo_anterior, saldo_nuevo, descripcion, usuario_responsable)
-         VALUES ($1,$2,$3,'descuento',$4,0,0,$5,$6)`,
-        [
-          sol.funcionario_id, id, sol.tipo_permiso_id, sol.dias_solicitados,
-          `Permiso especial aprobado: ${sol.tipo_nombre} del ${sol.fecha_inicio} al ${sol.fecha_fin}`,
-          req.usuario.id,
-        ]
-      );
+      await actualizarEstadoSolicitud(client, id, 'aprobado', req.usuario.id, observaciones);
+      await registrarMovimiento(client, {
+        funcionarioId: sol.funcionario_id, solicitudId: id,
+        tipoPermisoId: sol.tipo_permiso_id, tipoMovimiento: 'descuento',
+        diasMovimiento: sol.dias_solicitados, saldoAnterior: 0, saldoNuevo: 0,
+        descripcion: `Permiso especial aprobado: ${sol.tipo_nombre} del ${sol.fecha_inicio} al ${sol.fecha_fin}`,
+        usuarioId: req.usuario.id,
+      });
       await client.query('COMMIT');
       return res.json({ mensaje: 'Solicitud aprobada correctamente' });
     }
@@ -498,26 +496,16 @@ router.patch('/:id/aprobar', soloAdmin, async (req, res) => {
         ]
       );
 
-      await client.query(
-        `UPDATE solicitudes
-         SET estado = 'aprobado', aprobado_por = $1, fecha_resolucion = NOW(), observaciones = $2
-         WHERE id = $3`,
-        [req.usuario.id, observaciones || null, id]
-      );
+      await actualizarEstadoSolicitud(client, id, 'aprobado', req.usuario.id, observaciones);
 
       const saldoNuevo = totalAntes - sol.dias_solicitados;
-      await client.query(
-        `INSERT INTO historial_movimientos
-           (funcionario_id, solicitud_id, tipo_permiso_id, tipo_movimiento,
-            dias_movimiento, saldo_anterior, saldo_nuevo, descripcion, usuario_responsable)
-         VALUES ($1, $2, $3, 'descuento', $4, $5, $6, $7, $8)`,
-        [
-          sol.funcionario_id, id, sol.tipo_permiso_id,
-          sol.dias_solicitados, totalAntes, saldoNuevo,
-          `Feriado legal aprobado: ${sol.tipo_nombre} del ${sol.fecha_inicio} al ${sol.fecha_fin} (${diasArrastre} arrastre + ${diasActual} período actual)`,
-          req.usuario.id,
-        ]
-      );
+      await registrarMovimiento(client, {
+        funcionarioId: sol.funcionario_id, solicitudId: id,
+        tipoPermisoId: sol.tipo_permiso_id, tipoMovimiento: 'descuento',
+        diasMovimiento: sol.dias_solicitados, saldoAnterior: totalAntes, saldoNuevo,
+        descripcion: `Feriado legal aprobado: ${sol.tipo_nombre} del ${sol.fecha_inicio} al ${sol.fecha_fin} (${diasArrastre} arrastre + ${diasActual} período actual)`,
+        usuarioId: req.usuario.id,
+      });
 
       await client.query('COMMIT');
       return res.json({
@@ -541,25 +529,14 @@ router.patch('/:id/aprobar', soloAdmin, async (req, res) => {
       [sol.dias_solicitados, s.id]
     );
 
-    await client.query(
-      `UPDATE solicitudes
-       SET estado = 'aprobado', aprobado_por = $1, fecha_resolucion = NOW(), observaciones = $2
-       WHERE id = $3`,
-      [req.usuario.id, observaciones || null, id]
-    );
-
-    await client.query(
-      `INSERT INTO historial_movimientos
-         (funcionario_id, solicitud_id, tipo_permiso_id, tipo_movimiento,
-          dias_movimiento, saldo_anterior, saldo_nuevo, descripcion, usuario_responsable)
-       VALUES ($1, $2, $3, 'descuento', $4, $5, $6, $7, $8)`,
-      [
-        sol.funcionario_id, id, sol.tipo_permiso_id,
-        sol.dias_solicitados, saldoAnteriorDisponible, saldoNuevo,
-        `Permiso aprobado: ${sol.tipo_nombre} del ${sol.fecha_inicio} al ${sol.fecha_fin}`,
-        req.usuario.id,
-      ]
-    );
+    await actualizarEstadoSolicitud(client, id, 'aprobado', req.usuario.id, observaciones);
+    await registrarMovimiento(client, {
+      funcionarioId: sol.funcionario_id, solicitudId: id,
+      tipoPermisoId: sol.tipo_permiso_id, tipoMovimiento: 'descuento',
+      diasMovimiento: sol.dias_solicitados, saldoAnterior: saldoAnteriorDisponible, saldoNuevo,
+      descripcion: `Permiso aprobado: ${sol.tipo_nombre} del ${sol.fecha_inicio} al ${sol.fecha_fin}`,
+      usuarioId: req.usuario.id,
+    });
 
     await client.query('COMMIT');
     res.json({ mensaje: 'Solicitud aprobada correctamente', saldo_nuevo: saldoNuevo });
@@ -611,21 +588,14 @@ router.patch('/:id/rechazar', adminOSupervisor, async (req, res) => {
 
     // ── Rechazar permiso especial (sin movimiento de saldo) ───────────────
     if (sol.es_especial) {
-      await client.query(
-        `UPDATE solicitudes SET estado='rechazado', aprobado_por=$1, fecha_resolucion=NOW(), observaciones=$2 WHERE id=$3`,
-        [req.usuario.id, observaciones || null, id]
-      );
-      await client.query(
-        `INSERT INTO historial_movimientos
-           (funcionario_id, solicitud_id, tipo_permiso_id, tipo_movimiento,
-            dias_movimiento, saldo_anterior, saldo_nuevo, descripcion, usuario_responsable)
-         VALUES ($1,$2,$3,'reintegro',$4,0,0,$5,$6)`,
-        [
-          sol.funcionario_id, id, sol.tipo_permiso_id, sol.dias_solicitados,
-          `Permiso especial rechazado: ${sol.tipo_nombre}`,
-          req.usuario.id,
-        ]
-      );
+      await actualizarEstadoSolicitud(client, id, 'rechazado', req.usuario.id, observaciones);
+      await registrarMovimiento(client, {
+        funcionarioId: sol.funcionario_id, solicitudId: id,
+        tipoPermisoId: sol.tipo_permiso_id, tipoMovimiento: 'reintegro',
+        diasMovimiento: sol.dias_solicitados, saldoAnterior: 0, saldoNuevo: 0,
+        descripcion: `Permiso especial rechazado: ${sol.tipo_nombre}`,
+        usuarioId: req.usuario.id,
+      });
       await client.query('COMMIT');
       return res.json({ mensaje: 'Solicitud rechazada' });
     }
@@ -657,25 +627,15 @@ router.patch('/:id/rechazar', adminOSupervisor, async (req, res) => {
         [diasArrastre, diasActual, s.id]
       );
 
-      await client.query(
-        `UPDATE solicitudes
-         SET estado = 'rechazado', aprobado_por = $1, fecha_resolucion = NOW(), observaciones = $2
-         WHERE id = $3`,
-        [req.usuario.id, observaciones || null, id]
-      );
-
-      await client.query(
-        `INSERT INTO historial_movimientos
-           (funcionario_id, solicitud_id, tipo_permiso_id, tipo_movimiento,
-            dias_movimiento, saldo_anterior, saldo_nuevo, descripcion, usuario_responsable)
-         VALUES ($1, $2, $3, 'reintegro', $4, $5, $6, $7, $8)`,
-        [
-          sol.funcionario_id, id, sol.tipo_permiso_id,
-          sol.dias_solicitados, totalAntes, totalAntes + sol.dias_solicitados,
-          `Solicitud rechazada — ${diasArrastre} día(s) arrastre + ${diasActual} día(s) período actual reintegrados`,
-          req.usuario.id,
-        ]
-      );
+      await actualizarEstadoSolicitud(client, id, 'rechazado', req.usuario.id, observaciones);
+      await registrarMovimiento(client, {
+        funcionarioId: sol.funcionario_id, solicitudId: id,
+        tipoPermisoId: sol.tipo_permiso_id, tipoMovimiento: 'reintegro',
+        diasMovimiento: sol.dias_solicitados,
+        saldoAnterior: totalAntes, saldoNuevo: totalAntes + sol.dias_solicitados,
+        descripcion: `Solicitud rechazada — ${diasArrastre} día(s) arrastre + ${diasActual} día(s) período actual reintegrados`,
+        usuarioId: req.usuario.id,
+      });
 
       await client.query('COMMIT');
       return res.json({
@@ -695,25 +655,15 @@ router.patch('/:id/rechazar', adminOSupervisor, async (req, res) => {
       [sol.dias_solicitados, s.id]
     );
 
-    await client.query(
-      `UPDATE solicitudes
-       SET estado = 'rechazado', aprobado_por = $1, fecha_resolucion = NOW(), observaciones = $2
-       WHERE id = $3`,
-      [req.usuario.id, observaciones || null, id]
-    );
-
-    await client.query(
-      `INSERT INTO historial_movimientos
-         (funcionario_id, solicitud_id, tipo_permiso_id, tipo_movimiento,
-          dias_movimiento, saldo_anterior, saldo_nuevo, descripcion, usuario_responsable)
-       VALUES ($1, $2, $3, 'reintegro', $4, $5, $6, $7, $8)`,
-      [
-        sol.funcionario_id, id, sol.tipo_permiso_id,
-        sol.dias_solicitados, saldoAnteriorDisponible, saldoNuevo,
-        `Solicitud rechazada — ${sol.dias_solicitados} día(s) reintegrados al saldo`,
-        req.usuario.id,
-      ]
-    );
+    await actualizarEstadoSolicitud(client, id, 'rechazado', req.usuario.id, observaciones);
+    await registrarMovimiento(client, {
+      funcionarioId: sol.funcionario_id, solicitudId: id,
+      tipoPermisoId: sol.tipo_permiso_id, tipoMovimiento: 'reintegro',
+      diasMovimiento: sol.dias_solicitados,
+      saldoAnterior: saldoAnteriorDisponible, saldoNuevo,
+      descripcion: `Solicitud rechazada — ${sol.dias_solicitados} día(s) reintegrados al saldo`,
+      usuarioId: req.usuario.id,
+    });
 
     await client.query('COMMIT');
     res.json({ mensaje: 'Solicitud rechazada y días reintegrados', saldo_nuevo: saldoNuevo });
@@ -753,21 +703,14 @@ router.patch('/:id/reintegrar', soloAdmin, async (req, res) => {
 
     // ── Reintegrar permiso especial (sin movimiento de saldo) ────────────
     if (sol.es_especial) {
-      await client.query(
-        `INSERT INTO historial_movimientos
-           (funcionario_id, solicitud_id, tipo_permiso_id, tipo_movimiento,
-            dias_movimiento, saldo_anterior, saldo_nuevo, descripcion, usuario_responsable)
-         VALUES ($1,$2,$3,'reintegro',$4,0,0,$5,$6)`,
-        [
-          sol.funcionario_id, id, sol.tipo_permiso_id, sol.dias_solicitados,
-          `Reintegro manual (especial): ${sol.tipo_nombre} del ${sol.fecha_inicio} al ${sol.fecha_fin}${observaciones ? ' — ' + observaciones : ''}`,
-          req.usuario.id,
-        ]
-      );
-      await client.query(
-        `UPDATE solicitudes SET estado='cancelado', aprobado_por=$1, fecha_resolucion=NOW(), observaciones=$2 WHERE id=$3`,
-        [req.usuario.id, observaciones || 'Reintegro manual por administrador', id]
-      );
+      await registrarMovimiento(client, {
+        funcionarioId: sol.funcionario_id, solicitudId: id,
+        tipoPermisoId: sol.tipo_permiso_id, tipoMovimiento: 'reintegro',
+        diasMovimiento: sol.dias_solicitados, saldoAnterior: 0, saldoNuevo: 0,
+        descripcion: `Reintegro manual (especial): ${sol.tipo_nombre} del ${sol.fecha_inicio} al ${sol.fecha_fin}${observaciones ? ' — ' + observaciones : ''}`,
+        usuarioId: req.usuario.id,
+      });
+      await actualizarEstadoSolicitud(client, id, 'cancelado', req.usuario.id, observaciones || 'Reintegro manual por administrador');
       await client.query('COMMIT');
       return res.json({ mensaje: 'Solicitud cancelada correctamente' });
     }
@@ -801,16 +744,14 @@ router.patch('/:id/reintegrar', soloAdmin, async (req, res) => {
          WHERE id = $3`,
         [diasArrastre, diasActual, s.id]
       );
-      await client.query(
-        `INSERT INTO historial_movimientos
-           (funcionario_id, solicitud_id, tipo_permiso_id, tipo_movimiento,
-            dias_movimiento, saldo_anterior, saldo_nuevo, descripcion, usuario_responsable)
-         VALUES ($1,$2,$3,'reintegro',$4,$5,$6,$7,$8)`,
-        [sol.funcionario_id, id, sol.tipo_permiso_id,
-         sol.dias_solicitados, saldoAntes, saldoAntes + parseFloat(sol.dias_solicitados),
-         `Reintegro manual: ${sol.tipo_nombre} del ${sol.fecha_inicio} al ${sol.fecha_fin}${observaciones ? ' — ' + observaciones : ''}`,
-         req.usuario.id]
-      );
+      await registrarMovimiento(client, {
+        funcionarioId: sol.funcionario_id, solicitudId: id,
+        tipoPermisoId: sol.tipo_permiso_id, tipoMovimiento: 'reintegro',
+        diasMovimiento: sol.dias_solicitados,
+        saldoAnterior: saldoAntes, saldoNuevo: saldoAntes + parseFloat(sol.dias_solicitados),
+        descripcion: `Reintegro manual: ${sol.tipo_nombre} del ${sol.fecha_inicio} al ${sol.fecha_fin}${observaciones ? ' — ' + observaciones : ''}`,
+        usuarioId: req.usuario.id,
+      });
     } else {
       const saldoAntes = parseFloat(s.dias_asignados) - parseFloat(s.dias_usados) - parseFloat(s.dias_pendientes);
       await client.query(
@@ -820,25 +761,17 @@ router.patch('/:id/reintegrar', soloAdmin, async (req, res) => {
          WHERE id = $2`,
         [sol.dias_solicitados, s.id]
       );
-      await client.query(
-        `INSERT INTO historial_movimientos
-           (funcionario_id, solicitud_id, tipo_permiso_id, tipo_movimiento,
-            dias_movimiento, saldo_anterior, saldo_nuevo, descripcion, usuario_responsable)
-         VALUES ($1,$2,$3,'reintegro',$4,$5,$6,$7,$8)`,
-        [sol.funcionario_id, id, sol.tipo_permiso_id,
-         sol.dias_solicitados, saldoAntes, saldoAntes + parseFloat(sol.dias_solicitados),
-         `Reintegro manual: ${sol.tipo_nombre} del ${sol.fecha_inicio} al ${sol.fecha_fin}${observaciones ? ' — ' + observaciones : ''}`,
-         req.usuario.id]
-      );
+      await registrarMovimiento(client, {
+        funcionarioId: sol.funcionario_id, solicitudId: id,
+        tipoPermisoId: sol.tipo_permiso_id, tipoMovimiento: 'reintegro',
+        diasMovimiento: sol.dias_solicitados,
+        saldoAnterior: saldoAntes, saldoNuevo: saldoAntes + parseFloat(sol.dias_solicitados),
+        descripcion: `Reintegro manual: ${sol.tipo_nombre} del ${sol.fecha_inicio} al ${sol.fecha_fin}${observaciones ? ' — ' + observaciones : ''}`,
+        usuarioId: req.usuario.id,
+      });
     }
 
-    await client.query(
-      `UPDATE solicitudes
-       SET estado = 'cancelado', aprobado_por = $1, fecha_resolucion = NOW(),
-           observaciones = $2
-       WHERE id = $3`,
-      [req.usuario.id, observaciones || 'Reintegro manual por administrador', id]
-    );
+    await actualizarEstadoSolicitud(client, id, 'cancelado', req.usuario.id, observaciones || 'Reintegro manual por administrador');
 
     await client.query('COMMIT');
     res.json({ mensaje: 'Días reintegrados correctamente al saldo del funcionario' });

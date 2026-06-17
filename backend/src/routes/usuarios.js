@@ -68,7 +68,7 @@ router.post('/', [
 
   const { email, rol, sector } = req.body;
   try {
-    const hash = bcrypt.hashSync('cesfam2026', 10);
+    const hash = await bcrypt.hash(process.env.INITIAL_PASSWORD || 'cesfam2026', 10);
     const result = await pool.query(
       `INSERT INTO usuarios (email, password_hash, rol, sector)
        VALUES ($1, $2, $3, $4)

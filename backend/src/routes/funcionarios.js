@@ -32,7 +32,7 @@ router.get('/', async (req, res) => {
 
     // Filtro por grupo contractual
     if (req.query.tipo_grupo === 'contrata') {
-      whereParts.push(`f.tipo_contrato IN ('Indefinido', 'Plazo Fijo', 'Planta', 'Contrata')`);
+      whereParts.push(`f.tipo_contrato IN ('Indefinido', 'Plazo Fijo')`);
     } else if (req.query.tipo_grupo === 'honorarios') {
       whereParts.push(`f.tipo_contrato = 'Honorarios'`);
     } else if (req.query.tipo_grupo === 'suplentes') {
@@ -306,7 +306,7 @@ router.post('/bulk', soloAdmin, async (req, res) => {
           ? await client.query(`SELECT id FROM dispositivos WHERE LOWER(nombre) LIKE LOWER($1) LIMIT 1`, [`%${f.dispositivo}%`])
           : { rows: [] };
 
-        const TIPOS_CONTRATO = ['Indefinido', 'Plazo Fijo', 'Honorarios', 'Suplencia', 'Planta', 'Contrata'];
+        const TIPOS_CONTRATO = ['Indefinido', 'Plazo Fijo', 'Honorarios', 'Suplencia'];
         const tipoContrato = TIPOS_CONTRATO.includes(f.tipo_contrato) ? f.tipo_contrato : null;
         const horasContrato = f.horas_contrato ? parseInt(f.horas_contrato) || null : null;
 

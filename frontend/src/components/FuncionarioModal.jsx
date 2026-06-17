@@ -5,7 +5,7 @@ import { funcionariosApi, tiposPermisosApi, serviciosApi, dispositivosApi } from
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 
-const TIPOS_CONTRATO = ['Planta', 'Contrata', 'Indefinido', 'Plazo Fijo', 'Honorarios', 'Suplencia'];
+const TIPOS_CONTRATO = ['Indefinido', 'Plazo Fijo', 'Honorarios', 'Suplencia'];
 const HORAS_OPCIONES = [44, 33, 28, 22, 11];
 const SECTORES = ['Verde', 'Azul', 'Amarillo', 'Rojo', 'Lila', 'SAR'];
 const SECTOR_COLORS = {
@@ -25,7 +25,7 @@ const PROGRAMAS = [
 const ESCALAFONES = ['Directivo', 'Profesional', 'Técnico', 'Administrativo', 'Auxiliar de Servicios Menores'];
 
 const TIPOS_CONTRATO_POR_GRUPO = {
-  contrata:   ['Planta', 'Contrata', 'Indefinido', 'Plazo Fijo'],
+  contrata:   ['Indefinido', 'Plazo Fijo'],
   honorarios: ['Honorarios'],
   suplentes:  ['Suplencia'],
 };

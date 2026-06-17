@@ -1,28 +1,24 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Upload, FileSpreadsheet, Download, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Info } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { funcionariosApi, tiposPermisosApi } from '../api/client';
+import { funcionariosApi } from '../api/client';
 import toast from 'react-hot-toast';
 
 const TIPOS_CONTRATO = ['Indefinido', 'Plazo Fijo', 'Honorarios', 'Suplencia'];
 
 // ── Genera plantilla Excel ───────────────────────────────────────────────────
-function generarTemplate(tipos) {
+function generarTemplate() {
   const encabezados = [
     'RUT', 'Nombres', 'Apellidos', 'Correo', 'Cargo',
     'Servicio', 'Establecimiento', 'Tipo Contrato', 'Horas',
     'Fecha Ingreso', 'Fecha Nacimiento', 'Telefono',
-    ...tipos.map(t => `Días ${t.nombre}`),
   ];
   const ejemplo = [
     '12.345.678-9', 'María', 'González', 'maria@cesfam.cl',
     'Médico General', 'Medicina General', 'CESFAM LOS CERROS',
     'Indefinido', 44, '2020-03-15', '1985-06-20', '+56912345678',
-    ...tipos.map(t => t.dias_anuales_max),
   ];
-
-  // Segunda fila de instrucciones
   const instrucciones = [
     '', '', '', '', '', '', '',
     `Opciones: ${TIPOS_CONTRATO.join(' | ')}`,
@@ -30,13 +26,10 @@ function generarTemplate(tipos) {
     'Formato: AAAA-MM-DD',
     'Formato: AAAA-MM-DD',
     'Ej: +56912345678',
-    ...tipos.map(() => 'Número entero'),
   ];
 
   const ws = XLSX.utils.aoa_to_sheet([encabezados, instrucciones, ejemplo]);
-
-  // Estilo ancho de columnas
-  ws['!cols'] = encabezados.map((_, i) => ({ wch: i < 12 ? 22 : 18 }));
+  ws['!cols'] = encabezados.map(() => ({ wch: 22 }));
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Funcionarios');
@@ -44,7 +37,7 @@ function generarTemplate(tipos) {
 }
 
 // ── Parser Excel ─────────────────────────────────────────────────────────────
-function parsearExcel(file, tipos) {
+function parsearExcel(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -53,26 +46,11 @@ function parsearExcel(file, tipos) {
         const ws = wb.Sheets[wb.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
 
-        // Mapa código → id para saldos
-        const mapeoCodigo = {};
-        tipos.forEach(t => {
-          mapeoCodigo[`días ${t.nombre.toLowerCase()}`] = t.id;
-          mapeoCodigo[`dias ${t.nombre.toLowerCase()}`]  = t.id;
-          mapeoCodigo[t.codigo.toLowerCase()] = t.id;
-        });
-
         const funcionarios = rows.map((row, i) => {
           // Normalizar claves (sin tildes, minúsculas)
           const r = {};
           Object.entries(row).forEach(([k, v]) => {
             r[k.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')] = v;
-          });
-
-          // Extraer saldos por tipo
-          const saldos = {};
-          Object.entries(mapeoCodigo).forEach(([clave, tipoId]) => {
-            const val = r[clave];
-            if (val !== undefined && val !== '') saldos[tipoId] = parseInt(val) || 0;
           });
 
           // Helper para normalizar fechas (Date object, número serial Excel, o string)
@@ -86,8 +64,9 @@ function parsearExcel(file, tipos) {
             return String(val).trim();
           };
 
-          // Normalizar fecha
-          const fechaIngreso = normFecha(r['fecha ingreso'] || r['fecha_ingreso'] || '');
+          const fechaIngreso     = normFecha(r['fecha ingreso']    || r['fecha_ingreso']    || '');
+          const fechaNacimiento  = normFecha(r['fecha nacimiento'] || r['fecha_nacimiento'] || '');
+          const telefono         = String(r['telefono'] || r['teléfono'] || r['fono'] || '').trim();
 
           // Tipo contrato — normalizar capitalización
           const tipoContratoRaw = String(r['tipo contrato'] || r['tipo_contrato'] || '').trim();
@@ -107,11 +86,8 @@ function parsearExcel(file, tipos) {
               ? `Tipo contrato inválido: "${tipoContratoRaw}"`
               : null;
 
-          const fechaNacimiento = normFecha(r['fecha nacimiento'] || r['fecha_nacimiento'] || '');
-          const telefono = String(r['telefono'] || r['teléfono'] || r['fono'] || '').trim();
-
           return {
-            fila: i + 2,
+            fila:            i + 2,
             rut:             String(r['rut']          || '').trim(),
             nombres:         String(r['nombres']       || '').trim(),
             apellidos:       String(r['apellidos']     || '').trim(),
@@ -124,9 +100,9 @@ function parsearExcel(file, tipos) {
             fecha_ingreso:   fechaIngreso,
             fecha_nacimiento: fechaNacimiento,
             telefono,
-            saldos,
-            valido: !invalido,
-            error: invalido,
+            saldos:          {},
+            valido:          !invalido,
+            error:           invalido,
           };
         });
 
@@ -142,18 +118,11 @@ function parsearExcel(file, tipos) {
 
 // ── Componente principal ─────────────────────────────────────────────────────
 export default function CargaMasivaModal({ onClose, onSuccess }) {
-  const [tipos, setTipos] = useState([]);
-  const [preview, setPreview] = useState(null);
-  const [cargando, setCargando] = useState(false);
-  const [resultado, setResultado] = useState(null);
+  const [preview, setPreview]           = useState(null);
+  const [cargando, setCargando]         = useState(false);
+  const [resultado, setResultado]       = useState(null);
   const [mostrarErrores, setMostrarErrores] = useState(false);
   const inputRef = useRef();
-
-  useEffect(() => {
-    tiposPermisosApi.listar()
-      .then(({ data }) => setTipos(data.filter(t => t.activo)))
-      .catch(() => toast.error('Error cargando tipos de permisos'));
-  }, []);
 
   const handleFile = async (file) => {
     if (!file) return;
@@ -163,7 +132,7 @@ export default function CargaMasivaModal({ onClose, onSuccess }) {
       return;
     }
     try {
-      const rows = await parsearExcel(file, tipos);
+      const rows = await parsearExcel(file);
       setPreview(rows);
       setResultado(null);
     } catch (err) {
@@ -216,12 +185,10 @@ export default function CargaMasivaModal({ onClose, onSuccess }) {
               Carga Masiva de Funcionarios
             </h2>
             <div className="flex items-center gap-2">
-              {tipos.length > 0 && (
-                <button onClick={() => generarTemplate(tipos)} className="btn-secondary text-xs py-1.5">
-                  <Download size={14} />
-                  Descargar plantilla
-                </button>
-              )}
+              <button onClick={() => generarTemplate()} className="btn-secondary text-xs py-1.5">
+                <Download size={14} />
+                Descargar plantilla
+              </button>
               <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-dark-100 text-dark-400">
                 <X size={18} />
               </button>
@@ -247,37 +214,18 @@ export default function CargaMasivaModal({ onClose, onSuccess }) {
             )}
 
             {/* Columnas esperadas */}
-            {!preview && !resultado && tipos.length > 0 && (
+            {!preview && !resultado && (
               <div className="card p-4 space-y-3">
                 <p className="text-xs font-semibold text-dark-500 uppercase tracking-wide">
                   Columnas esperadas en el Excel
                 </p>
-
-                {/* Fijas */}
-                <div>
-                  <p className="text-xs text-dark-400 mb-1.5 font-medium">Datos del funcionario</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {columnasFijas.map(col => (
-                      <span key={col} className="text-xs bg-dark-100 text-dark-600 px-2 py-1 rounded font-mono">
-                        {col}
-                      </span>
-                    ))}
-                  </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {columnasFijas.map(col => (
+                    <span key={col} className="text-xs bg-dark-100 text-dark-600 px-2 py-1 rounded font-mono">
+                      {col}
+                    </span>
+                  ))}
                 </div>
-
-                {/* Saldos por tipo */}
-                <div>
-                  <p className="text-xs text-dark-400 mb-1.5 font-medium">Saldos por tipo de permiso (días)</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {tipos.map(t => (
-                      <span key={t.id} className="text-xs bg-brand-50 text-brand-700 px-2 py-1 rounded font-mono">
-                        Días {t.nombre}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Notas */}
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-1">
                   <p className="text-xs font-medium text-amber-700 flex items-center gap-1">
                     <Info size={12} />
@@ -328,11 +276,8 @@ export default function CargaMasivaModal({ onClose, onSuccess }) {
                           <th className="px-3 py-2 text-left text-dark-500 font-medium">Contrato</th>
                           <th className="px-3 py-2 text-center text-dark-500 font-medium">Horas</th>
                           <th className="px-3 py-2 text-left text-dark-500 font-medium">F. Ingreso</th>
-                          {tipos.slice(0, 4).map(t => (
-                            <th key={t.id} className="px-3 py-2 text-center text-dark-500 font-medium">
-                              {t.codigo}
-                            </th>
-                          ))}
+                          <th className="px-3 py-2 text-left text-dark-500 font-medium">F. Nacimiento</th>
+                          <th className="px-3 py-2 text-left text-dark-500 font-medium">Teléfono</th>
                           <th className="px-3 py-2 text-left text-dark-500 font-medium">Estado</th>
                         </tr>
                       </thead>
@@ -360,11 +305,8 @@ export default function CargaMasivaModal({ onClose, onSuccess }) {
                               {f.horas_contrato ? `${f.horas_contrato}h` : '—'}
                             </td>
                             <td className="px-3 py-2 text-dark-500">{f.fecha_ingreso || '—'}</td>
-                            {tipos.slice(0, 4).map(t => (
-                              <td key={t.id} className="px-3 py-2 text-center text-dark-600">
-                                {f.saldos[t.id] ?? t.dias_anuales_max}
-                              </td>
-                            ))}
+                            <td className="px-3 py-2 text-dark-500">{f.fecha_nacimiento || '—'}</td>
+                            <td className="px-3 py-2 text-dark-500">{f.telefono || '—'}</td>
                             <td className="px-3 py-2">
                               {f.valido
                                 ? <CheckCircle2 size={14} className="text-emerald-500" />

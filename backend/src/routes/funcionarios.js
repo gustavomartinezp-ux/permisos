@@ -201,6 +201,7 @@ router.post('/', soloAdmin, [
     fecha_nacimiento, telefono, direccion_particular, numero_reloj,
     convenio_honorarios, prestacion, fecha_termino_contrato,
     escalafon, categoria, nivel,
+    suplencia_fecha_inicio, motivo_reemplazo,
   } = req.body;
   const client = await pool.connect();
 
@@ -244,6 +245,39 @@ router.post('/', soloAdmin, [
          SELECT $1, tipo_id, $2, dias
          FROM unnest($3::int[], $4::int[]) AS t(tipo_id, dias)`,
         [funcId, anio, tipoIds, diasArr]
+      );
+    }
+
+    // Registrar en historial_suplencias si es suplente con fechas
+    if (tipo_contrato === 'Suplencia' && suplencia_fecha_inicio && fecha_termino_contrato) {
+      let cargoReemplazado = cargo;
+      let rutReemplazado = null;
+      let nombreReemplazado = null;
+      if (reemplaza_a) {
+        const rep = await client.query(
+          'SELECT cargo, rut, nombres, apellidos FROM funcionarios WHERE id = $1',
+          [reemplaza_a]
+        );
+        if (rep.rows.length > 0) {
+          cargoReemplazado = rep.rows[0].cargo;
+          rutReemplazado   = rep.rows[0].rut;
+          nombreReemplazado = `${rep.rows[0].nombres} ${rep.rows[0].apellidos}`;
+        }
+      }
+      const motivo = ['licencia_medica','feriado_legal','permiso_administrativo','permiso_sin_goce','vacancia','otro']
+        .includes(motivo_reemplazo) ? motivo_reemplazo : 'otro';
+      await client.query(
+        `INSERT INTO historial_suplencias
+           (funcionario_suplente_id, funcionario_reemplazado_id,
+            rut_reemplazado, nombre_reemplazado, cargo_reemplazado,
+            motivo_reemplazo, fecha_inicio, fecha_termino, estado, creado_por)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'activa',$9)`,
+        [
+          funcId, reemplaza_a || null,
+          rutReemplazado, nombreReemplazado, cargoReemplazado,
+          motivo, suplencia_fecha_inicio, fecha_termino_contrato,
+          req.user?.id || null,
+        ]
       );
     }
 

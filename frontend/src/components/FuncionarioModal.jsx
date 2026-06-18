@@ -51,6 +51,15 @@ const ESCALAFONES = [
   'TERAPEUTA OCUPACIONAL',
 ];
 
+const MOTIVOS_REEMPLAZO = [
+  { val: 'licencia_medica',        label: 'Licencia Médica' },
+  { val: 'feriado_legal',          label: 'Feriado Legal' },
+  { val: 'permiso_administrativo', label: 'Permiso Administrativo' },
+  { val: 'permiso_sin_goce',       label: 'Permiso Sin Goce de Sueldo' },
+  { val: 'vacancia',               label: 'Vacancia' },
+  { val: 'otro',                   label: 'Otro' },
+];
+
 const TIPOS_CONTRATO_POR_GRUPO = {
   contrata:   ['Indefinido', 'Plazo Fijo'],
   honorarios: ['Honorarios'],
@@ -103,6 +112,7 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
     sector: '', area: '', activo: true,
     convenio_honorarios: '', prestacion: '',
     escalafon: '', categoria: '', nivel: '',
+    suplencia_fecha_inicio: '', motivo_reemplazo: 'otro',
     ...(funcEdit || {}),
     fecha_ingreso: normFecha(funcEdit?.fecha_ingreso),
     fecha_nacimiento: normFecha(funcEdit?.fecha_nacimiento),
@@ -282,7 +292,7 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
 
                   <div>
                     <label className="block text-xs font-medium text-dark-700 mb-1.5">
-                      <Calendar size={12} className="inline mr-1" />Fecha de ingreso
+                      <Calendar size={12} className="inline mr-1" />Fecha de antigüedad
                     </label>
                     <input type="date" value={form.fecha_ingreso || ''} onChange={e => set('fecha_ingreso', e.target.value)} className="input-field" />
                   </div>
@@ -291,7 +301,8 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
                   {(form.tipo_contrato === 'Honorarios' || form.tipo_contrato === 'Suplencia' || form.tipo_contrato === 'Plazo Fijo') && (
                     <div>
                       <label className="block text-xs font-medium text-dark-700 mb-1.5">
-                        <Calendar size={12} className="inline mr-1" />Fecha término contrato
+                        <Calendar size={12} className="inline mr-1" />
+                        {form.tipo_contrato === 'Suplencia' ? 'Fecha término suplencia' : 'Fecha término contrato'}
                       </label>
                       <input
                         type="date"
@@ -313,6 +324,29 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
                         ))}
                       </select>
                     </div>
+                  )}
+
+                  {/* Campos específicos suplencia: fecha inicio y motivo */}
+                  {form.tipo_contrato === 'Suplencia' && (
+                    <>
+                      <div>
+                        <label className="block text-xs font-medium text-dark-700 mb-1.5">
+                          <Calendar size={12} className="inline mr-1" />Fecha inicio suplencia
+                        </label>
+                        <input
+                          type="date"
+                          value={form.suplencia_fecha_inicio || ''}
+                          onChange={e => set('suplencia_fecha_inicio', e.target.value)}
+                          className="input-field"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-dark-700 mb-1.5">Motivo de reemplazo</label>
+                        <select value={form.motivo_reemplazo || 'otro'} onChange={e => set('motivo_reemplazo', e.target.value)} className="input-field">
+                          {MOTIVOS_REEMPLAZO.map(m => <option key={m.val} value={m.val}>{m.label}</option>)}
+                        </select>
+                      </div>
+                    </>
                   )}
                 </div>
               </section>
@@ -364,7 +398,7 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
                           <span className="text-sm font-semibold text-dark-800">
                             {calcularAntiguedad(form.fecha_ingreso)}
                           </span>
-                          <span className="text-xs text-dark-400">calculada desde la fecha de ingreso</span>
+                          <span className="text-xs text-dark-400">calculada desde la fecha de antigüedad</span>
                         </div>
                       </div>
                     )}

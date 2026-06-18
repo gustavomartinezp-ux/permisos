@@ -131,6 +131,8 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
   const [saldos, setSaldos] = useState({});
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
+  const [busquedaReemplazado, setBusquedaReemplazado] = useState('');
+  const [mostrarSugerencias, setMostrarSugerencias] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -326,16 +328,65 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
                     </div>
                   )}
 
-                  {/* Reemplaza a — solo Suplencia */}
+                  {/* Reemplaza a — solo Suplencia, con buscador */}
                   {form.tipo_contrato === 'Suplencia' && (
                     <div className="col-span-2">
                       <label className="block text-xs font-medium text-dark-700 mb-1.5">Reemplaza a</label>
-                      <select value={form.reemplaza_a || ''} onChange={e => handleReemplazaA(e.target.value)} className="input-field">
-                        <option value="">Seleccionar funcionario...</option>
-                        {todosFunc.map(f => (
-                          <option key={f.id} value={f.id}>{f.nombres} {f.apellidos} — {f.cargo}</option>
-                        ))}
-                      </select>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          className="input-field pr-8"
+                          placeholder="Buscar por nombre, apellido o cargo..."
+                          value={busquedaReemplazado}
+                          onChange={e => {
+                            setBusquedaReemplazado(e.target.value);
+                            setMostrarSugerencias(true);
+                            if (!e.target.value) handleReemplazaA('');
+                          }}
+                          onFocus={() => setMostrarSugerencias(true)}
+                          onBlur={() => setTimeout(() => setMostrarSugerencias(false), 150)}
+                          autoComplete="off"
+                        />
+                        {busquedaReemplazado && (
+                          <button
+                            type="button"
+                            onClick={() => { setBusquedaReemplazado(''); handleReemplazaA(''); }}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-dark-400 hover:text-dark-700"
+                          >
+                            <X size={14} />
+                          </button>
+                        )}
+                        {mostrarSugerencias && busquedaReemplazado.trim().length >= 1 && (() => {
+                          const q = busquedaReemplazado.toLowerCase();
+                          const filtrados = todosFunc.filter(f =>
+                            `${f.nombres} ${f.apellidos} ${f.cargo}`.toLowerCase().includes(q)
+                          ).slice(0, 8);
+                          if (!filtrados.length) return (
+                            <div className="absolute z-20 w-full mt-1 bg-white border border-dark-200 rounded-lg shadow-lg p-3 text-xs text-dark-400">
+                              Sin resultados
+                            </div>
+                          );
+                          return (
+                            <ul className="absolute z-20 w-full mt-1 bg-white border border-dark-200 rounded-lg shadow-lg overflow-hidden">
+                              {filtrados.map(f => (
+                                <li
+                                  key={f.id}
+                                  onMouseDown={() => {
+                                    handleReemplazaA(f.id);
+                                    setBusquedaReemplazado(`${f.nombres} ${f.apellidos}`);
+                                    setMostrarSugerencias(false);
+                                  }}
+                                  className="px-3 py-2 text-sm cursor-pointer hover:bg-brand-50 border-b border-dark-100 last:border-0"
+                                >
+                                  <span className="font-medium text-dark-800">{f.nombres} {f.apellidos}</span>
+                                  <span className="text-dark-400 ml-2 text-xs">{f.cargo}</span>
+                                  {f.sector && <span className="text-dark-400 ml-1 text-xs">· {f.sector}</span>}
+                                </li>
+                              ))}
+                            </ul>
+                          );
+                        })()}
+                      </div>
                       {form.reemplaza_a && (() => {
                         const rep = todosFunc.find(f => String(f.id) === String(form.reemplaza_a));
                         if (!rep) return null;

@@ -154,6 +154,20 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
 
   const set = (key, val) => setForm(f => ({ ...f, [key]: val }));
 
+  const handleReemplazaA = (id) => {
+    const rep = todosFunc.find(f => String(f.id) === String(id));
+    if (!rep) { set('reemplaza_a', ''); return; }
+    setForm(f => ({
+      ...f,
+      reemplaza_a:   rep.id,
+      cargo:         rep.cargo         || f.cargo,
+      sector:        rep.sector        || f.sector,
+      area:          rep.area          || f.area,
+      dispositivo_id: rep.dispositivo_id || f.dispositivo_id,
+      servicio_id:   rep.servicio_id   || f.servicio_id,
+    }));
+  };
+
   const esPlantaContrata = form.tipo_contrato === 'Planta' || form.tipo_contrato === 'Contrata';
 
   const handleSubmit = async (e) => {
@@ -316,12 +330,23 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
                   {form.tipo_contrato === 'Suplencia' && (
                     <div className="col-span-2">
                       <label className="block text-xs font-medium text-dark-700 mb-1.5">Reemplaza a</label>
-                      <select value={form.reemplaza_a || ''} onChange={e => set('reemplaza_a', e.target.value)} className="input-field">
+                      <select value={form.reemplaza_a || ''} onChange={e => handleReemplazaA(e.target.value)} className="input-field">
                         <option value="">Seleccionar funcionario...</option>
                         {todosFunc.map(f => (
                           <option key={f.id} value={f.id}>{f.nombres} {f.apellidos} — {f.cargo}</option>
                         ))}
                       </select>
+                      {form.reemplaza_a && (() => {
+                        const rep = todosFunc.find(f => String(f.id) === String(form.reemplaza_a));
+                        if (!rep) return null;
+                        return (
+                          <div className="mt-2 p-2.5 bg-blue-50 border border-blue-100 rounded-lg text-xs text-blue-700 space-y-0.5">
+                            <p><strong>Cargo:</strong> {rep.cargo}</p>
+                            {rep.sector && <p><strong>Sector:</strong> {rep.sector}</p>}
+                            {rep.area && <p><strong>Área:</strong> {rep.area}</p>}
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
 

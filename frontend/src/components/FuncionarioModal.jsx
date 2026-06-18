@@ -297,12 +297,11 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
                     <input type="date" value={form.fecha_ingreso || ''} onChange={e => set('fecha_ingreso', e.target.value)} className="input-field" />
                   </div>
 
-                  {/* Fecha término — Honorarios, Suplencia y Plazo Fijo */}
-                  {(form.tipo_contrato === 'Honorarios' || form.tipo_contrato === 'Suplencia' || form.tipo_contrato === 'Plazo Fijo') && (
+                  {/* Fecha término — solo Honorarios y Plazo Fijo */}
+                  {(form.tipo_contrato === 'Honorarios' || form.tipo_contrato === 'Plazo Fijo') && (
                     <div>
                       <label className="block text-xs font-medium text-dark-700 mb-1.5">
-                        <Calendar size={12} className="inline mr-1" />
-                        {form.tipo_contrato === 'Suplencia' ? 'Fecha término suplencia' : 'Fecha término contrato'}
+                        <Calendar size={12} className="inline mr-1" />Fecha término contrato
                       </label>
                       <input
                         type="date"
@@ -326,7 +325,7 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
                     </div>
                   )}
 
-                  {/* Campos específicos suplencia: fecha inicio y motivo */}
+                  {/* Campos específicos suplencia: inicio, término y motivo */}
                   {form.tipo_contrato === 'Suplencia' && (
                     <>
                       <div>
@@ -341,6 +340,17 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
                         />
                       </div>
                       <div>
+                        <label className="block text-xs font-medium text-dark-700 mb-1.5">
+                          <Calendar size={12} className="inline mr-1" />Fecha término suplencia
+                        </label>
+                        <input
+                          type="date"
+                          value={form.fecha_termino_contrato || ''}
+                          onChange={e => set('fecha_termino_contrato', e.target.value)}
+                          className="input-field"
+                        />
+                      </div>
+                      <div className="col-span-2">
                         <label className="block text-xs font-medium text-dark-700 mb-1.5">Motivo de reemplazo</label>
                         <select value={form.motivo_reemplazo || 'otro'} onChange={e => set('motivo_reemplazo', e.target.value)} className="input-field">
                           {MOTIVOS_REEMPLAZO.map(m => <option key={m.val} value={m.val}>{m.label}</option>)}

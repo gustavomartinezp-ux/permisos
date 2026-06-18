@@ -476,6 +476,43 @@ router.put('/:id', adminOSupervisor, async (req, res) => {
   }
 });
 
+// Pasivar / Activar — solo cambia el campo activo (no toca ningún otro dato)
+router.patch('/:id/activo', soloAdmin, async (req, res) => {
+  const { activo } = req.body;
+  if (typeof activo !== 'boolean')
+    return res.status(400).json({ error: 'El campo activo debe ser un booleano' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const result = await client.query(
+      `UPDATE funcionarios SET activo = $1 WHERE id = $2
+       RETURNING id, activo, nombres, apellidos`,
+      [activo, req.params.id]
+    );
+    if (!result.rows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Funcionario no encontrado' });
+    }
+
+    // Sincronizar el usuario vinculado
+    await client.query(
+      `UPDATE usuarios SET activo = $1 WHERE funcionario_id = $2`,
+      [activo, req.params.id]
+    );
+
+    await client.query('COMMIT');
+    res.json(result.rows[0]);
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    res.status(500).json({ error: 'Error al actualizar estado del funcionario' });
+  } finally {
+    client.release();
+  }
+});
+
 // Eliminar funcionario pasivo — requiere contraseña del admin
 router.delete('/:id', soloAdmin, async (req, res) => {
   const { password_admin } = req.body;

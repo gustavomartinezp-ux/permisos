@@ -364,12 +364,12 @@ export default function Funcionarios({ grupo }) {
     if (!confirmPasivar) return;
     setProcesandoPasivar(true);
     try {
-      await funcionariosApi.actualizar(confirmPasivar.id, { activo: false });
+      await funcionariosApi.toggleActivo(confirmPasivar.id, false);
       toast.success(`${confirmPasivar.nombres} ${confirmPasivar.apellidos} pasivado correctamente`);
       setConfirmPasivar(null);
       cargar();
-    } catch {
-      toast.error('Error al pasivar el funcionario');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al pasivar el funcionario');
     } finally {
       setProcesandoPasivar(false);
     }
@@ -377,11 +377,11 @@ export default function Funcionarios({ grupo }) {
 
   async function handleActivar(funcionario) {
     try {
-      await funcionariosApi.actualizar(funcionario.id, { activo: true });
+      await funcionariosApi.toggleActivo(funcionario.id, true);
       toast.success(`${funcionario.nombres} ${funcionario.apellidos} activado correctamente`);
       cargar();
-    } catch {
-      toast.error('Error al activar el funcionario');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al activar el funcionario');
     }
   }
 
@@ -415,7 +415,7 @@ export default function Funcionarios({ grupo }) {
   }
 
   const filtrados = funcionarios.filter((f) => {
-    if (verPasivos ? f.activo !== false : f.activo === false) return false;
+    if (verPasivos ? f.activo !== false : f.activo !== true) return false;
     const q = busqueda.toLowerCase();
     return (
       f.nombres.toLowerCase().includes(q) ||

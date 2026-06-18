@@ -37,6 +37,7 @@ export const funcionariosApi = {
   obtener: (id, anio) => api.get(`/funcionarios/${id}`, { params: { anio } }),
   crear: (data) => api.post('/funcionarios', data),
   actualizar: (id, data) => api.put(`/funcionarios/${id}`, data),
+  toggleActivo: (id, activo) => api.patch(`/funcionarios/${id}/activo`, { activo }),
   eliminar: (id, password_admin) => api.delete(`/funcionarios/${id}`, { data: { password_admin } }),
   actualizarSaldos: (id, saldos, arrastres, anio, motivo) => api.put(`/funcionarios/${id}/saldos`, { saldos, arrastres, anio, motivo }),
   actualizarFoto: (id, foto_base64) => api.put(`/funcionarios/${id}/foto`, { foto_base64 }),

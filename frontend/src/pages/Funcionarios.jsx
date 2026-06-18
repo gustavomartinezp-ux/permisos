@@ -5,7 +5,8 @@ import { format, parseISO, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
   Search, Plus, Users, ChevronRight, Upload, FileDown, UserX,
-  AlertTriangle, Clock, Briefcase,
+  AlertTriangle, Clock, Briefcase, Trash2, PowerOff, Power,
+  X, ShieldAlert, Eye, EyeOff,
 } from 'lucide-react';
 import { funcionariosApi, solicitudesApi } from '../api/client';
 import { generarReporteFuncionario } from '../utils/reportePDF';
@@ -188,7 +189,7 @@ function CardSuplentes({ funcionario }) {
 }
 
 // ─── Tarjeta genérica ─────────────────────────────────────────────────────────
-function FuncionarioCard({ funcionario, index, onSolicitar, grupo }) {
+function FuncionarioCard({ funcionario, index, onSolicitar, grupo, esAdmin, onPasivar, onActivar, onEliminar }) {
   const cfg = GRUPOS[grupo] || GRUPOS.contrata;
   const [generandoPDF, setGenerandoPDF] = useState(false);
 
@@ -263,6 +264,36 @@ function FuncionarioCard({ funcionario, index, onSolicitar, grupo }) {
               : <FileDown size={15} />
             }
           </button>
+
+          {/* Acciones de admin */}
+          {esAdmin && funcionario.activo !== false && (
+            <button
+              onClick={() => onPasivar(funcionario)}
+              title="Pasivar funcionario"
+              className="p-1.5 rounded-lg hover:bg-amber-50 text-dark-400 hover:text-amber-600 transition-colors"
+            >
+              <PowerOff size={15} />
+            </button>
+          )}
+          {esAdmin && funcionario.activo === false && (
+            <>
+              <button
+                onClick={() => onActivar(funcionario)}
+                title="Activar funcionario"
+                className="p-1.5 rounded-lg hover:bg-emerald-50 text-dark-400 hover:text-emerald-600 transition-colors"
+              >
+                <Power size={15} />
+              </button>
+              <button
+                onClick={() => onEliminar(funcionario)}
+                title="Eliminar definitivamente"
+                className="p-1.5 rounded-lg hover:bg-red-50 text-dark-400 hover:text-red-600 transition-colors"
+              >
+                <Trash2 size={15} />
+              </button>
+            </>
+          )}
+
           <Link
             to={`/funcionarios/${funcionario.id}`}
             className="p-1.5 rounded-lg hover:bg-dark-100 text-dark-400 hover:text-dark-600 transition-colors"
@@ -303,6 +334,17 @@ export default function Funcionarios({ grupo }) {
   const [showNuevo, setShowNuevo]       = useState(false);
   const [showBulk, setShowBulk]         = useState(false);
 
+  // Pasivar
+  const [confirmPasivar, setConfirmPasivar] = useState(null);
+  const [procesandoPasivar, setProcesandoPasivar] = useState(false);
+
+  // Eliminar definitivamente
+  const [confirmEliminar, setConfirmEliminar] = useState(null);
+  const [pasoEliminar, setPasoEliminar]       = useState(1);
+  const [passwordAdmin, setPasswordAdmin]     = useState('');
+  const [showPass, setShowPass]               = useState(false);
+  const [procesandoEliminar, setProcesandoEliminar] = useState(false);
+
   const cargar = () => {
     setCargando(true);
     const params = {};
@@ -315,6 +357,62 @@ export default function Funcionarios({ grupo }) {
   };
 
   useEffect(() => { cargar(); }, [verPasivos, grupo]);
+
+  // ── Handlers de baja ────────────────────────────────────────────────────────
+
+  async function handlePasivar() {
+    if (!confirmPasivar) return;
+    setProcesandoPasivar(true);
+    try {
+      await funcionariosApi.actualizar(confirmPasivar.id, { activo: false });
+      toast.success(`${confirmPasivar.nombres} ${confirmPasivar.apellidos} pasivado correctamente`);
+      setConfirmPasivar(null);
+      cargar();
+    } catch {
+      toast.error('Error al pasivar el funcionario');
+    } finally {
+      setProcesandoPasivar(false);
+    }
+  }
+
+  async function handleActivar(funcionario) {
+    try {
+      await funcionariosApi.actualizar(funcionario.id, { activo: true });
+      toast.success(`${funcionario.nombres} ${funcionario.apellidos} activado correctamente`);
+      cargar();
+    } catch {
+      toast.error('Error al activar el funcionario');
+    }
+  }
+
+  function abrirEliminar(funcionario) {
+    setConfirmEliminar(funcionario);
+    setPasoEliminar(1);
+    setPasswordAdmin('');
+    setShowPass(false);
+  }
+
+  function cerrarEliminar() {
+    setConfirmEliminar(null);
+    setPasoEliminar(1);
+    setPasswordAdmin('');
+    setShowPass(false);
+  }
+
+  async function handleEliminarDefinitivo() {
+    if (!passwordAdmin.trim()) return;
+    setProcesandoEliminar(true);
+    try {
+      await funcionariosApi.eliminar(confirmEliminar.id, passwordAdmin);
+      toast.success(`${confirmEliminar.nombres} ${confirmEliminar.apellidos} eliminado permanentemente`);
+      cerrarEliminar();
+      cargar();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al eliminar. Verifica la contraseña.');
+    } finally {
+      setProcesandoEliminar(false);
+    }
+  }
 
   const filtrados = funcionarios.filter((f) => {
     if (verPasivos ? f.activo !== false : f.activo === false) return false;
@@ -435,7 +533,11 @@ export default function Funcionarios({ grupo }) {
               funcionario={f}
               index={i}
               grupo={grupo}
+              esAdmin={esAdmin}
               onSolicitar={esSupervisor && grupo !== 'honorarios' ? setModalSolicitud : null}
+              onPasivar={setConfirmPasivar}
+              onActivar={handleActivar}
+              onEliminar={abrirEliminar}
             />
           ))}
         </div>
@@ -462,6 +564,160 @@ export default function Funcionarios({ grupo }) {
           onClose={() => setShowBulk(false)}
           onSuccess={cargar}
         />
+      )}
+
+      {/* ── Modal: Confirmar Pasivar ────────────────────────────────────────── */}
+      {confirmPasivar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6"
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                <PowerOff size={18} className="text-amber-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-dark-900">Pasivar funcionario</h3>
+                <p className="text-xs text-dark-500">Borrado lógico reversible</p>
+              </div>
+            </div>
+
+            <p className="text-sm text-dark-700 mb-1">
+              ¿Confirmas pasivar a{' '}
+              <strong>{confirmPasivar.nombres} {confirmPasivar.apellidos}</strong>?
+            </p>
+            <p className="text-xs text-dark-500 mb-5">
+              El funcionario no podrá iniciar sesión ni aparecerá en los listados activos.
+              Su historial queda intacto y la acción es reversible desde la vista "Pasivos".
+            </p>
+
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setConfirmPasivar(null)}
+                className="btn-secondary text-sm"
+                disabled={procesandoPasivar}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handlePasivar}
+                disabled={procesandoPasivar}
+                className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {procesandoPasivar
+                  ? <span className="animate-spin h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full" />
+                  : <PowerOff size={14} />
+                }
+                Pasivar
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* ── Modal: Eliminar Definitivamente ────────────────────────────────── */}
+      {confirmEliminar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6"
+          >
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                  {pasoEliminar === 1
+                    ? <ShieldAlert size={18} className="text-red-600" />
+                    : <Trash2 size={18} className="text-red-600" />
+                  }
+                </div>
+                <div>
+                  <h3 className="font-semibold text-dark-900">Eliminar definitivamente</h3>
+                  <p className="text-xs text-dark-500">Paso {pasoEliminar} de 2</p>
+                </div>
+              </div>
+              <button onClick={cerrarEliminar} className="text-dark-400 hover:text-dark-600">
+                <X size={18} />
+              </button>
+            </div>
+
+            {pasoEliminar === 1 ? (
+              <>
+                <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-4">
+                  <p className="text-sm font-semibold text-red-700 mb-1">⚠ Esta acción es irreversible</p>
+                  <p className="text-xs text-red-600">
+                    Se eliminará por completo el registro de{' '}
+                    <strong>{confirmEliminar.nombres} {confirmEliminar.apellidos}</strong>,
+                    incluyendo su historial, saldos, solicitudes y cuenta de usuario.
+                    No hay forma de recuperar estos datos.
+                  </p>
+                </div>
+                <p className="text-xs text-dark-500 mb-5">
+                  Solo se puede eliminar un funcionario que ya esté en estado <strong>Pasivo</strong>.
+                </p>
+                <div className="flex gap-2 justify-end">
+                  <button onClick={cerrarEliminar} className="btn-secondary text-sm">
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => setPasoEliminar(2)}
+                    className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition-colors flex items-center gap-2"
+                  >
+                    <ShieldAlert size={14} />
+                    Entendido, continuar
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-dark-700 mb-4">
+                  Ingresa tu <strong>contraseña de administrador</strong> para confirmar la eliminación de{' '}
+                  <strong>{confirmEliminar.nombres} {confirmEliminar.apellidos}</strong>.
+                </p>
+                <div className="relative mb-5">
+                  <input
+                    type={showPass ? 'text' : 'password'}
+                    value={passwordAdmin}
+                    onChange={(e) => setPasswordAdmin(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleEliminarDefinitivo()}
+                    placeholder="Contraseña de admin"
+                    className="input-field pr-10 w-full"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPass(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-dark-400 hover:text-dark-600"
+                  >
+                    {showPass ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <button
+                    onClick={() => setPasoEliminar(1)}
+                    className="btn-secondary text-sm"
+                    disabled={procesandoEliminar}
+                  >
+                    Atrás
+                  </button>
+                  <button
+                    onClick={handleEliminarDefinitivo}
+                    disabled={!passwordAdmin.trim() || procesandoEliminar}
+                    className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {procesandoEliminar
+                      ? <span className="animate-spin h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full" />
+                      : <Trash2 size={14} />
+                    }
+                    Eliminar definitivamente
+                  </button>
+                </div>
+              </>
+            )}
+          </motion.div>
+        </div>
       )}
     </div>
   );

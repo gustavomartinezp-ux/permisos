@@ -531,9 +531,37 @@ router.delete('/:id', soloAdmin, async (req, res) => {
       return res.status(400).json({ error: 'Solo se pueden eliminar funcionarios en estado Pasivo' });
 
     await client.query('BEGIN');
+
+    // 1. Suplencias donde este funcionario era el suplente
+    //    (las prórrogas se borran en CASCADE desde historial_suplencias)
+    await client.query(
+      `DELETE FROM historial_suplencias WHERE funcionario_suplente_id = $1`,
+      [req.params.id]
+    );
+    // 2. Desreferenciar donde era el reemplazado (FK nullable, sin CASCADE)
+    await client.query(
+      `UPDATE historial_suplencias SET funcionario_reemplazado_id = NULL
+       WHERE funcionario_reemplazado_id = $1`,
+      [req.params.id]
+    );
+
+    // 3. Desreferenciar creado_por / actualizado_por en suplencias
+    await client.query(
+      `UPDATE historial_suplencias SET creado_por = NULL WHERE creado_por IN
+       (SELECT id FROM usuarios WHERE funcionario_id = $1)`,
+      [req.params.id]
+    );
+    await client.query(
+      `UPDATE historial_suplencias SET actualizado_por = NULL WHERE actualizado_por IN
+       (SELECT id FROM usuarios WHERE funcionario_id = $1)`,
+      [req.params.id]
+    );
+
+    // 4. Historial de movimientos y saldos
     await client.query('DELETE FROM historial_movimientos WHERE funcionario_id = $1', [req.params.id]);
     await client.query('DELETE FROM saldos_funcionarios WHERE funcionario_id = $1', [req.params.id]);
-    // Desreferenciar aprobadores antes de borrar solicitudes/usuario
+
+    // 5. Desreferenciar aprobadores en solicitudes antes de borrarlas
     await client.query(
       `UPDATE solicitudes SET pre_aprobado_por = NULL
        WHERE pre_aprobado_por IN (SELECT id FROM usuarios WHERE funcionario_id = $1)`,
@@ -545,15 +573,18 @@ router.delete('/:id', soloAdmin, async (req, res) => {
       [req.params.id]
     );
     await client.query('DELETE FROM solicitudes WHERE funcionario_id = $1', [req.params.id]);
+
+    // 6. Usuario vinculado y finalmente el funcionario
     await client.query('DELETE FROM usuarios WHERE funcionario_id = $1', [req.params.id]);
     await client.query('DELETE FROM funcionarios WHERE id = $1', [req.params.id]);
+
     await client.query('COMMIT');
 
     res.json({ mensaje: `${func.rows[0].nombres} ${func.rows[0].apellidos} eliminado permanentemente` });
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error(err);
-    res.status(500).json({ error: 'Error al eliminar funcionario' });
+    console.error('DELETE funcionario error:', err.message);
+    res.status(500).json({ error: `Error al eliminar funcionario: ${err.message}` });
   } finally {
     client.release();
   }

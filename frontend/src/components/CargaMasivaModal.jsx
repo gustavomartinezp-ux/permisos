@@ -28,7 +28,7 @@ function generarTemplate() {
     'Formato: AAAA-MM-DD',
     'Formato: AAAA-MM-DD',
     'Ej: +56912345678',
-    'Directivo | Profesional | Técnico | Administrativo | Auxiliar',
+    'MÉDICO | ENFERMERA | MATRONA | TENS | KINESIÓLOGO | PSICÓLOGO | etc.',
     'Ej: A, B, C...',
     'Ej: Grado 13',
   ];

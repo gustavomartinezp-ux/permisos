@@ -22,7 +22,32 @@ const PROGRAMAS = [
   'Programa del Adulto', 'Programa Adulto Mayor', 'Programa Salud Dental',
   'Programa de Salud Mental', 'Programa Comunitario', 'Referente OIRS', 'Médico Gestor',
 ];
-const ESCALAFONES = ['Directivo', 'Profesional', 'Técnico', 'Administrativo', 'Auxiliar de Servicios Menores'];
+const ESCALAFONES = [
+  'ADMINISTRATIVO',
+  'ASISTENTE SOCIAL',
+  'AUXILIAR',
+  'CHOFER',
+  'ENFERMERA',
+  'ENFERMERO',
+  'GUARDIA',
+  'INGENIERO EN ADMINISTRACIÓN',
+  'INGENIERO INFORMÁTICO',
+  'KINESIÓLOGO',
+  'MATRONA',
+  'MÉDICO',
+  'NUTRICIONISTA',
+  'ODONTÓLOGO',
+  'PROFESOR DE EDUCACIÓN FÍSICA',
+  'PSICÓLOGO',
+  'QUÍMICO FARMACÉUTICO',
+  'TÉCNICO PARAMÉDICO',
+  'TECNÓLOGO EN INFORMÁTICA BIOMÉDICA',
+  'TECNÓLOGO MÉDICO',
+  'TENS',
+  'TENS DENTAL',
+  'TENS PODOLOGÍA',
+  'TERAPEUTA OCUPACIONAL',
+];
 
 const TIPOS_CONTRATO_POR_GRUPO = {
   contrata:   ['Indefinido', 'Plazo Fijo'],

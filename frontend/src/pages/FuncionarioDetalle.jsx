@@ -7,7 +7,7 @@ import {
   ArrowLeft, User, Calendar, Briefcase, Plus, Clock, BarChart3,
   Edit2, Save, X, Building2, ArrowLeftRight, FileDown, Printer, Camera, Trash2,
   KeyRound, Mail, ShieldAlert, RefreshCw, CheckCircle2, AlertTriangle,
-  ArrowRight, History, CalendarRange,
+  ArrowRight, History, CalendarRange, Search,
 } from 'lucide-react';
 import { funcionariosApi, historialApi, solicitudesApi, usuariosApi, suplenciasApi } from '../api/client';
 import { generarReporteFuncionario, imprimirReporteFuncionario } from '../utils/reportePDF';
@@ -81,6 +81,11 @@ export default function FuncionarioDetalle() {
     fecha_inicio: '', fecha_termino: '', observaciones: '', documento_respaldo: '',
   });
   const [supGuardando, setSupGuardando]     = useState(false);
+  const [busquedaRemp, setBusquedaRemp]     = useState('');
+  const [showDropdownRemp, setShowDropdownRemp] = useState(false);
+  const [reemplazadoSel, setReemplazadoSel] = useState(null);
+  const [todosFunc, setTodosFunc]           = useState([]);
+  const dropdownRempRef                     = useRef(null);
   const [prorrogaForm, setProrrogaForm]     = useState({ fecha: '', obs: '' });
   const [finalizaObs, setFinalizaObs]       = useState('');
   const [showModal, setShowModal] = useState(false);
@@ -129,6 +134,25 @@ export default function FuncionarioDetalle() {
     if (tab === 'historial') cargarHistorial();
     if (tab === 'suplencias') cargarSuplencias();
   }, [tab, id]);
+
+  // Carga lista de funcionarios al abrir el modal de nueva suplencia
+  useEffect(() => {
+    if (!showNuevaSup) return;
+    funcionariosApi.listar().then(({ data }) => setTodosFunc(data)).catch(() => {});
+    setBusquedaRemp('');
+    setShowDropdownRemp(false);
+    setReemplazadoSel(null);
+  }, [showNuevaSup]);
+
+  // Cierra dropdown al hacer click fuera
+  useEffect(() => {
+    const handler = (e) => {
+      if (dropdownRempRef.current && !dropdownRempRef.current.contains(e.target))
+        setShowDropdownRemp(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   const iniciarEdicionSaldos = () => {
     const inicialSaldos = {};
@@ -1132,11 +1156,94 @@ export default function FuncionarioDetalle() {
               </div>
               <div className="p-6 space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="sm:col-span-2">
+                  {/* Buscador autocomplete funcionario reemplazado */}
+                  <div className="sm:col-span-2" ref={dropdownRempRef}>
+                    <label className="block text-xs font-medium text-dark-700 mb-1">
+                      Buscar funcionario reemplazado por nombre o RUT
+                    </label>
+                    <div className="relative">
+                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-dark-400 pointer-events-none" />
+                      <input
+                        type="text"
+                        value={busquedaRemp}
+                        onChange={e => {
+                          setBusquedaRemp(e.target.value);
+                          if (reemplazadoSel) {
+                            setReemplazadoSel(null);
+                            setSupForm(p => ({ ...p, funcionario_reemplazado_id: '', nombre_reemplazado: '', rut_reemplazado: '', cargo_reemplazado: '' }));
+                          }
+                          setShowDropdownRemp(true);
+                        }}
+                        onFocus={() => { if (busquedaRemp.length >= 1) setShowDropdownRemp(true); }}
+                        className="input-field text-sm pl-9 pr-9"
+                        placeholder="Escriba apellido, nombre o RUT…"
+                        autoComplete="off"
+                      />
+                      {reemplazadoSel && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setReemplazadoSel(null);
+                            setBusquedaRemp('');
+                            setSupForm(p => ({ ...p, funcionario_reemplazado_id: '', nombre_reemplazado: '', rut_reemplazado: '', cargo_reemplazado: '' }));
+                          }}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-dark-400 hover:text-dark-700"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                      {showDropdownRemp && busquedaRemp.length >= 1 && (() => {
+                        const filtrados = todosFunc
+                          .filter(f => f.activo !== false && f.id !== parseInt(id))
+                          .filter(f => {
+                            const t = `${f.apellidos} ${f.nombres} ${f.nombres} ${f.apellidos} ${f.rut || ''}`.toLowerCase();
+                            return t.includes(busquedaRemp.toLowerCase());
+                          }).slice(0, 8);
+                        return filtrados.length > 0 ? (
+                          <ul className="absolute z-50 left-0 right-0 mt-1 bg-white border border-dark-200 rounded-xl shadow-lg overflow-hidden">
+                            {filtrados.map(f => (
+                              <li
+                                key={f.id}
+                                onMouseDown={() => {
+                                  setReemplazadoSel(f);
+                                  setBusquedaRemp(`${f.apellidos} ${f.nombres}`);
+                                  setShowDropdownRemp(false);
+                                  setSupForm(p => ({
+                                    ...p,
+                                    funcionario_reemplazado_id: f.id,
+                                    nombre_reemplazado: `${f.nombres} ${f.apellidos}`,
+                                    rut_reemplazado: f.rut || '',
+                                    cargo_reemplazado: f.cargo || '',
+                                    unidad: f.unidad || p.unidad,
+                                  }));
+                                }}
+                                className="px-4 py-2.5 cursor-pointer hover:bg-brand-50 flex justify-between items-center gap-3 text-sm"
+                              >
+                                <span className="font-medium text-dark-900">{f.apellidos} {f.nombres}</span>
+                                <span className="text-xs text-dark-400 shrink-0">{f.rut} · {f.cargo}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-dark-200 rounded-xl shadow-lg px-4 py-3 text-xs text-dark-400">
+                            Sin coincidencias — puede completar los datos manualmente abajo.
+                          </div>
+                        );
+                      })()}
+                    </div>
+                    {reemplazadoSel && (
+                      <div className="mt-2 flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800">
+                        <CheckCircle2 size={13} className="text-emerald-600 flex-shrink-0" />
+                        Datos cargados automáticamente desde el sistema
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
                     <label className="block text-xs font-medium text-dark-700 mb-1">Nombre reemplazado</label>
                     <input type="text" value={supForm.nombre_reemplazado}
                       onChange={e => setSupForm(p => ({ ...p, nombre_reemplazado: e.target.value }))}
-                      className="input-field text-sm" placeholder="Nombre completo" />
+                      className="input-field text-sm" placeholder="Se completa automáticamente" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-dark-700 mb-1">RUT reemplazado</label>

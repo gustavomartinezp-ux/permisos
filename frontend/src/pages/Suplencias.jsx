@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, parseISO, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -62,24 +62,52 @@ function NuevaSuplenciaModal({ funcionarios, onClose, onSuccess }) {
     documento_respaldo: '',
   });
   const [guardando, setGuardando] = useState(false);
+  const [busqueda, setBusqueda] = useState('');
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [reemplazadoSeleccionado, setReemplazadoSeleccionado] = useState(null);
+  const dropdownRef = useRef(null);
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
   const suplentes = funcionarios.filter(f => f.tipo_contrato === 'Suplencia');
   const reemplazados = funcionarios.filter(f => f.activo !== false);
 
-  const handleReemplazadoChange = (e) => {
-    const fid = e.target.value;
-    set('funcionario_reemplazado_id', fid);
-    if (fid) {
-      const f = reemplazados.find(x => x.id == fid);
-      if (f) {
-        set('nombre_reemplazado', `${f.nombres} ${f.apellidos}`);
-        set('rut_reemplazado', f.rut || '');
-        set('cargo_reemplazado', f.cargo || '');
-      }
-    }
+  const reemplazadosFiltrados = busqueda.length >= 2
+    ? reemplazados.filter(f => {
+        const texto = `${f.apellidos} ${f.nombres} ${f.nombres} ${f.apellidos} ${f.rut || ''}`.toLowerCase();
+        return texto.includes(busqueda.toLowerCase());
+      }).slice(0, 8)
+    : [];
+
+  const seleccionarReemplazado = (f) => {
+    setReemplazadoSeleccionado(f);
+    setBusqueda(`${f.apellidos} ${f.nombres}`);
+    setShowDropdown(false);
+    set('funcionario_reemplazado_id', f.id);
+    set('nombre_reemplazado', `${f.nombres} ${f.apellidos}`);
+    set('rut_reemplazado', f.rut || '');
+    set('cargo_reemplazado', f.cargo || '');
+    if (f.unidad) set('unidad', f.unidad);
   };
+
+  const limpiarReemplazado = () => {
+    setReemplazadoSeleccionado(null);
+    setBusqueda('');
+    set('funcionario_reemplazado_id', '');
+    set('nombre_reemplazado', '');
+    set('rut_reemplazado', '');
+    set('cargo_reemplazado', '');
+  };
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   const guardar = async () => {
     if (!form.funcionario_suplente_id) return toast.error('Selecciona el funcionario suplente');
@@ -154,19 +182,66 @@ function NuevaSuplenciaModal({ funcionarios, onClose, onSuccess }) {
           <div className="border-t border-dark-100 pt-4">
             <p className="text-xs font-semibold text-dark-500 uppercase tracking-wide mb-3">Funcionario reemplazado</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-dark-700 mb-1">Seleccionar del sistema</label>
-                <select
-                  value={form.funcionario_reemplazado_id}
-                  onChange={handleReemplazadoChange}
-                  className="input-field text-sm"
-                >
-                  <option value="">— Externo / manual —</option>
-                  {reemplazados.map(f => (
-                    <option key={f.id} value={f.id}>{f.apellidos} {f.nombres}</option>
-                  ))}
-                </select>
+              {/* Buscador por nombre o RUT */}
+              <div className="sm:col-span-2" ref={dropdownRef}>
+                <label className="block text-xs font-medium text-dark-700 mb-1">
+                  Buscar por nombre o RUT
+                  <span className="ml-1 font-normal text-dark-400">(mínimo 2 caracteres)</span>
+                </label>
+                <div className="relative">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-dark-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={busqueda}
+                    onChange={e => {
+                      setBusqueda(e.target.value);
+                      if (reemplazadoSeleccionado) limpiarReemplazado();
+                      setShowDropdown(true);
+                    }}
+                    onFocus={() => { if (busqueda.length >= 2) setShowDropdown(true); }}
+                    className="input-field text-sm pl-9 pr-9"
+                    placeholder="Escriba apellido, nombre o RUT…"
+                    autoComplete="off"
+                  />
+                  {reemplazadoSeleccionado && (
+                    <button
+                      type="button"
+                      onClick={limpiarReemplazado}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-dark-400 hover:text-dark-700"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                  {showDropdown && reemplazadosFiltrados.length > 0 && (
+                    <ul className="absolute z-50 left-0 right-0 mt-1 bg-white border border-dark-200 rounded-xl shadow-lg overflow-hidden">
+                      {reemplazadosFiltrados.map(f => (
+                        <li
+                          key={f.id}
+                          onMouseDown={() => seleccionarReemplazado(f)}
+                          className="px-4 py-2.5 cursor-pointer hover:bg-brand-50 flex justify-between items-center gap-3 text-sm"
+                        >
+                          <span className="font-medium text-dark-900">
+                            {f.apellidos} {f.nombres}
+                          </span>
+                          <span className="text-xs text-dark-400 shrink-0">{f.rut} · {f.cargo}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {showDropdown && busqueda.length >= 2 && reemplazadosFiltrados.length === 0 && (
+                    <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-dark-200 rounded-xl shadow-lg px-4 py-3 text-xs text-dark-400">
+                      Sin coincidencias — puede completar los datos manualmente abajo.
+                    </div>
+                  )}
+                </div>
+                {reemplazadoSeleccionado && (
+                  <div className="mt-2 flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800">
+                    <CheckCircle2 size={13} className="text-emerald-600 flex-shrink-0" />
+                    Datos cargados automáticamente desde el sistema
+                  </div>
+                )}
               </div>
+
               <div>
                 <label className="block text-xs font-medium text-dark-700 mb-1">RUT reemplazado</label>
                 <input
@@ -177,14 +252,14 @@ function NuevaSuplenciaModal({ funcionarios, onClose, onSuccess }) {
                   placeholder="12.345.678-9"
                 />
               </div>
-              <div className="sm:col-span-2">
+              <div>
                 <label className="block text-xs font-medium text-dark-700 mb-1">Nombre reemplazado</label>
                 <input
                   type="text"
                   value={form.nombre_reemplazado}
                   onChange={e => set('nombre_reemplazado', e.target.value)}
                   className="input-field text-sm"
-                  placeholder="Se completa automáticamente al seleccionar del sistema"
+                  placeholder="Se completa automáticamente"
                 />
               </div>
               <div>
@@ -196,7 +271,7 @@ function NuevaSuplenciaModal({ funcionarios, onClose, onSuccess }) {
                   value={form.cargo_reemplazado}
                   onChange={e => set('cargo_reemplazado', e.target.value)}
                   className="input-field text-sm"
-                  placeholder="Ej: Enfermera, TENS, Médico..."
+                  placeholder="Ej: Enfermera, TENS, Médico…"
                 />
               </div>
               <div>

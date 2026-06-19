@@ -72,7 +72,7 @@ function NuevaSuplenciaModal({ funcionarios, onClose, onSuccess }) {
   const suplentes = funcionarios.filter(f => f.tipo_contrato === 'Suplencia');
   const reemplazados = funcionarios.filter(f => f.activo !== false);
 
-  const reemplazadosFiltrados = busqueda.length >= 2
+  const reemplazadosFiltrados = busqueda.length >= 1
     ? reemplazados.filter(f => {
         const texto = `${f.apellidos} ${f.nombres} ${f.nombres} ${f.apellidos} ${f.rut || ''}`.toLowerCase();
         return texto.includes(busqueda.toLowerCase());
@@ -186,7 +186,6 @@ function NuevaSuplenciaModal({ funcionarios, onClose, onSuccess }) {
               <div className="sm:col-span-2" ref={dropdownRef}>
                 <label className="block text-xs font-medium text-dark-700 mb-1">
                   Buscar por nombre o RUT
-                  <span className="ml-1 font-normal text-dark-400">(mínimo 2 caracteres)</span>
                 </label>
                 <div className="relative">
                   <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-dark-400 pointer-events-none" />
@@ -198,7 +197,7 @@ function NuevaSuplenciaModal({ funcionarios, onClose, onSuccess }) {
                       if (reemplazadoSeleccionado) limpiarReemplazado();
                       setShowDropdown(true);
                     }}
-                    onFocus={() => { if (busqueda.length >= 2) setShowDropdown(true); }}
+                    onFocus={() => { if (busqueda.length >= 1) setShowDropdown(true); }}
                     className="input-field text-sm pl-9 pr-9"
                     placeholder="Escriba apellido, nombre o RUT…"
                     autoComplete="off"
@@ -228,7 +227,7 @@ function NuevaSuplenciaModal({ funcionarios, onClose, onSuccess }) {
                       ))}
                     </ul>
                   )}
-                  {showDropdown && busqueda.length >= 2 && reemplazadosFiltrados.length === 0 && (
+                  {showDropdown && busqueda.length >= 1 && reemplazadosFiltrados.length === 0 && (
                     <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-dark-200 rounded-xl shadow-lg px-4 py-3 text-xs text-dark-400">
                       Sin coincidencias — puede completar los datos manualmente abajo.
                     </div>

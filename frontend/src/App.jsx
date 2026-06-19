@@ -1,5 +1,41 @@
+import { Component } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, info) {
+    console.error('ErrorBoundary capturó:', error, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-dark-50 p-6">
+          <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center space-y-4">
+            <p className="text-4xl">⚠️</p>
+            <h1 className="text-xl font-semibold text-dark-900">Ocurrió un error inesperado</h1>
+            <p className="text-sm text-dark-500">
+              {this.state.error?.message || 'Error desconocido'}
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-2 px-6 py-2 bg-brand-600 text-white rounded-xl text-sm font-medium hover:bg-brand-700 transition-colors"
+            >
+              Recargar página
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -87,8 +123,10 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppRoutes />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }

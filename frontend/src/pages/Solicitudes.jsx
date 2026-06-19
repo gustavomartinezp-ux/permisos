@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { FileText, CheckCircle2, XCircle, Search, ShieldCheck, RotateCcw, Download, Printer } from 'lucide-react';
 import { solicitudesApi } from '../api/client';
@@ -10,6 +10,12 @@ import { descargarFormularioOficial, imprimirFormularioOficial } from '../utils/
 import EstadoBadge from '../components/EstadoBadge';
 import RechazoModal from '../components/RechazoModal';
 import toast from 'react-hot-toast';
+
+const fmtFecha = (d, fmt) => {
+  if (!d) return '—';
+  const parsed = parseISO(d.toString().substring(0, 10));
+  return isValid(parsed) ? format(parsed, fmt, { locale: es }) : '—';
+};
 
 const funcionarioDeSolicitud = (sol) => ({
   nombres: sol.nombres,
@@ -244,8 +250,8 @@ export default function Solicitudes() {
                     </span>
                   </div>
                   <p className="text-xs text-dark-500 mt-0.5">
-                    {format(parseISO(sol.fecha_inicio), 'd MMM', { locale: es })} –{' '}
-                    {format(parseISO(sol.fecha_fin), 'd MMM yyyy', { locale: es })}
+                    {fmtFecha(sol.fecha_inicio, 'd MMM')} –{' '}
+                    {fmtFecha(sol.fecha_fin, 'd MMM yyyy')}
                   </p>
                   {sol.jornada_medio_dia && (
                     <p className={`text-xs font-medium mt-0.5 ${sol.jornada_medio_dia === 'AM' ? 'text-amber-600' : 'text-indigo-600'}`}>
@@ -368,7 +374,7 @@ export default function Solicitudes() {
                     {(sol.estado === 'aprobado' || sol.estado === 'rechazado') && (
                       <span className="text-xs text-dark-300 italic">
                         {sol.fecha_resolucion
-                          ? format(parseISO(sol.fecha_resolucion), 'd MMM', { locale: es })
+                          ? fmtFecha(sol.fecha_resolucion, 'd MMM')
                           : '—'}
                       </span>
                     )}

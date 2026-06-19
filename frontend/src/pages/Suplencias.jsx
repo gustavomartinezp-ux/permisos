@@ -611,11 +611,17 @@ export default function Suplencias() {
   const [funcionarios, setFuncionarios]           = useState([]);
   const [cargando, setCargando]                   = useState(true);
   const [tab, setTab]                             = useState('activas');
+  const [qInput, setQInput]                       = useState('');
   const [q, setQ]                                 = useState('');
   const [filtroEstado, setFiltroEstado]           = useState('');
   const [showNueva, setShowNueva]                 = useState(false);
   const [prorrogarSup, setProrrogarSup]           = useState(null);
   const [finalizarSup, setFinalizarSup]           = useState(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setQ(qInput), 300);
+    return () => clearTimeout(timer);
+  }, [qInput]);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -762,8 +768,8 @@ export default function Suplencias() {
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-dark-400" />
             <input
               type="text"
-              value={q}
-              onChange={e => setQ(e.target.value)}
+              value={qInput}
+              onChange={e => setQInput(e.target.value)}
               className="input-field pl-9 text-sm"
               placeholder="Buscar suplente o reemplazado..."
             />

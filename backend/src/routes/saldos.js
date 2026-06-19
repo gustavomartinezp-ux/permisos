@@ -60,55 +60,38 @@ router.post('/calcular-arrastre', soloAdmin, async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    // Tipos marcados como feriado legal
-    const tipos = await client.query(
-      `SELECT id FROM tipos_permisos WHERE es_feriado_legal = TRUE AND activo = TRUE`
+    // Un solo INSERT ... ON CONFLICT reemplaza todos los loops N+1:
+    // - Para funcionarios que YA tienen saldo en anioDestino → actualiza saldo_arrastre
+    // - Para funcionarios sin saldo en anioDestino → inserta con dias_asignados del tipo
+    const result = await client.query(
+      `INSERT INTO saldos_funcionarios
+         (funcionario_id, tipo_permiso_id, anio, dias_asignados, saldo_arrastre)
+       SELECT
+         sf.funcionario_id,
+         sf.tipo_permiso_id,
+         $2,
+         COALESCE(sf_dest.dias_asignados, tp.dias_anuales_max),
+         GREATEST(sf.dias_asignados - sf.dias_usados - sf.dias_pendientes, 0)
+       FROM saldos_funcionarios sf
+       JOIN tipos_permisos tp
+         ON tp.id = sf.tipo_permiso_id
+        AND tp.es_feriado_legal = TRUE
+        AND tp.activo = TRUE
+       LEFT JOIN saldos_funcionarios sf_dest
+         ON sf_dest.funcionario_id  = sf.funcionario_id
+        AND sf_dest.tipo_permiso_id = sf.tipo_permiso_id
+        AND sf_dest.anio            = $2
+       WHERE sf.anio = $1
+         AND GREATEST(sf.dias_asignados - sf.dias_usados - sf.dias_pendientes, 0) > 0
+       ON CONFLICT (funcionario_id, tipo_permiso_id, anio)
+       DO UPDATE SET
+         saldo_arrastre = EXCLUDED.saldo_arrastre,
+         updated_at     = NOW()`,
+      [anioOrigen, anioDestino]
     );
 
-    let actualizados = 0;
-
-    for (const tipo of tipos.rows) {
-      // Para cada funcionario: obtener saldo del año origen
-      const saldosOrigen = await client.query(
-        `SELECT funcionario_id,
-                GREATEST(dias_asignados - dias_usados - dias_pendientes, 0) AS dias_restantes
-         FROM saldos_funcionarios
-         WHERE tipo_permiso_id = $1 AND anio = $2`,
-        [tipo.id, anioOrigen]
-      );
-
-      for (const s of saldosOrigen.rows) {
-        if (s.dias_restantes <= 0) continue;
-
-        // Actualizar o crear saldo del año destino con el arrastre
-        const existe = await client.query(
-          `SELECT id FROM saldos_funcionarios
-           WHERE funcionario_id = $1 AND tipo_permiso_id = $2 AND anio = $3`,
-          [s.funcionario_id, tipo.id, anioDestino]
-        );
-
-        if (existe.rows.length > 0) {
-          await client.query(
-            `UPDATE saldos_funcionarios
-             SET saldo_arrastre = $1, updated_at = NOW()
-             WHERE funcionario_id = $2 AND tipo_permiso_id = $3 AND anio = $4`,
-            [s.dias_restantes, s.funcionario_id, tipo.id, anioDestino]
-          );
-        } else {
-          const maxDias = await client.query(
-            `SELECT dias_anuales_max FROM tipos_permisos WHERE id = $1`, [tipo.id]
-          );
-          await client.query(
-            `INSERT INTO saldos_funcionarios (funcionario_id, tipo_permiso_id, anio, dias_asignados, saldo_arrastre)
-             VALUES ($1, $2, $3, $4, $5)`,
-            [s.funcionario_id, tipo.id, anioDestino, maxDias.rows[0].dias_anuales_max, s.dias_restantes]
-          );
-        }
-        actualizados++;
-      }
-    }
-
     await client.query('COMMIT');
+    const actualizados = result.rowCount;
     res.json({
       mensaje: `Arrastre calculado: ${actualizados} registro(s) actualizados`,
       anio_origen: anioOrigen,

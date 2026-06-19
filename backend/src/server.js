@@ -28,7 +28,7 @@ const originesPermitidos = [
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || originesPermitidos.some(o => origin.startsWith(o))) {
+    if (!origin || originesPermitidos.some(o => o === origin)) {
       callback(null, true);
     } else {
       callback(new Error('CORS no permitido'));

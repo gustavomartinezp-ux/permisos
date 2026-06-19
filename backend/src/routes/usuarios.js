@@ -68,7 +68,8 @@ router.post('/', [
 
   const { email, rol, sector } = req.body;
   try {
-    const hash = await bcrypt.hash(process.env.INITIAL_PASSWORD || 'cesfam2026', 10);
+    if (!process.env.INITIAL_PASSWORD) return res.status(500).json({ error: 'INITIAL_PASSWORD no está configurada en el servidor' });
+    const hash = await bcrypt.hash(process.env.INITIAL_PASSWORD, 10);
     const result = await pool.query(
       `INSERT INTO usuarios (email, password_hash, rol, sector)
        VALUES ($1, $2, $3, $4)
@@ -136,13 +137,16 @@ router.patch('/:id/email', async (req, res) => {
 // Activar/desactivar usuario
 router.patch('/:id/activo', async (req, res) => {
   const { activo } = req.body;
+  if (typeof activo !== 'boolean') return res.status(400).json({ error: 'El campo activo debe ser boolean' });
   try {
     const result = await pool.query(
       `UPDATE usuarios SET activo = $1 WHERE id = $2 RETURNING id, email, activo`,
-      [activo !== false, req.params.id]
+      [activo, req.params.id]
     );
+    if (!result.rows.length) return res.status(404).json({ error: 'Usuario no encontrado' });
     res.json(result.rows[0]);
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'Error al actualizar estado' });
   }
 });

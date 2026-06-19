@@ -174,6 +174,28 @@ router.get('/', adminOSupervisor, async (req, res) => {
   }
 });
 
+// ─── GET /alertas-contractuales ───────────────────────────────────────────────
+// IMPORTANTE: debe estar antes de GET /:id para que Express no lo capture como parámetro
+router.get('/alertas-contractuales', adminOSupervisor, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT hs.id, hs.estado, hs.fecha_inicio, hs.fecha_termino,
+              hs.nombre_reemplazado, hs.cargo_reemplazado,
+              f.nombres AS suplente_nombres, f.apellidos AS suplente_apellidos,
+              f.rut AS suplente_rut, f.tipo_contrato
+       FROM historial_suplencias hs
+       JOIN funcionarios f ON hs.funcionario_suplente_id = f.id
+       WHERE f.tipo_contrato IS DISTINCT FROM 'Suplencia'
+       ORDER BY CASE WHEN hs.estado = 'activa' THEN 0 WHEN hs.estado = 'prorrogada' THEN 1 ELSE 2 END,
+                hs.fecha_inicio DESC`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al obtener alertas contractuales' });
+  }
+});
+
 // ─── GET /:id ─────────────────────────────────────────────────────────────────
 router.get('/:id', adminOSupervisor, async (req, res) => {
   try {
@@ -201,27 +223,6 @@ router.get('/:id', adminOSupervisor, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error al obtener suplencia' });
-  }
-});
-
-// ─── GET /alertas-contractuales ───────────────────────────────────────────────
-router.get('/alertas-contractuales', adminOSupervisor, async (req, res) => {
-  try {
-    const { rows } = await pool.query(
-      `SELECT hs.id, hs.estado, hs.fecha_inicio, hs.fecha_termino,
-              hs.nombre_reemplazado, hs.cargo_reemplazado,
-              f.nombres AS suplente_nombres, f.apellidos AS suplente_apellidos,
-              f.rut AS suplente_rut, f.tipo_contrato
-       FROM historial_suplencias hs
-       JOIN funcionarios f ON hs.funcionario_suplente_id = f.id
-       WHERE f.tipo_contrato IS DISTINCT FROM 'Suplencia'
-       ORDER BY CASE WHEN hs.estado = 'activa' THEN 0 WHEN hs.estado = 'prorrogada' THEN 1 ELSE 2 END,
-                hs.fecha_inicio DESC`
-    );
-    res.json(rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Error al obtener alertas contractuales' });
   }
 });
 

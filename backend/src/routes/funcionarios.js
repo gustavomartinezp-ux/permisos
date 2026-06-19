@@ -283,7 +283,8 @@ router.post('/', soloAdmin, [
 
     // Crear cuenta de usuario si se provee email
     if (email && email.trim()) {
-      const hash = await bcrypt.hash(process.env.INITIAL_PASSWORD || 'cesfam2026', 10);
+      if (!process.env.INITIAL_PASSWORD) throw new Error('INITIAL_PASSWORD no está configurada en el servidor');
+      const hash = await bcrypt.hash(process.env.INITIAL_PASSWORD, 10);
       const rolUsuario = ['admin', 'supervisor', 'funcionario'].includes(rol_sistema) ? rol_sistema : 'funcionario';
       const sectorUser = rolUsuario === 'supervisor' ? (sector_supervisa || null) : null;
       const areaUser   = rolUsuario === 'supervisor' ? (area_supervisa   || null) : null;
@@ -403,7 +404,8 @@ router.post('/bulk', soloAdmin, async (req, res) => {
 
         // Crear usuario si tiene email
         if (f.email && f.email.trim()) {
-          const hash = await bcrypt.hash(process.env.INITIAL_PASSWORD || 'cesfam2026', 10);
+          if (!process.env.INITIAL_PASSWORD) throw new Error('INITIAL_PASSWORD no está configurada en el servidor');
+          const hash = await bcrypt.hash(process.env.INITIAL_PASSWORD, 10);
           await client.query(
             `INSERT INTO usuarios (email, password_hash, rol, funcionario_id)
              VALUES ($1, $2, 'funcionario', $3)

@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const { pool } = require('./db');
+const { runMigrations } = require('./db/migrate');
 
 const authRoutes = require('./routes/auth');
 const funcionariosRoutes = require('./routes/funcionarios');
@@ -37,7 +38,7 @@ app.use(cors({
   credentials: true,
 }));
 app.use(helmet());
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/funcionarios', funcionariosRoutes);
@@ -69,6 +70,13 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`Servidor CESFAM Los Cerros corriendo en puerto ${PORT}`);
-});
+runMigrations()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Servidor CESFAM Los Cerros corriendo en puerto ${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error('No se pudieron ejecutar las migraciones:', err.message);
+    process.exit(1);
+  });

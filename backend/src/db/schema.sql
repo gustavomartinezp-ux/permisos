@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS funcionarios (
   servicio_id  INTEGER REFERENCES servicios(id),
   fecha_ingreso DATE,
   activo       BOOLEAN DEFAULT TRUE,
+  foto_url     TEXT,
   created_at   TIMESTAMP DEFAULT NOW()
 );
 

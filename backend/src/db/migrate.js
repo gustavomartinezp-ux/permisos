@@ -109,6 +109,35 @@ const migrations = [
       ON CONFLICT DO NOTHING;
     `,
   },
+  {
+    // Módulo de reportería asíncrona: seguimiento de tareas de generación de
+    // PDF/Excel ejecutivos procesadas en segundo plano (worker in-process,
+    // sin Redis/cola externa — ver backend/src/workers/reporteWorker.js).
+    // El archivo generado se guarda directamente en la fila (BYTEA); dado el
+    // volumen de este sistema (~230 funcionarios) es más simple y robusto que
+    // depender de almacenamiento en disco efímero de Render.
+    id: 'report_tasks_v1',
+    sql: `
+      CREATE TABLE IF NOT EXISTS report_tasks (
+        id             SERIAL PRIMARY KEY,
+        usuario_id     INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+        report_type    VARCHAR(50) NOT NULL,
+        formato        VARCHAR(10) NOT NULL CHECK (formato IN ('pdf','excel')),
+        status         VARCHAR(20) NOT NULL DEFAULT 'PENDING'
+          CHECK (status IN ('PENDING','PROCESSING','COMPLETED','FAILED')),
+        filtros        JSONB NOT NULL DEFAULT '{}',
+        archivo        BYTEA,
+        archivo_nombre VARCHAR(200),
+        error_message  TEXT,
+        created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        completed_at   TIMESTAMPTZ,
+        expires_at     TIMESTAMPTZ
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_report_tasks_usuario ON report_tasks(usuario_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_report_tasks_expires ON report_tasks(expires_at);
+    `,
+  },
 ];
 
 async function runMigrations() {

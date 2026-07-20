@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, X } from 'lucide-react';
 import Sidebar from './Sidebar';
+import CentroDescargas from './CentroDescargas';
 import { SISTEMA } from '../config/sistema';
 
 export default function Layout() {
@@ -40,6 +41,8 @@ export default function Layout() {
           </>
         )}
       </AnimatePresence>
+
+      <CentroDescargas />
 
       {/* Main content */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">

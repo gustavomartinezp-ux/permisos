@@ -21,6 +21,7 @@ const reportesRoutes           = require('./routes/reportes');
 const suplenciasRoutes         = require('./routes/suplencias');
 const rolesRoutes               = require('./routes/roles');
 const subrogacionesRoutes       = require('./routes/subrogaciones');
+const reporteTareasRoutes       = require('./routes/reporte-tareas');
 
 const app = express();
 
@@ -58,6 +59,7 @@ app.use('/api/reportes',                 reportesRoutes);
 app.use('/api/suplencias',               suplenciasRoutes);
 app.use('/api/roles',                    rolesRoutes);
 app.use('/api/subrogaciones',            subrogacionesRoutes);
+app.use('/api/reporte-tareas',           reporteTareasRoutes);
 
 app.get('/api/health', async (req, res) => {
   try {

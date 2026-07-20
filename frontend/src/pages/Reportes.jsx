@@ -7,7 +7,7 @@ import {
   TrendingDown, Calendar, Clock, FileSpreadsheet, AlertCircle,
   CheckCircle2, XCircle, Hourglass, ChevronLeft, ChevronRight,
 } from 'lucide-react';
-import { reportesApi, tiposPermisosApi } from '../api/client';
+import { reportesApi, tiposPermisosApi, reporteTareasApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 
@@ -142,7 +142,20 @@ function TabPermisos() {
   const [filtros,  setFiltros]  = useState({
     fecha_inicio: '', fecha_fin: '', tipo_permiso_id: '', estado: '', sector: '',
   });
+  const [generando, setGenerando] = useState(null); // 'pdf' | 'excel' | null
   const LIMIT = 50;
+
+  const generarEjecutivo = async (formato) => {
+    setGenerando(formato);
+    try {
+      await reporteTareasApi.crear({ report_type: 'permisos', formato, filtros });
+      toast.success('Tu reporte se está procesando. Puedes seguir usando el sistema — te avisaremos cuando esté listo.');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'No se pudo iniciar la generación del reporte');
+    } finally {
+      setGenerando(null);
+    }
+  };
 
   useEffect(() => {
     tiposPermisosApi.listar().then(({ data }) => setTipos(data)).catch(() => {});
@@ -206,6 +219,21 @@ function TabPermisos() {
           <button onClick={() => { setFiltros({ fecha_inicio:'',fecha_fin:'',tipo_permiso_id:'',estado:'',sector:'' }); setPage(1); }}
             className="btn-secondary text-sm py-1.5">
             Limpiar
+          </button>
+          <span className="flex-1" />
+          <button onClick={() => generarEjecutivo('pdf')} disabled={!!generando}
+            className="btn-secondary text-sm py-1.5" title="Generar reporte ejecutivo en PDF (procesamiento en segundo plano)">
+            {generando === 'pdf'
+              ? <span className="animate-spin h-3.5 w-3.5 border-2 border-dark-400 border-t-transparent rounded-full" />
+              : <FileText size={13} />}
+            PDF Ejecutivo
+          </button>
+          <button onClick={() => generarEjecutivo('excel')} disabled={!!generando}
+            className="btn-secondary text-sm py-1.5" title="Generar reporte ejecutivo en Excel (procesamiento en segundo plano)">
+            {generando === 'excel'
+              ? <span className="animate-spin h-3.5 w-3.5 border-2 border-dark-400 border-t-transparent rounded-full" />
+              : <FileSpreadsheet size={13} />}
+            Excel
           </button>
         </div>
       </div>

@@ -136,6 +136,11 @@ export const reportesApi = {
   ausentismo:   (params = {}) => api.get('/reportes/ausentismo',   { params }),
 };
 
+export const reporteTareasApi = {
+  crear:   (data) => api.post('/reporte-tareas', data),
+  listar:  () => api.get('/reporte-tareas'),
+};
+
 export const suplenciasApi = {
   listar:                 (params = {}) => api.get('/suplencias',                         { params }),
   porFuncionario:         (id)          => api.get(`/suplencias/funcionario/${id}`),

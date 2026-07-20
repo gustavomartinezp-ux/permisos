@@ -1,10 +1,11 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { pool } = require('../db');
-const { verificarToken, soloAdmin } = require('../middleware/auth');
+const { verificarToken } = require('../middleware/auth');
+const { cargarPermisos, requierePermiso } = require('../middleware/rbac');
 
 const router = express.Router();
-router.use(verificarToken);
+router.use(verificarToken, cargarPermisos);
 
 router.get('/', async (req, res) => {
   const soloActivos = req.query.todos !== 'true';
@@ -20,7 +21,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', soloAdmin, [
+router.post('/', requierePermiso('configuracion.gestionar', 'saldos.ajustar'), [
   body('codigo').notEmpty().trim().toUpperCase(),
   body('nombre').notEmpty().trim(),
   body('dias_anuales_max').isInt({ min: 0 }),
@@ -78,7 +79,7 @@ router.post('/', soloAdmin, [
   }
 });
 
-router.put('/:id', soloAdmin, async (req, res) => {
+router.put('/:id', requierePermiso('configuracion.gestionar', 'saldos.ajustar'), async (req, res) => {
   const {
     nombre, descripcion, dias_anuales_max, requiere_aprobacion, color, activo, es_feriado_legal,
     es_especial, tipo_especial, dias_fijos, tipo_dias, normativa, requiere_certificado,

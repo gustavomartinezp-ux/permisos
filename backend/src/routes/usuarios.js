@@ -2,11 +2,12 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const { body, validationResult } = require('express-validator');
 const { pool } = require('../db');
-const { verificarToken, soloAdmin } = require('../middleware/auth');
+const { verificarToken } = require('../middleware/auth');
+const { cargarPermisos, requierePermiso } = require('../middleware/rbac');
 const { SECTORES_VALIDOS, AREAS_VALIDAS } = require('../config/catalogos');
 
 const router = express.Router();
-router.use(verificarToken, soloAdmin);
+router.use(verificarToken, cargarPermisos, requierePermiso('usuarios.gestionar_roles'));
 
 // Listar todos los usuarios (admin)
 router.get('/', async (req, res) => {

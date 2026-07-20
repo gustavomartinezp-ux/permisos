@@ -1,9 +1,10 @@
 const express = require('express');
 const { pool } = require('../db');
-const { verificarToken, soloAdmin } = require('../middleware/auth');
+const { verificarToken } = require('../middleware/auth');
+const { cargarPermisos, requierePermiso } = require('../middleware/rbac');
 
 const router = express.Router();
-router.use(verificarToken);
+router.use(verificarToken, cargarPermisos);
 
 router.get('/', async (req, res) => {
   try {
@@ -14,7 +15,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', soloAdmin, async (req, res) => {
+router.post('/', requierePermiso('configuracion.gestionar'), async (req, res) => {
   const { nombre, descripcion } = req.body;
   if (!nombre) return res.status(400).json({ error: 'Nombre requerido' });
   try {
@@ -28,7 +29,7 @@ router.post('/', soloAdmin, async (req, res) => {
   }
 });
 
-router.put('/:id', soloAdmin, async (req, res) => {
+router.put('/:id', requierePermiso('configuracion.gestionar'), async (req, res) => {
   const { nombre, descripcion, activo } = req.body;
   try {
     const r = await pool.query(

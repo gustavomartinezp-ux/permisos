@@ -31,6 +31,18 @@ const NAV_SUPERVISOR = [
   { to: '/acerca',               label: 'Acerca del Sistema',  icon: Info },
 ];
 
+// Nombres legibles para los roles RBAC — se muestran en vez del rol legacy
+// crudo (que no cambia aunque se asignen roles nuevos, ver AuthContext).
+const NOMBRE_ROL = {
+  ADMIN_TI: 'Administrador de TI',
+  RRHH_ADMIN: 'Encargado de RRHH',
+  SECRETARY: 'Secretaría',
+  SUPERVISOR: 'Supervisor',
+  EMPLOYEE: 'Funcionario',
+  AUDITOR: 'Auditor',
+};
+const ORDEN_ROL = ['ADMIN_TI', 'RRHH_ADMIN', 'SECRETARY', 'SUPERVISOR', 'AUDITOR', 'EMPLOYEE'];
+
 // Filtra el menú según los roles RBAC del usuario y quita headers que se
 // queden sin ningún ítem visible debajo (evita títulos de sección huérfanos).
 function filtrarNav(items, rolesUsuario) {
@@ -69,6 +81,11 @@ export default function Sidebar({ mobile = false, onClose }) {
   const navItems = esSoloAutoservicio
     ? navFuncionario
     : filtrarNav(NAV_SUPERVISOR, rolesEfectivos);
+
+  const etiquetaRol = ORDEN_ROL
+    .filter((codigo) => rolesEfectivos.includes(codigo))
+    .map((codigo) => NOMBRE_ROL[codigo])
+    .join(' · ') || usuario?.rol;
 
   return (
     <aside className="flex flex-col h-full bg-dark-900 text-white">
@@ -123,7 +140,7 @@ export default function Sidebar({ mobile = false, onClose }) {
             <p className="text-sm font-medium truncate text-white">
               {usuario?.nombres} {usuario?.apellidos}
             </p>
-            <p className="text-xs text-dark-400 capitalize">{usuario?.rol}</p>
+            <p className="text-xs text-dark-400 truncate" title={etiquetaRol}>{etiquetaRol}</p>
           </div>
         </div>
         <button onClick={() => setShowCambiarPassword(true)} className="sidebar-link w-full">

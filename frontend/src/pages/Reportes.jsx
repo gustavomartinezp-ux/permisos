@@ -17,6 +17,7 @@ const TABS = [
   { key: 'dashboard',  label: 'Dashboard',    icon: BarChart2  },
   { key: 'permisos',   label: 'Permisos',     icon: FileText   },
   { key: 'ausentismo', label: 'Ausentismo',   icon: TrendingDown },
+  { key: 'ejecutivos', label: 'Reportes Ejecutivos', icon: Hourglass },
   { key: 'exportar',   label: 'Exportar',     icon: Download   },
 ];
 
@@ -430,6 +431,81 @@ function TabAusentismo() {
   );
 }
 
+// ─── Tab Reportes Ejecutivos (preconcebidos, listos para generar) ──────────────
+function TabEjecutivos() {
+  const [catalogo, setCatalogo] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [generando, setGenerando] = useState(null); // `${id}-${formato}`
+
+  useEffect(() => {
+    reporteTareasApi.tipos()
+      .then(({ data }) => setCatalogo(data.filter((r) => !r.requiereFiltros)))
+      .catch(() => toast.error('No se pudo cargar el catálogo de reportes'))
+      .finally(() => setCargando(false));
+  }, []);
+
+  const generar = async (id, formato) => {
+    const clave = `${id}-${formato}`;
+    setGenerando(clave);
+    try {
+      await reporteTareasApi.crear({ report_type: id, formato, filtros: {} });
+      toast.success('Tu reporte se está procesando. Puedes seguir usando el sistema — te avisaremos cuando esté listo.');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'No se pudo iniciar la generación del reporte');
+    } finally {
+      setGenerando(null);
+    }
+  };
+
+  if (cargando) {
+    return <div className="card h-48 animate-pulse bg-dark-100" />;
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-dark-500">
+        Reportes preconcebidos, listos para generar con un clic. Se procesan en segundo plano —
+        recíbelos en el Centro de Descargas (ícono arriba a la derecha) cuando estén listos.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {catalogo.map((r) => (
+          <div key={r.id} className="card p-4 flex flex-col gap-3">
+            <div>
+              <p className="font-semibold text-dark-800 text-sm">{r.nombre}</p>
+              <p className="text-xs text-dark-500 mt-1">{r.descripcion}</p>
+            </div>
+            <div className="flex gap-2 mt-auto">
+              <button
+                onClick={() => generar(r.id, 'pdf')}
+                disabled={!!generando}
+                className="btn-secondary text-xs py-1.5 flex-1 justify-center"
+              >
+                {generando === `${r.id}-pdf`
+                  ? <span className="animate-spin h-3 w-3 border-2 border-dark-400 border-t-transparent rounded-full" />
+                  : <FileText size={13} />}
+                PDF
+              </button>
+              <button
+                onClick={() => generar(r.id, 'excel')}
+                disabled={!!generando}
+                className="btn-secondary text-xs py-1.5 flex-1 justify-center"
+              >
+                {generando === `${r.id}-excel`
+                  ? <span className="animate-spin h-3 w-3 border-2 border-dark-400 border-t-transparent rounded-full" />
+                  : <FileSpreadsheet size={13} />}
+                Excel
+              </button>
+            </div>
+          </div>
+        ))}
+        {catalogo.length === 0 && (
+          <p className="text-sm text-dark-400 py-8 text-center col-span-full">Sin reportes disponibles</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Tab Exportar ──────────────────────────────────────────────────────────────
 function TabExportar({ anio }) {
   const [descargando, setDescargando] = useState(null);
@@ -602,6 +678,7 @@ export default function Reportes() {
         {tab === 'dashboard'  && <TabDashboard anio={anio} />}
         {tab === 'permisos'   && <TabPermisos />}
         {tab === 'ausentismo' && <TabAusentismo />}
+        {tab === 'ejecutivos' && <TabEjecutivos />}
         {tab === 'exportar'   && <TabExportar anio={anio} />}
       </div>
     </div>

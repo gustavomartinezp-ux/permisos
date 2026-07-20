@@ -139,6 +139,7 @@ export const reportesApi = {
 export const reporteTareasApi = {
   crear:   (data) => api.post('/reporte-tareas', data),
   listar:  () => api.get('/reporte-tareas'),
+  tipos:   () => api.get('/reporte-tareas/tipos'),
 };
 
 export const suplenciasApi = {

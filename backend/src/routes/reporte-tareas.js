@@ -16,7 +16,37 @@ const puedeGenerarReportes = (req, res, next) => {
   return res.status(403).json({ error: 'Acceso restringido a supervisores, administradores y roles con acceso a reportes' });
 };
 
-const TIPOS_VALIDOS = ['permisos'];
+// Catálogo de reportes preconcebidos — listos para generar con un clic
+// (sin filtros propios, salvo 'permisos' que usa los filtros de su pestaña).
+const REPORTES_DISPONIBLES = [
+  {
+    id: 'permisos', nombre: 'Reporte de Permisos', requiereFiltros: true,
+    descripcion: 'Detalle de solicitudes de permiso, filtrable por fecha, tipo y estado.',
+  },
+  {
+    id: 'ausentismo', nombre: 'Ausentismo (180 días)', requiereFiltros: false,
+    descripcion: 'Ranking de ausentismo por funcionario en los últimos 180 días.',
+  },
+  {
+    id: 'balance_saldos', nombre: 'Balance General de Saldos', requiereFiltros: false,
+    descripcion: 'Saldos vigentes de todos los funcionarios por tipo de permiso.',
+  },
+  {
+    id: 'funcionarios', nombre: 'Dotación de Funcionarios', requiereFiltros: false,
+    descripcion: 'Listado de funcionarios activos con cargo, contrato y sector.',
+  },
+  {
+    id: 'estadisticas', nombre: 'Resumen Ejecutivo General', requiereFiltros: false,
+    descripcion: 'KPIs generales: funcionarios activos/inactivos y solicitudes del año por estado.',
+  },
+];
+const TIPOS_VALIDOS = REPORTES_DISPONIBLES.map((r) => r.id);
+
+// Catálogo — para que el frontend arme la galería de "reportes preconcebidos"
+// sin duplicar esta lista.
+router.get('/tipos', puedeGenerarReportes, (req, res) => {
+  res.json(REPORTES_DISPONIBLES);
+});
 
 // Crear tarea de reporte — responde 202 de inmediato, el worker procesa aparte.
 router.post('/', puedeGenerarReportes, async (req, res) => {

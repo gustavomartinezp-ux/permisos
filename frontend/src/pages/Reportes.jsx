@@ -5,9 +5,9 @@ import { es } from 'date-fns/locale';
 import {
   BarChart2, Users, FileText, Download, Filter, RefreshCw,
   TrendingDown, Calendar, Clock, FileSpreadsheet, AlertCircle,
-  CheckCircle2, XCircle, Hourglass, ChevronLeft, ChevronRight,
+  CheckCircle2, XCircle, Hourglass, ChevronLeft, ChevronRight, Search, X,
 } from 'lucide-react';
-import { reportesApi, tiposPermisosApi, reporteTareasApi } from '../api/client';
+import { reportesApi, tiposPermisosApi, reporteTareasApi, funcionariosApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 
@@ -431,24 +431,49 @@ function TabAusentismo() {
   );
 }
 
+// Quita tildes/diacríticos para que la búsqueda no dependa de que el usuario
+// escriba acentos ("Martinez" debe encontrar "MARTÍNEZ").
+function normalizar(s) {
+  // Descompone acentos (NFD) y descarta los caracteres combinantes
+  // resultantes (rango Unicode U+0300–U+036F) sin depender de escribir
+  // ese rango como literal en el archivo fuente.
+  return s
+    .normalize('NFD')
+    .split('')
+    .filter((ch) => { const c = ch.codePointAt(0); return c < 0x0300 || c > 0x036f; })
+    .join('')
+    .toLowerCase();
+}
+
 // ─── Tab Reportes Ejecutivos (preconcebidos, listos para generar) ──────────────
 function TabEjecutivos() {
   const [catalogo, setCatalogo] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [generando, setGenerando] = useState(null); // `${id}-${formato}`
 
+  // Buscador de funcionario — opcional, acota los reportes que lo soportan
+  // (Ausentismo, Balance de Saldos, Dotación) a una sola persona.
+  const [todosFunc, setTodosFunc]   = useState([]);
+  const [busqueda, setBusqueda]     = useState('');
+  const [mostrarLista, setMostrarLista] = useState(false);
+  const [funcSel, setFuncSel]       = useState(null);
+
   useEffect(() => {
     reporteTareasApi.tipos()
       .then(({ data }) => setCatalogo(data.filter((r) => !r.requiereFiltros)))
       .catch(() => toast.error('No se pudo cargar el catálogo de reportes'))
       .finally(() => setCargando(false));
+    funcionariosApi.listar().then(({ data }) => setTodosFunc(data)).catch(() => {});
   }, []);
 
-  const generar = async (id, formato) => {
-    const clave = `${id}-${formato}`;
+  const limpiarSeleccion = () => { setFuncSel(null); setBusqueda(''); };
+
+  const generar = async (rep, formato) => {
+    const clave = `${rep.id}-${formato}`;
     setGenerando(clave);
     try {
-      await reporteTareasApi.crear({ report_type: id, formato, filtros: {} });
+      const filtros = (rep.soportaFuncionario && funcSel) ? { funcionario_id: funcSel.id } : {};
+      await reporteTareasApi.crear({ report_type: rep.id, formato, filtros });
       toast.success('Tu reporte se está procesando. Puedes seguir usando el sistema — te avisaremos cuando esté listo.');
     } catch (err) {
       toast.error(err.response?.data?.error || 'No se pudo iniciar la generación del reporte');
@@ -461,43 +486,109 @@ function TabEjecutivos() {
     return <div className="card h-48 animate-pulse bg-dark-100" />;
   }
 
+  const busquedaNorm = normalizar(busqueda);
+  const filtrados = todosFunc
+    .filter((f) => f.activo !== false)
+    .filter((f) => normalizar(`${f.apellidos} ${f.nombres} ${f.rut || ''}`).includes(busquedaNorm))
+    .slice(0, 8);
+
   return (
     <div className="space-y-4">
       <p className="text-sm text-dark-500">
         Reportes preconcebidos, listos para generar con un clic. Se procesan en segundo plano —
         recíbelos en el Centro de Descargas (ícono arriba a la derecha) cuando estén listos.
       </p>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {catalogo.map((r) => (
-          <div key={r.id} className="card p-4 flex flex-col gap-3">
-            <div>
-              <p className="font-semibold text-dark-800 text-sm">{r.nombre}</p>
-              <p className="text-xs text-dark-500 mt-1">{r.descripcion}</p>
-            </div>
-            <div className="flex gap-2 mt-auto">
-              <button
-                onClick={() => generar(r.id, 'pdf')}
-                disabled={!!generando}
-                className="btn-secondary text-xs py-1.5 flex-1 justify-center"
-              >
-                {generando === `${r.id}-pdf`
-                  ? <span className="animate-spin h-3 w-3 border-2 border-dark-400 border-t-transparent rounded-full" />
-                  : <FileText size={13} />}
-                PDF
-              </button>
-              <button
-                onClick={() => generar(r.id, 'excel')}
-                disabled={!!generando}
-                className="btn-secondary text-xs py-1.5 flex-1 justify-center"
-              >
-                {generando === `${r.id}-excel`
-                  ? <span className="animate-spin h-3 w-3 border-2 border-dark-400 border-t-transparent rounded-full" />
-                  : <FileSpreadsheet size={13} />}
-                Excel
-              </button>
-            </div>
+
+      {/* Buscador de funcionario (opcional) */}
+      <div className="card p-4">
+        <label className="block text-xs font-medium text-dark-700 mb-1.5">
+          Acotar a un funcionario (opcional)
+        </label>
+        <div className="relative max-w-sm">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-dark-400 pointer-events-none" />
+          <input
+            type="text"
+            value={busqueda}
+            onChange={(e) => { setBusqueda(e.target.value); if (funcSel) setFuncSel(null); setMostrarLista(true); }}
+            onFocus={() => busqueda.length >= 1 && setMostrarLista(true)}
+            onBlur={() => setTimeout(() => setMostrarLista(false), 150)}
+            placeholder="Buscar por nombre o RUT…"
+            autoComplete="off"
+            className="input-field text-sm pl-9 pr-9"
+          />
+          {funcSel && (
+            <button onClick={limpiarSeleccion} className="absolute right-3 top-1/2 -translate-y-1/2 text-dark-400 hover:text-dark-700">
+              <X size={14} />
+            </button>
+          )}
+          {mostrarLista && busqueda.length >= 1 && !funcSel && (
+            filtrados.length > 0 ? (
+              <ul className="absolute z-20 left-0 right-0 mt-1 bg-white border border-dark-200 rounded-xl shadow-lg overflow-hidden">
+                {filtrados.map((f) => (
+                  <li
+                    key={f.id}
+                    onMouseDown={() => { setFuncSel(f); setBusqueda(`${f.apellidos} ${f.nombres}`); setMostrarLista(false); }}
+                    className="px-4 py-2.5 cursor-pointer hover:bg-brand-50 flex justify-between items-center gap-3 text-sm"
+                  >
+                    <span className="font-medium text-dark-900">{f.apellidos} {f.nombres}</span>
+                    <span className="text-xs text-dark-400 shrink-0">{f.rut}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-dark-200 rounded-xl shadow-lg px-4 py-3 text-xs text-dark-400">
+                Sin coincidencias
+              </div>
+            )
+          )}
+        </div>
+        {funcSel && (
+          <div className="mt-2 flex items-center gap-2 px-3 py-2 bg-brand-50 border border-brand-200 rounded-lg text-xs text-brand-700 w-fit">
+            <CheckCircle2 size={13} className="flex-shrink-0" />
+            Los reportes que lo permiten se generarán solo para <strong>{funcSel.apellidos} {funcSel.nombres}</strong>
           </div>
-        ))}
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {catalogo.map((r) => {
+          const aplicaFiltro = r.soportaFuncionario && funcSel;
+          return (
+            <div key={r.id} className="card p-4 flex flex-col gap-3">
+              <div>
+                <p className="font-semibold text-dark-800 text-sm">{r.nombre}</p>
+                <p className="text-xs text-dark-500 mt-1">{r.descripcion}</p>
+                {funcSel && (
+                  <p className={`text-[11px] mt-1.5 font-medium ${aplicaFiltro ? 'text-brand-600' : 'text-dark-400'}`}>
+                    {aplicaFiltro ? `Se generará solo para ${funcSel.apellidos} ${funcSel.nombres}` : 'Este reporte siempre es global'}
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-2 mt-auto">
+                <button
+                  onClick={() => generar(r, 'pdf')}
+                  disabled={!!generando}
+                  className="btn-secondary text-xs py-1.5 flex-1 justify-center"
+                >
+                  {generando === `${r.id}-pdf`
+                    ? <span className="animate-spin h-3 w-3 border-2 border-dark-400 border-t-transparent rounded-full" />
+                    : <FileText size={13} />}
+                  PDF
+                </button>
+                <button
+                  onClick={() => generar(r, 'excel')}
+                  disabled={!!generando}
+                  className="btn-secondary text-xs py-1.5 flex-1 justify-center"
+                >
+                  {generando === `${r.id}-excel`
+                    ? <span className="animate-spin h-3 w-3 border-2 border-dark-400 border-t-transparent rounded-full" />
+                    : <FileSpreadsheet size={13} />}
+                  Excel
+                </button>
+              </div>
+            </div>
+          );
+        })}
         {catalogo.length === 0 && (
           <p className="text-sm text-dark-400 py-8 text-center col-span-full">Sin reportes disponibles</p>
         )}

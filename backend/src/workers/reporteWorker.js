@@ -35,6 +35,25 @@ async function scopeSupervisor(usuarioId) {
   return { ...u, sector, area };
 }
 
+// Agrega "AND f.id = $N" al WHERE si el usuario filtró por un funcionario
+// específico (búsqueda en la galería de Reportes Ejecutivos). Se aplica
+// DESPUÉS del scope de sector/área del supervisor, así que si el funcionario
+// elegido cae fuera de su sector el reporte simplemente sale vacío — no es
+// un hueco de seguridad, solo un resultado sin filas.
+function filtroFuncionario(params, filtros) {
+  if (!filtros.funcionario_id) return '';
+  params.push(parseInt(filtros.funcionario_id));
+  return `AND f.id = $${params.length}`;
+}
+
+async function nombreFuncionario(funcionarioId) {
+  if (!funcionarioId) return null;
+  const { rows } = await pool.query(
+    'SELECT nombres, apellidos FROM funcionarios WHERE id = $1', [parseInt(funcionarioId)]
+  );
+  return rows[0] ? `${rows[0].nombres} ${rows[0].apellidos}` : null;
+}
+
 // Cola in-process, sin Redis/BullMQ: suficiente para el volumen de este
 // sistema (~230 funcionarios). Procesa una tarea a la vez para no saturar
 // el pool de conexiones a Postgres; el request HTTP que crea la tarea ya
@@ -194,6 +213,8 @@ async function generarReporteAusentismo(filtros, formato, usuarioId) {
     : u.area
     ? (params.push(u.area), `AND f.area = $${params.length}`)
     : '';
+  const fw = filtroFuncionario(params, filtros);
+  const nombreFiltro = await nombreFuncionario(filtros.funcionario_id);
 
   const [porFuncionario, resumen] = await Promise.all([
     pool.query(
@@ -202,7 +223,7 @@ async function generarReporteAusentismo(filtros, formato, usuarioId) {
               COALESCE(SUM(s.dias_solicitados),0)::int AS total_dias
        FROM funcionarios f
        JOIN solicitudes s ON s.funcionario_id = f.id
-       WHERE s.estado='aprobado' AND s.fecha_inicio >= NOW()-INTERVAL '180 days' ${sw}
+       WHERE s.estado='aprobado' AND s.fecha_inicio >= NOW()-INTERVAL '180 days' ${sw} ${fw}
        GROUP BY f.id ORDER BY total_dias DESC LIMIT 50`, params
     ),
     pool.query(
@@ -210,7 +231,7 @@ async function generarReporteAusentismo(filtros, formato, usuarioId) {
               COALESCE(SUM(s.dias_solicitados),0)::int AS total_dias,
               COUNT(s.id)::int AS total_solicitudes
        FROM solicitudes s JOIN funcionarios f ON s.funcionario_id = f.id
-       WHERE s.estado='aprobado' AND s.fecha_inicio >= NOW()-INTERVAL '180 days' ${sw}`, params
+       WHERE s.estado='aprobado' AND s.fecha_inicio >= NOW()-INTERVAL '180 days' ${sw} ${fw}`, params
     ),
   ]);
   const r = resumen.rows[0];
@@ -231,8 +252,11 @@ async function generarReporteAusentismo(filtros, formato, usuarioId) {
   const filas = porFuncionario.rows.map((f) => ({ ...f, nombre_completo: `${f.apellidos} ${f.nombres}` }));
 
   return empaquetar({
-    titulo: 'Ausentismo — Últimos 180 días',
-    filtrosTexto: u.sector ? `Sector: ${u.sector}` : u.area ? `Área: ${u.area}` : '',
+    titulo: nombreFiltro ? `Ausentismo — ${nombreFiltro}` : 'Ausentismo — Últimos 180 días',
+    filtrosTexto: [
+      nombreFiltro ? `Funcionario: ${nombreFiltro}` : null,
+      u.sector ? `Sector: ${u.sector}` : u.area ? `Área: ${u.area}` : null,
+    ].filter(Boolean).join(' · '),
     kpis, columnas, filas, totalesKeys: ['total_dias', 'total_solicitudes'],
     generadoPor: u.email || '', formato, prefijoArchivo: 'reporte_ausentismo',
   });
@@ -248,6 +272,8 @@ async function generarReporteBalanceSaldos(filtros, formato, usuarioId) {
     : u.area
     ? (params.push(u.area), `AND f.area = $${params.length}`)
     : '';
+  const fw = filtroFuncionario(params, filtros);
+  const nombreFiltro = await nombreFuncionario(filtros.funcionario_id);
 
   const { rows } = await pool.query(
     `SELECT f.nombres, f.apellidos, f.rut, f.sector, tp.nombre AS tipo_permiso,
@@ -256,7 +282,7 @@ async function generarReporteBalanceSaldos(filtros, formato, usuarioId) {
      FROM saldos_funcionarios sf
      JOIN funcionarios f ON sf.funcionario_id = f.id
      JOIN tipos_permisos tp ON sf.tipo_permiso_id = tp.id
-     WHERE sf.anio = $1 AND tp.activo = TRUE AND tp.es_especial = FALSE AND f.activo = TRUE ${sw}
+     WHERE sf.anio = $1 AND tp.activo = TRUE AND tp.es_especial = FALSE AND f.activo = TRUE ${sw} ${fw}
      ORDER BY f.apellidos, f.nombres, tp.nombre
      LIMIT 5000`, params
   );
@@ -282,8 +308,11 @@ async function generarReporteBalanceSaldos(filtros, formato, usuarioId) {
   const filas = rows.map((r) => ({ ...r, nombre_completo: `${r.apellidos} ${r.nombres}` }));
 
   return empaquetar({
-    titulo: `Balance General de Saldos ${anio}`,
-    filtrosTexto: u.sector ? `Sector: ${u.sector}` : u.area ? `Área: ${u.area}` : '',
+    titulo: nombreFiltro ? `Balance de Saldos ${anio} — ${nombreFiltro}` : `Balance General de Saldos ${anio}`,
+    filtrosTexto: [
+      nombreFiltro ? `Funcionario: ${nombreFiltro}` : null,
+      u.sector ? `Sector: ${u.sector}` : u.area ? `Área: ${u.area}` : null,
+    ].filter(Boolean).join(' · '),
     kpis, columnas, filas, totalesKeys: ['dias_asignados', 'dias_usados', 'disponible'],
     generadoPor: u.email || '', formato, prefijoArchivo: 'balance_saldos',
   });
@@ -298,12 +327,14 @@ async function generarReporteFuncionarios(filtros, formato, usuarioId) {
     : u.area
     ? (params.push(u.area), `AND f.area = $${params.length}`)
     : '';
+  const fw = filtroFuncionario(params, filtros);
+  const nombreFiltro = await nombreFuncionario(filtros.funcionario_id);
 
   const { rows } = await pool.query(
     `SELECT f.nombres, f.apellidos, f.rut, f.cargo, f.sector, f.area,
             f.tipo_contrato, f.horas_contrato, f.fecha_ingreso
      FROM funcionarios f
-     WHERE f.activo = TRUE ${sw}
+     WHERE f.activo = TRUE ${sw} ${fw}
      ORDER BY f.apellidos, f.nombres
      LIMIT 5000`, params
   );
@@ -330,8 +361,11 @@ async function generarReporteFuncionarios(filtros, formato, usuarioId) {
   const filas = rows.map((r) => ({ ...r, nombre_completo: `${r.apellidos} ${r.nombres}` }));
 
   return empaquetar({
-    titulo: 'Dotación de Funcionarios',
-    filtrosTexto: u.sector ? `Sector: ${u.sector}` : u.area ? `Área: ${u.area}` : '',
+    titulo: nombreFiltro ? `Ficha de Dotación — ${nombreFiltro}` : 'Dotación de Funcionarios',
+    filtrosTexto: [
+      nombreFiltro ? `Funcionario: ${nombreFiltro}` : null,
+      u.sector ? `Sector: ${u.sector}` : u.area ? `Área: ${u.area}` : null,
+    ].filter(Boolean).join(' · '),
     kpis, columnas, filas, totalesKeys: ['horas_contrato'],
     generadoPor: u.email || '', formato, prefijoArchivo: 'dotacion_funcionarios',
   });

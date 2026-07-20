@@ -40,9 +40,10 @@ export default function CentroDescargas() {
   const [abierto, setAbierto] = useState(false);
   const vistasRef = useRef(new Set());
   const prevEstadosRef = useRef({});
+  const tareasActualesRef = useRef([]);
 
   const cargar = useCallback(() => {
-    reporteTareasApi.listar()
+    return reporteTareasApi.listar()
       .then(({ data }) => {
         // Notificación flotante cuando una tarea pasa a COMPLETED/FAILED
         data.forEach((t) => {
@@ -71,6 +72,7 @@ export default function CentroDescargas() {
         const nuevosEstados = {};
         data.forEach((t) => { nuevosEstados[t.id] = t.status; });
         prevEstadosRef.current = nuevosEstados;
+        tareasActualesRef.current = data;
         setTareas(data);
       })
       .catch(() => {});
@@ -80,10 +82,15 @@ export default function CentroDescargas() {
     if (!usuario || esSoloAutoservicio) return;
     cargar();
     let cancelado = false;
-    const tick = () => {
+    // Espera a que el fetch de este ciclo termine (no "fire-and-forget")
+    // antes de decidir la próxima cadencia — si no, la detección de "hay
+    // tareas activas" siempre queda un ciclo atrasada respecto al dato que
+    // esta misma llamada acaba de traer.
+    const tick = async () => {
       if (cancelado) return;
-      cargar();
-      const hayActivas = tareas.some((t) => ACTIVOS.includes(t.status));
+      await cargar();
+      if (cancelado) return;
+      const hayActivas = tareasActualesRef.current.some((t) => ACTIVOS.includes(t.status));
       timeoutId = setTimeout(tick, hayActivas ? 4000 : 25000);
     };
     let timeoutId = setTimeout(tick, 4000);

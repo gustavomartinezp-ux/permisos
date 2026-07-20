@@ -24,15 +24,15 @@ const REPORTES_DISPONIBLES = [
     descripcion: 'Detalle de solicitudes de permiso, filtrable por fecha, tipo y estado.',
   },
   {
-    id: 'ausentismo', nombre: 'Ausentismo (180 días)', requiereFiltros: false,
+    id: 'ausentismo', nombre: 'Ausentismo (180 días)', requiereFiltros: false, soportaFuncionario: true,
     descripcion: 'Ranking de ausentismo por funcionario en los últimos 180 días.',
   },
   {
-    id: 'balance_saldos', nombre: 'Balance General de Saldos', requiereFiltros: false,
+    id: 'balance_saldos', nombre: 'Balance General de Saldos', requiereFiltros: false, soportaFuncionario: true,
     descripcion: 'Saldos vigentes de todos los funcionarios por tipo de permiso.',
   },
   {
-    id: 'funcionarios', nombre: 'Dotación de Funcionarios', requiereFiltros: false,
+    id: 'funcionarios', nombre: 'Dotación de Funcionarios', requiereFiltros: false, soportaFuncionario: true,
     descripcion: 'Listado de funcionarios activos con cargo, contrato y sector.',
   },
   {

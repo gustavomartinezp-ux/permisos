@@ -26,7 +26,7 @@ const NAV_SUPERVISOR = [
 ];
 
 export default function Sidebar({ mobile = false, onClose }) {
-  const { usuario, logout, esFuncionario, esSupervisorPuro, tienePermiso } = useAuth();
+  const { usuario, logout, esSoloAutoservicio, esSupervisorPuro, tienePermiso } = useAuth();
   const navigate = useNavigate();
   const [showCambiarPassword, setShowCambiarPassword] = useState(false);
 
@@ -54,7 +54,7 @@ export default function Sidebar({ mobile = false, onClose }) {
     { to: '/acerca',                 label: 'Acerca del Sistema',  icon: Info },
   ];
 
-  const navItems = esFuncionario
+  const navItems = esSoloAutoservicio
     ? navFuncionario
     : puedeVerRolesPermisos
       ? [...NAV_SUPERVISOR, { to: '/roles', label: 'Roles y Permisos', icon: ShieldCheck }]

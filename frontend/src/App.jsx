@@ -60,12 +60,14 @@ function HomeRedirect() {
   return <Navigate to="/dashboard" replace />;
 }
 
-// Bloquea una ruta si el rol es funcionario
+// Bloquea una ruta si el rol es funcionario raso — no aplica a roles RBAC nuevos
+// (SECRETARY, AUDITOR) que conviven con rol legacy 'funcionario' pero sí deben
+// acceder a estas secciones.
 function SoloSupervisor({ children }) {
-  const { usuario, cargando, esFuncionario } = useAuth();
+  const { usuario, cargando, esSoloAutoservicio } = useAuth();
   if (cargando) return null;
   if (!usuario) return <Navigate to="/login" replace />;
-  if (esFuncionario) {
+  if (esSoloAutoservicio) {
     return <Navigate to={`/funcionarios/${usuario.funcionario_id}`} replace />;
   }
   return children;

@@ -123,7 +123,7 @@ router.post('/', [
 
   const { funcionario_id, tipo_permiso_id, fecha_inicio, fecha_fin, dias_solicitados, motivo, jornada_medio_dia } = req.body;
 
-  if (req.usuario.rol === 'funcionario' && req.usuario.funcionario_id != funcionario_id) {
+  if (esSoloAutoservicio(req) && req.usuario.funcionario_id != funcionario_id) {
     return res.status(403).json({ error: 'Solo puedes solicitar permisos para ti mismo' });
   }
 

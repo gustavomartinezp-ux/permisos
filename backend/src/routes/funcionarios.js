@@ -2,7 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const bcrypt = require('bcryptjs');
 const { pool } = require('../db');
-const { verificarToken, adminOSupervisor } = require('../middleware/auth');
+const { verificarToken } = require('../middleware/auth');
 const { cargarPermisos, requierePermiso, esSoloAutoservicio } = require('../middleware/rbac');
 
 const router = express.Router();
@@ -435,7 +435,21 @@ router.post('/bulk', requierePermiso('funcionarios.crear'), async (req, res) => 
   }
 });
 
-router.put('/:id', adminOSupervisor, async (req, res) => {
+// RRHH_ADMIN (o admin legacy) edita todo; SECRETARY solo datos básicos de contacto.
+// Supervisor queda deliberadamente fuera: el frontend nunca le mostró este botón
+// y el spec de RBAC le niega explícitamente la edición de datos de personal.
+const puedeEditarCompleto = (req) =>
+  req.usuario.rol === 'admin' || (req.usuario.permisos || []).includes('funcionarios.editar');
+const puedeEditarBasico = (req) =>
+  puedeEditarCompleto(req) || (req.usuario.permisos || []).includes('funcionarios.editar_basico');
+
+router.put('/:id', async (req, res, next) => {
+  if (!puedeEditarBasico(req)) {
+    return res.status(403).json({ error: 'No tienes permiso para editar funcionarios' });
+  }
+  req.edicionBasica = !puedeEditarCompleto(req);
+  next();
+}, async (req, res) => {
   const {
     nombres, apellidos, cargo, servicio_id, activo, sector, area,
     tipo_contrato, horas_contrato, dispositivo_id, reemplaza_a, fecha_ingreso,
@@ -453,44 +467,51 @@ router.put('/:id', adminOSupervisor, async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    const activoParam = (req.usuario.rol === 'admin' && activo != null) ? Boolean(activo) : null;
-    const result = await client.query(
-      `UPDATE funcionarios
-       SET nombres=$1, apellidos=$2, cargo=$3, servicio_id=$4,
-           activo = COALESCE($5, activo),
-           tipo_contrato=$6, horas_contrato=$7, dispositivo_id=$8, reemplaza_a=$9,
-           fecha_ingreso=$10, sector=$11, area=$12,
-           fecha_nacimiento=$13, telefono=$14, direccion_particular=$15, numero_reloj=$16,
-           convenio_honorarios=$17, prestacion=$18, fecha_termino_contrato=$19,
-           escalafon=$20, categoria=$21, nivel=$22
-       WHERE id=$23 RETURNING *`,
-      [
-        nombres, apellidos, cargo,
-        servicio_id || null,
-        activoParam,
-        tipo_contrato || null,
-        horas_contrato ? parseInt(horas_contrato) : null,
-        dispositivo_id || null,
-        reemplaza_a || null,
-        fecha_ingreso || null,
-        sector || null,
-        area || null,
-        fecha_nacimiento || null,
-        telefono || null,
-        direccion_particular || null,
-        numero_reloj ? parseInt(numero_reloj) : null,
-        convenio_honorarios || null,
-        prestacion || null,
-        fecha_termino_contrato || null,
-        escalafon || null,
-        categoria || null,
-        nivel || null,
-        req.params.id,
-      ]
-    );
+    // Edición básica (ej. Secretaría): solo datos de contacto, nunca estructura organizacional.
+    const result = req.edicionBasica
+      ? await client.query(
+          `UPDATE funcionarios
+           SET fecha_nacimiento=$1, telefono=$2, direccion_particular=$3
+           WHERE id=$4 RETURNING *`,
+          [fecha_nacimiento || null, telefono || null, direccion_particular || null, req.params.id]
+        )
+      : await client.query(
+          `UPDATE funcionarios
+           SET nombres=$1, apellidos=$2, cargo=$3, servicio_id=$4,
+               activo = COALESCE($5, activo),
+               tipo_contrato=$6, horas_contrato=$7, dispositivo_id=$8, reemplaza_a=$9,
+               fecha_ingreso=$10, sector=$11, area=$12,
+               fecha_nacimiento=$13, telefono=$14, direccion_particular=$15, numero_reloj=$16,
+               convenio_honorarios=$17, prestacion=$18, fecha_termino_contrato=$19,
+               escalafon=$20, categoria=$21, nivel=$22
+           WHERE id=$23 RETURNING *`,
+          [
+            nombres, apellidos, cargo,
+            servicio_id || null,
+            (req.usuario.rol === 'admin' && activo != null) ? Boolean(activo) : null,
+            tipo_contrato || null,
+            horas_contrato ? parseInt(horas_contrato) : null,
+            dispositivo_id || null,
+            reemplaza_a || null,
+            fecha_ingreso || null,
+            sector || null,
+            area || null,
+            fecha_nacimiento || null,
+            telefono || null,
+            direccion_particular || null,
+            numero_reloj ? parseInt(numero_reloj) : null,
+            convenio_honorarios || null,
+            prestacion || null,
+            fecha_termino_contrato || null,
+            escalafon || null,
+            categoria || null,
+            nivel || null,
+            req.params.id,
+          ]
+        );
 
     // Actualizar o crear usuario si se indica rol_sistema (solo admin)
-    if (req.usuario.rol === 'admin' && rol_sistema) {
+    if (!req.edicionBasica && req.usuario.rol === 'admin' && rol_sistema) {
       const rolValido = ['admin', 'supervisor', 'funcionario'].includes(rol_sistema) ? rol_sistema : 'funcionario';
       const sectorUser = rolValido === 'supervisor' ? (sector_supervisa || null) : null;
       const areaUser   = rolValido === 'supervisor' ? (area_supervisa   || null) : null;

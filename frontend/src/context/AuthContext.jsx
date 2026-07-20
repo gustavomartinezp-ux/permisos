@@ -46,6 +46,10 @@ export function AuthProvider({ children }) {
   const esSupervisor   = ['admin', 'supervisor'].includes(usuario?.rol);
   const esSupervisorPuro = usuario?.rol === 'supervisor' || (usuario?.rolesRBAC || []).includes('SUPERVISOR');
   const esFuncionario  = usuario?.rol === 'funcionario';
+  // Autoservicio estricto: rol legacy funcionario Y sin ningún rol RBAC adicional
+  // (SECRETARY/AUDITOR también parten de rol legacy 'funcionario' pero no deben
+  // quedar restringidos a la vista de autoservicio).
+  const esSoloAutoservicio = esFuncionario && !(usuario?.rolesRBAC || []).some((r) => r !== 'EMPLOYEE');
 
   // RBAC granular (roles/permisos nuevos, conviven con el rol legacy de arriba)
   const tienePermiso = useCallback(
@@ -60,7 +64,7 @@ export function AuthProvider({ children }) {
   return (
     <AuthContext.Provider value={{
       usuario, cargando, login, logout,
-      esAdmin, esSupervisor, esSupervisorPuro, esFuncionario,
+      esAdmin, esSupervisor, esSupervisorPuro, esFuncionario, esSoloAutoservicio,
       tienePermiso, tieneRolRBAC,
     }}>
       {children}

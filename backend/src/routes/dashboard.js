@@ -1,13 +1,14 @@
 const express = require('express');
 const { pool } = require('../db');
 const { verificarToken } = require('../middleware/auth');
+const { cargarPermisos, esSoloAutoservicio } = require('../middleware/rbac');
 const { SECTORES_VALIDOS, AREAS_VALIDAS } = require('../config/catalogos');
 
 const router = express.Router();
-router.use(verificarToken);
+router.use(verificarToken, cargarPermisos);
 
 router.get('/stats', async (req, res) => {
-  if (req.usuario.rol === 'funcionario') {
+  if (esSoloAutoservicio(req)) {
     return res.status(403).json({ error: 'Acceso denegado' });
   }
   const anio = req.query.anio || new Date().getFullYear();

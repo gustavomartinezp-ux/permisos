@@ -2,6 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { pool } = require('../db');
 const { verificarToken, soloAdmin, adminOSupervisor } = require('../middleware/auth');
+const { cargarPermisos, requierePermiso, noAutoAprobacion, esSoloAutoservicio } = require('../middleware/rbac');
 const {
   calcularDiasHabiles,
   calcularDistribucion,
@@ -11,7 +12,7 @@ const {
 } = require('../utils/feriadoLegal');
 
 const router = express.Router();
-router.use(verificarToken);
+router.use(verificarToken, cargarPermisos);
 
 async function registrarMovimiento(client, {
   funcionarioId, solicitudId = null, tipoPermisoId, tipoMovimiento,
@@ -44,7 +45,7 @@ router.get('/', async (req, res) => {
     const params = [];
     let paramIdx = 1;
 
-    if (req.usuario.rol === 'funcionario') {
+    if (esSoloAutoservicio(req)) {
       whereClause += ` AND sol.funcionario_id = $${paramIdx++}`;
       params.push(req.usuario.funcionario_id);
     } else {
@@ -380,14 +381,17 @@ router.patch('/:id/pre-aprobar', adminOSupervisor, async (req, res) => {
 
     const solCheck = check.rows[0];
 
-    if (req.usuario.funcionario_id && solCheck.funcionario_id == req.usuario.funcionario_id) {
+    if (noAutoAprobacion(solCheck.funcionario_id, req)) {
       return res.status(403).json({ error: 'No puede pre-aprobar su propia solicitud. Será aprobada directamente por el Administrador.' });
     }
 
-    if (req.usuario.sector && solCheck.sector !== req.usuario.sector) {
+    // Scope efectivo: si el usuario está subrogando a un supervisor titular vigente,
+    // se usa el sector/área del titular en vez del propio.
+    const scope = req.usuario.scopeEfectivo || { sector: req.usuario.sector, area: req.usuario.area };
+    if (scope.sector && solCheck.sector !== scope.sector) {
       return res.status(403).json({ error: 'No puede pre-aprobar solicitudes de otro sector' });
     }
-    if (!req.usuario.sector && req.usuario.area && solCheck.area !== req.usuario.area) {
+    if (!scope.sector && scope.area && solCheck.area !== scope.area) {
       return res.status(403).json({ error: 'No puede pre-aprobar solicitudes de otra área' });
     }
 
@@ -408,8 +412,8 @@ router.patch('/:id/pre-aprobar', adminOSupervisor, async (req, res) => {
   }
 });
 
-// APROBAR solicitud final — solo administrador, transacción atómica completa
-router.patch('/:id/aprobar', soloAdmin, async (req, res) => {
+// APROBAR solicitud final — RRHH_ADMIN (o admin legacy), transacción atómica completa
+router.patch('/:id/aprobar', requierePermiso('solicitudes.aprobar'), async (req, res) => {
   const { id } = req.params;
   const { observaciones } = req.body;
   const client = await pool.connect();
@@ -432,6 +436,12 @@ router.patch('/:id/aprobar', soloAdmin, async (req, res) => {
     }
 
     const sol = solicitud.rows[0];
+
+    // Anticonflicto de interés: nadie puede aprobar su propia solicitud, sin importar el rol.
+    if (noAutoAprobacion(sol.funcionario_id, req)) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'No puede aprobar su propia solicitud' });
+    }
 
     // ── Aprobar permiso especial (sin movimiento de saldo) ────────────────
     if (sol.es_especial) {
@@ -677,7 +687,7 @@ router.patch('/:id/rechazar', adminOSupervisor, async (req, res) => {
 });
 
 // REINTEGRAR días — admin cancela una solicitud aprobada y devuelve los días
-router.patch('/:id/reintegrar', soloAdmin, async (req, res) => {
+router.patch('/:id/reintegrar', requierePermiso('solicitudes.reintegrar'), async (req, res) => {
   const { id } = req.params;
   const { observaciones } = req.body;
   const client = await pool.connect();

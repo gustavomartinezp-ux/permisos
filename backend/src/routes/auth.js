@@ -5,6 +5,7 @@ const { body, validationResult } = require('express-validator');
 const rateLimit = require('express-rate-limit');
 const { pool } = require('../db');
 const { verificarToken } = require('../middleware/auth');
+const { cargarPermisos } = require('../middleware/rbac');
 
 const router = express.Router();
 
@@ -112,7 +113,7 @@ router.patch('/cambiar-password', verificarToken, [
   }
 });
 
-router.get('/me', verificarToken, async (req, res) => {
+router.get('/me', verificarToken, cargarPermisos, async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT u.id, u.email, u.rol, u.funcionario_id, u.sector, u.area,
@@ -128,6 +129,9 @@ router.get('/me', verificarToken, async (req, res) => {
       ...u,
       sector: u.sector || u.funcionario_sector || null,
       area:   u.area   || u.funcionario_area   || null,
+      rolesRBAC: req.usuario.rolesRBAC,
+      permisos: req.usuario.permisos,
+      subrogandoA: req.usuario.subrogandoA,
     });
   } catch (err) {
     res.status(500).json({ error: 'Error al obtener perfil' });

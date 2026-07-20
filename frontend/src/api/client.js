@@ -85,6 +85,20 @@ export const historialApi = {
   porFuncionario: (id, params) => api.get(`/historial/funcionario/${id}`, { params }),
 };
 
+export const rolesApi = {
+  listar: () => api.get('/roles'),
+  listarUsuarios: () => api.get('/roles/usuarios'),
+  asignar: (usuarioId, codigo) => api.post(`/roles/usuarios/${usuarioId}/asignar`, { codigo }),
+  revocar: (usuarioId, codigo) => api.delete(`/roles/usuarios/${usuarioId}/roles/${codigo}`),
+};
+
+export const subrogacionesApi = {
+  listar: () => api.get('/subrogaciones'),
+  candidatos: () => api.get('/subrogaciones/candidatos'),
+  crear: (data) => api.post('/subrogaciones', data),
+  cancelar: (id) => api.patch(`/subrogaciones/${id}/cancelar`),
+};
+
 export const dashboardApi = {
   stats: (anio) => api.get('/dashboard/stats', { params: { anio } }),
 };

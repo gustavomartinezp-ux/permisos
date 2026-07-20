@@ -1,15 +1,16 @@
 const express = require('express');
 const { pool } = require('../db');
-const { verificarToken, soloAdmin, adminOSupervisor } = require('../middleware/auth');
+const { verificarToken } = require('../middleware/auth');
+const { cargarPermisos, requierePermiso, esSoloAutoservicio } = require('../middleware/rbac');
 
 const router = express.Router();
-router.use(verificarToken);
+router.use(verificarToken, cargarPermisos);
 
 // ─── Saldos de un funcionario ─────────────────────────────────────────────────
 router.get('/funcionario/:id', async (req, res) => {
   const anio = req.query.anio || new Date().getFullYear();
 
-  if (req.usuario.rol === 'funcionario' && req.usuario.funcionario_id != req.params.id) {
+  if (esSoloAutoservicio(req) && req.usuario.funcionario_id != req.params.id) {
     return res.status(403).json({ error: 'Acceso denegado' });
   }
 
@@ -48,7 +49,7 @@ router.get('/funcionario/:id', async (req, res) => {
 
 // ─── Calcular y transferir arrastre al año nuevo ──────────────────────────────
 // Toma los días restantes de feriado legal del año anterior y los pone como arrastre
-router.post('/calcular-arrastre', soloAdmin, async (req, res) => {
+router.post('/calcular-arrastre', requierePermiso('saldos.ajustar'), async (req, res) => {
   const anioOrigen = parseInt(req.body.anio_origen || new Date().getFullYear() - 1);
   const anioDestino = parseInt(req.body.anio_destino || new Date().getFullYear());
 
@@ -108,7 +109,7 @@ router.post('/calcular-arrastre', soloAdmin, async (req, res) => {
 });
 
 // ─── Ajuste manual de saldo ───────────────────────────────────────────────────
-router.put('/ajuste', adminOSupervisor, async (req, res) => {
+router.put('/ajuste', requierePermiso('saldos.ajustar'), async (req, res) => {
   const { funcionario_id, tipo_permiso_id, anio, dias_asignados, motivo } = req.body;
   const client = await pool.connect();
 

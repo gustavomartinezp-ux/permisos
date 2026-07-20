@@ -2,14 +2,15 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const bcrypt = require('bcryptjs');
 const { pool } = require('../db');
-const { verificarToken, soloAdmin, adminOSupervisor } = require('../middleware/auth');
+const { verificarToken, adminOSupervisor } = require('../middleware/auth');
+const { cargarPermisos, requierePermiso, esSoloAutoservicio } = require('../middleware/rbac');
 
 const router = express.Router();
 
-router.use(verificarToken);
+router.use(verificarToken, cargarPermisos);
 
 router.get('/', async (req, res) => {
-  if (req.usuario.rol === 'funcionario') {
+  if (esSoloAutoservicio(req)) {
     return res.status(403).json({ error: 'Acceso denegado' });
   }
   try {
@@ -184,7 +185,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Crear funcionario individual con usuario y saldos personalizados
-router.post('/', soloAdmin, [
+router.post('/', requierePermiso('funcionarios.crear'), [
   body('rut').notEmpty(),
   body('nombres').notEmpty(),
   body('apellidos').notEmpty(),
@@ -309,7 +310,7 @@ router.post('/', soloAdmin, [
 });
 
 // Carga masiva desde Excel (array de funcionarios)
-router.post('/bulk', soloAdmin, async (req, res) => {
+router.post('/bulk', requierePermiso('funcionarios.crear'), async (req, res) => {
   const { funcionarios } = req.body;
 
   if (!Array.isArray(funcionarios) || funcionarios.length === 0) {
@@ -513,7 +514,7 @@ router.put('/:id', adminOSupervisor, async (req, res) => {
 });
 
 // Pasivar / Activar — solo cambia el campo activo (no toca ningún otro dato)
-router.patch('/:id/activo', soloAdmin, async (req, res) => {
+router.patch('/:id/activo', requierePermiso('funcionarios.editar'), async (req, res) => {
   const { activo } = req.body;
   if (typeof activo !== 'boolean')
     return res.status(400).json({ error: 'El campo activo debe ser un booleano' });
@@ -550,7 +551,7 @@ router.patch('/:id/activo', soloAdmin, async (req, res) => {
 });
 
 // Eliminar funcionario pasivo — requiere contraseña del admin
-router.delete('/:id', soloAdmin, async (req, res) => {
+router.delete('/:id', requierePermiso('funcionarios.eliminar'), async (req, res) => {
   const { password_admin } = req.body;
   if (!password_admin)
     return res.status(400).json({ error: 'Se requiere contraseña de administrador para confirmar' });
@@ -665,7 +666,7 @@ router.delete('/:id/foto', async (req, res) => {
 });
 
 // Actualizar saldos manualmente (cambio de grado + ajuste arrastre feriado legal)
-router.put('/:id/saldos', soloAdmin, async (req, res) => {
+router.put('/:id/saldos', requierePermiso('saldos.ajustar'), async (req, res) => {
   const { saldos, arrastres, anio, motivo } = req.body;
   const funcId = req.params.id;
   const client = await pool.connect();

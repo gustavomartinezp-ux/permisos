@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   LayoutDashboard, Users, FileText, Clock, LogOut,
-  ChevronRight, Settings, UserCircle, KeyRound, Hourglass, BarChart2, UserCheck, Briefcase, UserCog, Info,
+  ChevronRight, Settings, UserCircle, KeyRound, Hourglass, BarChart2, UserCheck, Briefcase, UserCog, Info, ShieldCheck,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import CambiarPasswordModal from './CambiarPasswordModal';
@@ -26,9 +26,14 @@ const NAV_SUPERVISOR = [
 ];
 
 export default function Sidebar({ mobile = false, onClose }) {
-  const { usuario, logout, esFuncionario } = useAuth();
+  const { usuario, logout, esFuncionario, esSupervisorPuro, tienePermiso } = useAuth();
   const navigate = useNavigate();
   const [showCambiarPassword, setShowCambiarPassword] = useState(false);
+
+  // Renderizado condicional según rol/permiso activo: "Roles y Permisos" solo es
+  // relevante para quien puede gestionar roles (ADMIN_TI) o delegar su supervisión
+  // (SUPERVISOR) — el resto de los roles ni siquiera ve la opción en el menú.
+  const puedeVerRolesPermisos = tienePermiso('usuarios.gestionar_roles') || esSupervisorPuro;
 
   const handleLogout = () => {
     logout();
@@ -49,7 +54,11 @@ export default function Sidebar({ mobile = false, onClose }) {
     { to: '/acerca',                 label: 'Acerca del Sistema',  icon: Info },
   ];
 
-  const navItems = esFuncionario ? navFuncionario : NAV_SUPERVISOR;
+  const navItems = esFuncionario
+    ? navFuncionario
+    : puedeVerRolesPermisos
+      ? [...NAV_SUPERVISOR, { to: '/roles', label: 'Roles y Permisos', icon: ShieldCheck }]
+      : NAV_SUPERVISOR;
 
   return (
     <aside className="flex flex-col h-full bg-dark-900 text-white">

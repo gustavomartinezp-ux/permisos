@@ -44,11 +44,25 @@ export function AuthProvider({ children }) {
 
   const esAdmin        = usuario?.rol === 'admin';
   const esSupervisor   = ['admin', 'supervisor'].includes(usuario?.rol);
-  const esSupervisorPuro = usuario?.rol === 'supervisor';
+  const esSupervisorPuro = usuario?.rol === 'supervisor' || (usuario?.rolesRBAC || []).includes('SUPERVISOR');
   const esFuncionario  = usuario?.rol === 'funcionario';
 
+  // RBAC granular (roles/permisos nuevos, conviven con el rol legacy de arriba)
+  const tienePermiso = useCallback(
+    (...codigos) => usuario?.rol === 'admin' || codigos.some((c) => (usuario?.permisos || []).includes(c)),
+    [usuario]
+  );
+  const tieneRolRBAC = useCallback(
+    (codigo) => (usuario?.rolesRBAC || []).includes(codigo),
+    [usuario]
+  );
+
   return (
-    <AuthContext.Provider value={{ usuario, cargando, login, logout, esAdmin, esSupervisor, esSupervisorPuro, esFuncionario }}>
+    <AuthContext.Provider value={{
+      usuario, cargando, login, logout,
+      esAdmin, esSupervisor, esSupervisorPuro, esFuncionario,
+      tienePermiso, tieneRolRBAC,
+    }}>
       {children}
     </AuthContext.Provider>
   );

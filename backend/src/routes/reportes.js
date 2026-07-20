@@ -2,11 +2,22 @@
 const express = require('express');
 const ExcelJS = require('exceljs');
 const { pool } = require('../db');
-const { verificarToken, soloAdmin, adminOSupervisor } = require('../middleware/auth');
+const { verificarToken, adminOSupervisor } = require('../middleware/auth');
+const { cargarPermisos, requierePermiso } = require('../middleware/rbac');
 const { SECTORES_VALIDOS, AREAS_VALIDAS } = require('../config/catalogos');
 
 const router = express.Router();
-router.use(verificarToken, adminOSupervisor);
+
+// Acceso: admin/supervisor legacy, o cualquiera con permiso de reportes/auditoría nuevo
+// (RRHH_ADMIN, SECRETARY, AUDITOR).
+router.use(verificarToken, cargarPermisos, (req, res, next) => {
+  const legacyOk = ['admin', 'supervisor'].includes(req.usuario.rol);
+  const permisoOk = (req.usuario.permisos || []).some((p) =>
+    ['reportes.ver_globales', 'reportes.ver_operativos', 'auditoria.ver_todo'].includes(p)
+  );
+  if (legacyOk || permisoOk) return next();
+  return res.status(403).json({ error: 'Acceso restringido a supervisores, administradores y roles con acceso a reportes' });
+});
 
 router.get('/estadisticas', async (req, res) => {
   try {
@@ -221,7 +232,7 @@ router.get('/ausentismo', async (req, res) => {
 });
 
 // ─── Exportar funcionarios → Excel ───────────────────────────────────────────
-router.get('/exportar/funcionarios', soloAdmin, async (req, res) => {
+router.get('/exportar/funcionarios', requierePermiso('reportes.ver_globales', 'auditoria.ver_todo'), async (req, res) => {
   try {
     const anio = parseInt(req.query.anio) || new Date().getFullYear();
 

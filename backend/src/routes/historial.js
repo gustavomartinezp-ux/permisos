@@ -1,9 +1,10 @@
 const express = require('express');
 const { pool } = require('../db');
 const { verificarToken } = require('../middleware/auth');
+const { cargarPermisos, esSoloAutoservicio } = require('../middleware/rbac');
 
 const router = express.Router();
-router.use(verificarToken);
+router.use(verificarToken, cargarPermisos);
 
 router.get('/', async (req, res) => {
   const { funcionario_id, tipo_movimiento, limit = 100, offset = 0 } = req.query;
@@ -12,7 +13,7 @@ router.get('/', async (req, res) => {
   const params = [];
   let idx = 1;
 
-  if (req.usuario.rol === 'funcionario') {
+  if (esSoloAutoservicio(req)) {
     where += ` AND hm.funcionario_id = $${idx++}`;
     params.push(req.usuario.funcionario_id);
   } else if (funcionario_id) {
@@ -63,7 +64,7 @@ router.get('/funcionario/:id', async (req, res) => {
   const { id } = req.params;
   const { anio, limit = 50 } = req.query;
 
-  if (req.usuario.rol === 'funcionario' && req.usuario.funcionario_id != id) {
+  if (esSoloAutoservicio(req) && req.usuario.funcionario_id != id) {
     return res.status(403).json({ error: 'Acceso denegado' });
   }
 

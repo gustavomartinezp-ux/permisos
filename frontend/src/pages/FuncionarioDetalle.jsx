@@ -12,7 +12,7 @@ import {
 import { funcionariosApi, historialApi, solicitudesApi, usuariosApi, suplenciasApi } from '../api/client';
 import { generarReporteFuncionario, imprimirReporteFuncionario } from '../utils/reportePDF';
 import { useAuth } from '../context/AuthContext';
-import SaldoCard from '../components/SaldoCard';
+import SaldosLista from '../components/SaldosLista';
 import TimelineMovimientos from '../components/TimelineMovimientos';
 import EstadoBadge from '../components/EstadoBadge';
 import SolicitudModal from '../components/SolicitudModal';
@@ -704,16 +704,7 @@ export default function FuncionarioDetalle() {
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {funcionario.saldos?.map((s, i) => (
-                <SaldoCard key={s.id} saldo={s} index={i} />
-              ))}
-              {!funcionario.saldos?.length && (
-                <p className="text-dark-400 text-sm col-span-full py-8 text-center">
-                  Sin saldos asignados para el año actual
-                </p>
-              )}
-            </div>
+            <SaldosLista saldos={funcionario.saldos} />
           )}
         </div>
       )}

@@ -154,7 +154,7 @@ router.get('/:id', async (req, res) => {
               ), 0) AS dias_parciales_usados
        FROM saldos_funcionarios sf
        JOIN tipos_permisos tp ON sf.tipo_permiso_id = tp.id
-       WHERE sf.funcionario_id = $1 AND sf.anio = $2
+       WHERE sf.funcionario_id = $1 AND sf.anio = $2 AND tp.es_especial = FALSE
        ORDER BY tp.es_feriado_legal DESC, tp.nombre`,
       [id, anio]
     );

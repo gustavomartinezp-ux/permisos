@@ -1,10 +1,21 @@
 'use strict';
 const express = require('express');
 const { pool } = require('../db');
-const { verificarToken, soloAdmin, adminOSupervisor } = require('../middleware/auth');
+const { verificarToken } = require('../middleware/auth');
+const { cargarPermisos, requierePermiso, esSoloAutoservicio } = require('../middleware/rbac');
 
 const router = express.Router();
-router.use(verificarToken);
+router.use(verificarToken, cargarPermisos);
+
+// Lectura: admin/supervisor legacy, o SECRETARY/AUDITOR vía permiso nuevo.
+const puedeLeer = (req, res, next) => {
+  const legacyOk = ['admin', 'supervisor'].includes(req.usuario.rol);
+  const permisoOk = (req.usuario.permisos || []).some((p) =>
+    ['reportes.ver_operativos', 'reportes.ver_globales', 'auditoria.ver_todo'].includes(p)
+  );
+  if (legacyOk || permisoOk) return next();
+  return res.status(403).json({ error: 'Acceso restringido a supervisores y administradores' });
+};
 
 const MOTIVOS_VALIDOS = [
   'licencia_medica', 'feriado_legal', 'permiso_administrativo',
@@ -36,7 +47,7 @@ async function adjuntarProrrogas(suplencias) {
 }
 
 // ─── GET /stats ───────────────────────────────────────────────────────────────
-router.get('/stats', adminOSupervisor, async (req, res) => {
+router.get('/stats', puedeLeer, async (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
     const [activas, finalizadas, prorrogadas, proximas, vencidas] = await Promise.all([
@@ -69,7 +80,7 @@ router.get('/stats', adminOSupervisor, async (req, res) => {
 });
 
 // ─── GET /alertas ─────────────────────────────────────────────────────────────
-router.get('/alertas', adminOSupervisor, async (req, res) => {
+router.get('/alertas', puedeLeer, async (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
     const { rows } = await pool.query(
@@ -98,7 +109,7 @@ router.get('/alertas', adminOSupervisor, async (req, res) => {
 
 // ─── GET /funcionario/:id ─────────────────────────────────────────────────────
 router.get('/funcionario/:id', async (req, res) => {
-  if (req.usuario.rol === 'funcionario' && req.usuario.funcionario_id != req.params.id) {
+  if (esSoloAutoservicio(req) && req.usuario.funcionario_id != req.params.id) {
     return res.status(403).json({ error: 'Acceso denegado' });
   }
   try {
@@ -126,7 +137,7 @@ router.get('/funcionario/:id', async (req, res) => {
 });
 
 // ─── GET / ────────────────────────────────────────────────────────────────────
-router.get('/', adminOSupervisor, async (req, res) => {
+router.get('/', puedeLeer, async (req, res) => {
   try {
     const params = [];
     const conds = ['1=1'];
@@ -176,7 +187,7 @@ router.get('/', adminOSupervisor, async (req, res) => {
 
 // ─── GET /alertas-contractuales ───────────────────────────────────────────────
 // IMPORTANTE: debe estar antes de GET /:id para que Express no lo capture como parámetro
-router.get('/alertas-contractuales', adminOSupervisor, async (req, res) => {
+router.get('/alertas-contractuales', puedeLeer, async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT hs.id, hs.estado, hs.fecha_inicio, hs.fecha_termino,
@@ -197,7 +208,7 @@ router.get('/alertas-contractuales', adminOSupervisor, async (req, res) => {
 });
 
 // ─── GET /:id ─────────────────────────────────────────────────────────────────
-router.get('/:id', adminOSupervisor, async (req, res) => {
+router.get('/:id', puedeLeer, async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT hs.*,
@@ -227,7 +238,7 @@ router.get('/:id', adminOSupervisor, async (req, res) => {
 });
 
 // ─── POST / ───────────────────────────────────────────────────────────────────
-router.post('/', soloAdmin, async (req, res) => {
+router.post('/', requierePermiso('funcionarios.editar'), async (req, res) => {
   const {
     funcionario_suplente_id, funcionario_reemplazado_id,
     rut_reemplazado, nombre_reemplazado,
@@ -290,7 +301,7 @@ router.post('/', soloAdmin, async (req, res) => {
 });
 
 // ─── PATCH /:id/prorrogar ─────────────────────────────────────────────────────
-router.patch('/:id/prorrogar', soloAdmin, async (req, res) => {
+router.patch('/:id/prorrogar', requierePermiso('funcionarios.editar'), async (req, res) => {
   const { nueva_fecha_termino, observaciones } = req.body;
   if (!nueva_fecha_termino) return res.status(400).json({ error: 'La nueva fecha de término es obligatoria' });
 
@@ -338,7 +349,7 @@ router.patch('/:id/prorrogar', soloAdmin, async (req, res) => {
 });
 
 // ─── PATCH /:id/finalizar ─────────────────────────────────────────────────────
-router.patch('/:id/finalizar', soloAdmin, async (req, res) => {
+router.patch('/:id/finalizar', requierePermiso('funcionarios.editar'), async (req, res) => {
   const { observaciones } = req.body;
   try {
     const { rows } = await pool.query(

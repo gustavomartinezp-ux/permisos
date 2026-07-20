@@ -2,11 +2,12 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { pool } = require('../db');
-const { verificarToken, soloAdmin, adminOSupervisor } = require('../middleware/auth');
+const { verificarToken } = require('../middleware/auth');
+const { cargarPermisos, requierePermiso, esSoloAutoservicio } = require('../middleware/rbac');
 const { FERIADOS_CHILE } = require('../utils/feriadoLegal');
 
 const router = express.Router();
-router.use(verificarToken);
+router.use(verificarToken, cargarPermisos);
 
 function detectarTipoDia(fecha) {
   const d = new Date(fecha + 'T12:00:00');
@@ -56,7 +57,7 @@ async function calcularSaldo(funcionarioId) {
 // GET /api/horas-compensatorias/saldo/:funcionarioId
 router.get('/saldo/:funcionarioId', async (req, res) => {
   const id = parseInt(req.params.funcionarioId);
-  if (req.usuario.rol === 'funcionario' && req.usuario.funcionario_id != id) {
+  if (esSoloAutoservicio(req) && req.usuario.funcionario_id != id) {
     return res.status(403).json({ error: 'Acceso denegado' });
   }
   try {
@@ -74,7 +75,7 @@ router.get('/', async (req, res) => {
     let whereClause = '1=1';
     const params = [];
 
-    if (req.usuario.rol === 'funcionario') {
+    if (esSoloAutoservicio(req)) {
       whereClause += ` AND hc.funcionario_id = $${params.length + 1}`;
       params.push(req.usuario.funcionario_id);
     } else if (req.usuario.rol === 'supervisor') {
@@ -118,7 +119,7 @@ router.get('/', async (req, res) => {
 // GET /api/horas-compensatorias/funcionario/:id — saldo + registros de un funcionario
 router.get('/funcionario/:id', async (req, res) => {
   const id = parseInt(req.params.id);
-  if (req.usuario.rol === 'funcionario' && req.usuario.funcionario_id != id) {
+  if (esSoloAutoservicio(req) && req.usuario.funcionario_id != id) {
     return res.status(403).json({ error: 'Acceso denegado' });
   }
   // Supervisor solo puede ver funcionarios de su sector/área o su propio perfil
@@ -154,7 +155,7 @@ router.get('/funcionario/:id', async (req, res) => {
 });
 
 // POST /api/horas-compensatorias — solo admin registra horas extraordinarias
-router.post('/', soloAdmin, [
+router.post('/', requierePermiso('saldos.ajustar'), [
   body('funcionario_id').isInt({ min: 1 }),
   body('fecha_realizacion').isDate(),
   body('horas_realizadas').isFloat({ min: 0.25, max: 24 }),
@@ -188,7 +189,7 @@ router.post('/', soloAdmin, [
 });
 
 // DELETE /api/horas-compensatorias/:id — admin anula un registro
-router.delete('/:id', soloAdmin, async (req, res) => {
+router.delete('/:id', requierePermiso('saldos.ajustar'), async (req, res) => {
   try {
     const result = await pool.query(
       `UPDATE horas_compensatorias

@@ -31,9 +31,13 @@ export function AuthProvider({ children }) {
   const login = useCallback(async (email, password) => {
     const { data } = await authApi.login(email, password);
     localStorage.setItem('token', data.token);
-    localStorage.setItem('usuario', JSON.stringify(data.usuario));
-    setUsuario(data.usuario);
-    return data.usuario;
+    // /auth/login no incluye rolesRBAC/permisos (solo /auth/me los resuelve) —
+    // se pide el perfil completo para que el menú y los guards de ruta queden
+    // correctos desde el primer render, sin esperar a un refresh.
+    const { data: perfil } = await authApi.me();
+    localStorage.setItem('usuario', JSON.stringify(perfil));
+    setUsuario(perfil);
+    return perfil;
   }, []);
 
   const logout = useCallback(() => {
@@ -61,11 +65,21 @@ export function AuthProvider({ children }) {
     [usuario]
   );
 
+  // Set de roles RBAC a usar para filtrar menús/rutas por rol. Si el backend ya
+  // resolvió rolesRBAC (caso normal) se usa tal cual; si no llegó todavía, se
+  // deriva del rol legacy para no dejar el menú vacío/incorrecto un instante.
+  const rolesEfectivos = (usuario?.rolesRBAC && usuario.rolesRBAC.length > 0)
+    ? usuario.rolesRBAC
+    : usuario?.rol === 'admin'      ? ['ADMIN_TI', 'RRHH_ADMIN']
+    : usuario?.rol === 'supervisor' ? ['SUPERVISOR']
+    : usuario?.rol === 'funcionario' ? ['EMPLOYEE']
+    : [];
+
   return (
     <AuthContext.Provider value={{
       usuario, cargando, login, logout,
       esAdmin, esSupervisor, esSupervisorPuro, esFuncionario, esSoloAutoservicio,
-      tienePermiso, tieneRolRBAC,
+      tienePermiso, tieneRolRBAC, rolesEfectivos,
     }}>
       {children}
     </AuthContext.Provider>

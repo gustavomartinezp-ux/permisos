@@ -8,32 +8,44 @@ import {
 import { useAuth } from '../context/AuthContext';
 import CambiarPasswordModal from './CambiarPasswordModal';
 
+// Roles permitidos por ítem — deben reflejar lo que el backend realmente exige
+// en cada ruta (ver backend/src/middleware/rbac.js y las rutas correspondientes).
+// Sin `roles` = visible para cualquiera que no sea autoservicio puro.
+const ELEVADOS = ['ADMIN_TI', 'RRHH_ADMIN', 'SECRETARY', 'SUPERVISOR', 'AUDITOR'];
+
 const NAV_SUPERVISOR = [
-  { to: '/dashboard',            label: 'Dashboard',           icon: LayoutDashboard },
-  { header: 'Funcionarios' },
-  { to: '/funcionarios',         label: 'Planta / Contrata',   icon: Users,     groupColor: 'text-emerald-400' },
-  { to: '/honorarios',           label: 'Honorarios',          icon: Briefcase, groupColor: 'text-amber-400'   },
-  { to: '/suplentes',            label: 'Personal Suplente',   icon: UserCog,   groupColor: 'text-purple-400'  },
-  { header: 'Gestión' },
-  { to: '/solicitudes',          label: 'Solicitudes',         icon: FileText },
-  { to: '/horas-compensatorias', label: 'Hrs. Compensat.',     icon: Hourglass },
-  { to: '/historial',            label: 'Historial',           icon: Clock },
-  { to: '/suplencias',           label: 'Hist. Suplencias',    icon: UserCheck },
-  { to: '/reportes',             label: 'Reportes',            icon: BarChart2 },
-  { to: '/configuracion',        label: 'Configuración',       icon: Settings },
+  { to: '/dashboard',            label: 'Dashboard',           icon: LayoutDashboard, roles: ELEVADOS },
+  { header: 'Funcionarios',      roles: ELEVADOS },
+  { to: '/funcionarios',         label: 'Planta / Contrata',   icon: Users,     groupColor: 'text-emerald-400', roles: ELEVADOS },
+  { to: '/honorarios',           label: 'Honorarios',          icon: Briefcase, groupColor: 'text-amber-400',   roles: ELEVADOS },
+  { to: '/suplentes',            label: 'Personal Suplente',   icon: UserCog,   groupColor: 'text-purple-400',  roles: ELEVADOS },
+  { header: 'Gestión',           roles: ELEVADOS },
+  { to: '/solicitudes',          label: 'Solicitudes',         icon: FileText,    roles: ELEVADOS },
+  { to: '/horas-compensatorias', label: 'Hrs. Compensat.',     icon: Hourglass,   roles: ELEVADOS },
+  { to: '/historial',            label: 'Historial',           icon: Clock,       roles: ELEVADOS },
+  { to: '/suplencias',           label: 'Hist. Suplencias',    icon: UserCheck,   roles: ELEVADOS },
+  { to: '/reportes',             label: 'Reportes',            icon: BarChart2,   roles: ELEVADOS },
+  { to: '/configuracion',        label: 'Configuración',       icon: Settings,    roles: ['ADMIN_TI'] }, // 👈 único visible para ADMIN_TI
+  { to: '/roles',                label: 'Roles y Permisos',    icon: ShieldCheck, roles: ['ADMIN_TI', 'SUPERVISOR'] },
   { header: 'Información' },
   { to: '/acerca',               label: 'Acerca del Sistema',  icon: Info },
 ];
 
+// Filtra el menú según los roles RBAC del usuario y quita headers que se
+// queden sin ningún ítem visible debajo (evita títulos de sección huérfanos).
+function filtrarNav(items, rolesUsuario) {
+  const visibles = items.filter((item) => !item.roles || item.roles.some((r) => rolesUsuario.includes(r)));
+  return visibles.filter((item, i) => {
+    if (!item.header) return true;
+    const siguiente = visibles[i + 1];
+    return siguiente && !siguiente.header;
+  });
+}
+
 export default function Sidebar({ mobile = false, onClose }) {
-  const { usuario, logout, esSoloAutoservicio, esSupervisorPuro, tienePermiso } = useAuth();
+  const { usuario, logout, esSoloAutoservicio, rolesEfectivos } = useAuth();
   const navigate = useNavigate();
   const [showCambiarPassword, setShowCambiarPassword] = useState(false);
-
-  // Renderizado condicional según rol/permiso activo: "Roles y Permisos" solo es
-  // relevante para quien puede gestionar roles (ADMIN_TI) o delegar su supervisión
-  // (SUPERVISOR) — el resto de los roles ni siquiera ve la opción en el menú.
-  const puedeVerRolesPermisos = tienePermiso('usuarios.gestionar_roles') || esSupervisorPuro;
 
   const handleLogout = () => {
     logout();
@@ -56,9 +68,7 @@ export default function Sidebar({ mobile = false, onClose }) {
 
   const navItems = esSoloAutoservicio
     ? navFuncionario
-    : puedeVerRolesPermisos
-      ? [...NAV_SUPERVISOR, { to: '/roles', label: 'Roles y Permisos', icon: ShieldCheck }]
-      : NAV_SUPERVISOR;
+    : filtrarNav(NAV_SUPERVISOR, rolesEfectivos);
 
   return (
     <aside className="flex flex-col h-full bg-dark-900 text-white">

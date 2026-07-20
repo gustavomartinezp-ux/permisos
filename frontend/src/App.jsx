@@ -73,6 +73,17 @@ function SoloSupervisor({ children }) {
   return children;
 }
 
+// Restringe una ruta a un set de roles RBAC específico (ej. Configuración → solo ADMIN_TI).
+function RequiereRol({ roles, children }) {
+  const { usuario, cargando, rolesEfectivos } = useAuth();
+  if (cargando) return null;
+  if (!usuario) return <Navigate to="/login" replace />;
+  if (!roles.some((r) => rolesEfectivos.includes(r))) {
+    return <Navigate to="/dashboard" replace />;
+  }
+  return children;
+}
+
 function ProtectedRoute({ children, requiereAdmin }) {
   const { usuario, cargando } = useAuth();
 
@@ -101,8 +112,8 @@ function AppRoutes() {
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         {/* Solo supervisores/admin */}
         <Route path="/dashboard"      element={<SoloSupervisor><Dashboard /></SoloSupervisor>} />
-        <Route path="/configuracion"  element={<SoloSupervisor><Configuracion /></SoloSupervisor>} />
-        <Route path="/tipos-permisos" element={<SoloSupervisor><TiposPermisos /></SoloSupervisor>} />
+        <Route path="/configuracion"  element={<RequiereRol roles={['ADMIN_TI']}><Configuracion /></RequiereRol>} />
+        <Route path="/tipos-permisos" element={<RequiereRol roles={['ADMIN_TI', 'RRHH_ADMIN']}><TiposPermisos /></RequiereRol>} />
 
         {/* Accesibles a todos (backend filtra por funcionario_id) */}
         <Route path="/reportes"   element={<SoloSupervisor><Reportes /></SoloSupervisor>} />

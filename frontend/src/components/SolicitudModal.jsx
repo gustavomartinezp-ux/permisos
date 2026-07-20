@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Calendar, FileText, AlertCircle, ArrowLeftRight, Info, Download, Printer, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { X, Calendar, FileText, AlertCircle, ArrowLeftRight, Info, Download, Printer, CheckCircle2, ShieldAlert, Wallet, Scale } from 'lucide-react';
 import { solicitudesApi, saldosApi, tiposPermisosApi } from '../api/client';
 import { descargarFormularioOficial, imprimirFormularioOficial } from '../utils/reportePDF';
 import toast from 'react-hot-toast';
@@ -70,6 +70,7 @@ const LABEL_TIPO_DIAS = {
 export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
   const [saldos, setSaldos] = useState([]);
   const [tiposEspeciales, setTiposEspeciales] = useState([]);
+  const [categoria, setCategoria] = useState('saldos'); // 'saldos' | 'especial'
   const [form, setForm] = useState({
     tipo_permiso_id: '',
     fecha_inicio: '',
@@ -155,6 +156,14 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
 
   const handleTipoChange = (e) => {
     setForm({ ...form, tipo_permiso_id: e.target.value, fecha_inicio: '', fecha_fin: '' });
+    setMedioDia(false);
+    setError('');
+  };
+
+  const cambiarCategoria = (cat) => {
+    if (cat === categoria) return;
+    setCategoria(cat);
+    setForm((f) => ({ ...f, tipo_permiso_id: '', fecha_inicio: '', fecha_fin: '' }));
     setMedioDia(false);
     setError('');
   };
@@ -312,14 +321,51 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
           </div>
 
           <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            {/* Selector de categoría */}
+            <div>
+              <div className="grid grid-cols-2 gap-1.5 p-1 bg-dark-100 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => cambiarCategoria('saldos')}
+                  className={`flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                    categoria === 'saldos' ? 'bg-white text-brand-700 shadow-sm' : 'text-dark-500 hover:text-dark-700'
+                  }`}
+                >
+                  <Wallet size={15} />
+                  Permisos con Saldos
+                </button>
+                <button
+                  type="button"
+                  onClick={() => cambiarCategoria('especial')}
+                  className={`flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                    categoria === 'especial' ? 'bg-white text-purple-700 shadow-sm' : 'text-dark-500 hover:text-dark-700'
+                  }`}
+                >
+                  <Scale size={15} />
+                  Permisos por Ley / Especiales
+                </button>
+              </div>
+              <div className="flex items-center gap-2 mt-2">
+                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                  categoria === 'saldos' ? 'bg-brand-100 text-brand-700' : 'bg-purple-100 text-purple-700'
+                }`}>
+                  {categoria === 'saldos' ? 'Con saldo anual' : 'Sin descuento de saldo'}
+                </span>
+                <span className="text-xs text-dark-400">
+                  {categoria === 'saldos'
+                    ? 'Descuenta días de tu saldo disponible del año'
+                    : 'Días fijos establecidos por normativa institucional'}
+                </span>
+              </div>
+            </div>
+
             {/* Tipo permiso */}
             <div>
               <label className="block text-sm font-medium text-dark-700 mb-1.5">Tipo de Permiso</label>
-              <select value={form.tipo_permiso_id} onChange={handleTipoChange} className="input-field" required>
-                <option value="">Seleccionar tipo...</option>
-
-                {saldos.length > 0 && (
-                  <optgroup label="Permisos con Saldo">
+              {categoria === 'saldos' ? (
+                saldos.length > 0 ? (
+                  <select value={form.tipo_permiso_id} onChange={handleTipoChange} className="input-field" required>
+                    <option value="">Seleccionar tipo...</option>
                     {saldos.map((s) => {
                       const aDisp = s.es_feriado_legal
                         ? ((s.saldo_arrastre || 0) - (s.arrastre_usados || 0) - (s.arrastre_pendientes || 0))
@@ -332,20 +378,56 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
                         </option>
                       );
                     })}
-                  </optgroup>
-                )}
-
-                {tiposEspeciales.length > 0 && (
-                  <optgroup label="Permisos Especiales (días fijos por ley)">
+                  </select>
+                ) : (
+                  <p className="text-sm text-dark-400 bg-dark-50 rounded-lg p-3">
+                    No tienes tipos de permiso con saldo asignado.
+                  </p>
+                )
+              ) : (
+                tiposEspeciales.length > 0 ? (
+                  <select value={form.tipo_permiso_id} onChange={handleTipoChange} className="input-field" required>
+                    <option value="">Seleccionar tipo...</option>
                     {tiposEspeciales.map((t) => (
                       <option key={t.id} value={t.id}>
                         {t.nombre} — {t.dias_fijos} {LABEL_TIPO_DIAS[t.tipo_dias] || 'días'}
                       </option>
                     ))}
-                  </optgroup>
-                )}
-              </select>
+                  </select>
+                ) : (
+                  <p className="text-sm text-dark-400 bg-dark-50 rounded-lg p-3">
+                    No hay permisos especiales configurados.
+                  </p>
+                )
+              )}
             </div>
+
+            {/* Indicador destacado de saldo disponible */}
+            {categoria === 'saldos' && saldoSel && (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
+                className="rounded-xl border border-brand-200 bg-brand-50 p-3.5"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-brand-700 flex items-center gap-1.5">
+                    <Wallet size={14} />
+                    Saldo disponible
+                  </span>
+                  <span className="text-2xl font-bold text-brand-700 tabular-nums">{totalDisp}</span>
+                </div>
+                <div className="mt-2 h-1.5 bg-brand-100 rounded-full overflow-hidden">
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${Math.min((totalDisp / Math.max((saldoSel.dias_asignados || 0) + (saldoSel.es_feriado_legal ? (saldoSel.saldo_arrastre || 0) : 0), 1)) * 100, 100)}%` }}
+                    transition={{ duration: 0.5, ease: 'easeOut' }}
+                    className="h-full bg-brand-500 rounded-full"
+                  />
+                </div>
+                <p className="text-xs text-brand-600 mt-1.5">
+                  Tienes <strong>{totalDisp} de {(saldoSel.dias_asignados || 0) + (saldoSel.es_feriado_legal ? (saldoSel.saldo_arrastre || 0) : 0)}</strong> días disponibles para {saldoSel.tipo_nombre}.
+                </p>
+              </motion.div>
+            )}
 
             {/* Banner informativo para tipos especiales */}
             {esEspecial && (
@@ -524,6 +606,13 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
                   {diasSolicitados} día(s) hábil(es)
                   {saldoSel && ` de ${totalDisp} disponibles`}
                 </p>
+
+                {saldoSel && !saldoInsuficiente && (
+                  <div className="flex justify-between text-xs pt-1.5 border-t border-brand-200">
+                    <span className="text-dark-500">Saldo restante tras esta solicitud</span>
+                    <span className="font-semibold text-dark-700">{Math.max(totalDisp - diasSolicitados, 0)} días</span>
+                  </div>
+                )}
 
                 {distribucion && !saldoInsuficiente && (
                   <div className="border-t border-brand-200 pt-2 space-y-1">

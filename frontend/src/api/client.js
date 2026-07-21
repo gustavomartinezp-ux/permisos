@@ -45,6 +45,13 @@ export const funcionariosApi = {
   bulk: (funcionarios) => api.post('/funcionarios/bulk', { funcionarios }),
   actualizarEmailCuenta: (id, email) => api.put(`/funcionarios/${id}/email`, { email }),
   resetearPasswordDefault: (id) => api.post(`/funcionarios/${id}/credenciales/reset-password`),
+  toggleCumpleanos: (id, mostrar_cumpleanos) => api.patch(`/funcionarios/${id}/mostrar-cumpleanos`, { mostrar_cumpleanos }),
+};
+
+export const birthdaysApi = {
+  hoy: () => api.get('/birthdays/today'),
+  like: (id) => api.post(`/birthdays/${id}/like`),
+  likers: (id) => api.get(`/birthdays/${id}/likers`),
 };
 
 export const tiposPermisosApi = {

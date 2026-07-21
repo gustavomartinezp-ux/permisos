@@ -909,4 +909,29 @@ router.put('/:id/saldos', requierePermiso('saldos.ajustar'), async (req, res) =>
   }
 });
 
+// Opt-out del módulo de cumpleaños — el propio funcionario decide si su
+// cumpleaños se publica en el muro social. Editable por el propio funcionario
+// o por quien ya puede editar sus datos básicos (RRHH/Admin/Secretaría).
+router.patch('/:id/mostrar-cumpleanos', async (req, res) => {
+  const { mostrar_cumpleanos } = req.body;
+  if (typeof mostrar_cumpleanos !== 'boolean') {
+    return res.status(400).json({ error: 'El campo mostrar_cumpleanos debe ser booleano' });
+  }
+  const esPropio = req.usuario.funcionario_id != null && req.usuario.funcionario_id == req.params.id;
+  if (!esPropio && !puedeEditarBasico(req)) {
+    return res.status(403).json({ error: 'No tienes permiso para cambiar esta preferencia' });
+  }
+  try {
+    const result = await pool.query(
+      `UPDATE funcionarios SET mostrar_cumpleanos = $1 WHERE id = $2 RETURNING id, mostrar_cumpleanos`,
+      [mostrar_cumpleanos, req.params.id]
+    );
+    if (!result.rows[0]) return res.status(404).json({ error: 'Funcionario no encontrado' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al actualizar la preferencia' });
+  }
+});
+
 module.exports = router;

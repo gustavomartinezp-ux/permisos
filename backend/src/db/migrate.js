@@ -172,6 +172,32 @@ const migrations = [
       ON CONFLICT DO NOTHING;
     `,
   },
+  {
+    // Módulo social de cumpleaños: mensaje institucional + likes. Los
+    // cumpleañeros del día se calculan en vivo desde funcionarios.fecha_nacimiento
+    // (sin tabla/cron aparte, ver backend/src/routes/birthdays.js). El "like"
+    // referencia funcionarios (no usuarios) para el cumpleañero porque no todo
+    // funcionario tiene cuenta de login, y referencia usuarios para quien
+    // reacciona (siempre autenticado). `dia` permite volver a felicitar cada
+    // año sin chocar con el Unique constraint.
+    id: 'cumpleanos_v1',
+    sql: `
+      ALTER TABLE funcionarios
+        ADD COLUMN IF NOT EXISTS mostrar_cumpleanos BOOLEAN NOT NULL DEFAULT TRUE;
+
+      CREATE TABLE IF NOT EXISTS birthday_likes (
+        id                       SERIAL PRIMARY KEY,
+        birthday_funcionario_id  INTEGER NOT NULL REFERENCES funcionarios(id) ON DELETE CASCADE,
+        liker_usuario_id         INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+        dia                      DATE NOT NULL DEFAULT CURRENT_DATE,
+        created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (birthday_funcionario_id, liker_usuario_id, dia)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_birthday_likes_funcionario_dia
+        ON birthday_likes(birthday_funcionario_id, dia);
+    `,
+  },
 ];
 
 async function runMigrations() {

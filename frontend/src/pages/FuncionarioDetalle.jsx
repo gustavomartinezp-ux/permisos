@@ -7,7 +7,7 @@ import {
   ArrowLeft, User, Calendar, Briefcase, Plus, Clock, BarChart3,
   Edit2, Save, X, Building2, ArrowLeftRight, FileDown, Printer, Camera, Trash2,
   KeyRound, Mail, ShieldAlert, RefreshCw, CheckCircle2, AlertTriangle, XCircle, Copy,
-  ArrowRight, History, CalendarRange, Search,
+  ArrowRight, History, CalendarRange, Search, PartyPopper,
 } from 'lucide-react';
 import { funcionariosApi, historialApi, solicitudesApi, suplenciasApi } from '../api/client';
 import { generarReporteFuncionario, imprimirReporteFuncionario } from '../utils/reportePDF';
@@ -72,6 +72,10 @@ export default function FuncionarioDetalle() {
   const { esAdmin, esSupervisor, esFuncionario, usuario, tienePermiso } = useAuth();
   const puedeGestionarCredenciales = tienePermiso('funcionarios.gestionar_credenciales');
   const esPropioFuncionario = esFuncionario && String(usuario?.funcionario_id) === String(id);
+  // Mismo criterio que el backend: dueño del perfil (sin importar su rol
+  // legacy) o alguien con permiso de edición de funcionarios.
+  const puedeVerToggleCumpleanos = String(usuario?.funcionario_id) === String(id)
+    || tienePermiso('funcionarios.editar_basico', 'funcionarios.editar');
   const [funcionario, setFuncionario] = useState(null);
   const [historial, setHistorial] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -120,6 +124,23 @@ export default function FuncionarioDetalle() {
   const [accionCuenta, setAccionCuenta] = useState(null); // 'email' | 'reset-password' | 'eliminar'
   const [cuentaForm, setCuentaForm] = useState({ password_admin: '', email: '' });
   const [procesandoCuenta, setProcesandoCuenta] = useState(false);
+
+  // Opt-out del muro social de cumpleaños
+  const [guardandoCumple, setGuardandoCumple] = useState(false);
+  const toggleCumpleanos = async () => {
+    if (guardandoCumple) return;
+    const nuevoValor = !funcionario.mostrar_cumpleanos;
+    setGuardandoCumple(true);
+    try {
+      await funcionariosApi.toggleCumpleanos(id, nuevoValor);
+      setFuncionario((prev) => ({ ...prev, mostrar_cumpleanos: nuevoValor }));
+      toast.success(nuevoValor ? 'Tu cumpleaños se mostrará en el muro social' : 'Tu cumpleaños ya no se mostrará');
+    } catch (err) {
+      toast.error(err?.response?.data?.error || 'Error al actualizar la preferencia');
+    } finally {
+      setGuardandoCumple(false);
+    }
+  };
 
   const cargarFuncionario = () => {
     setCargando(true);
@@ -635,6 +656,44 @@ export default function FuncionarioDetalle() {
               </div>
             </div>
           )}
+        </motion.div>
+      )}
+
+      {/* Opt-out del muro social de cumpleaños */}
+      {puedeVerToggleCumpleanos && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="card p-5"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <PartyPopper size={16} className="text-amber-500 flex-shrink-0" />
+              <div className="min-w-0">
+                <h3 className="text-sm font-semibold text-dark-700">Muro social de cumpleaños</h3>
+                <p className="text-xs text-dark-500">
+                  {funcionario.mostrar_cumpleanos
+                    ? 'Tu cumpleaños se publica y tus compañeros pueden felicitarte.'
+                    : 'Tu cumpleaños no se publica en el muro social.'}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={toggleCumpleanos}
+              disabled={guardandoCumple}
+              role="switch"
+              aria-checked={funcionario.mostrar_cumpleanos}
+              className={`relative flex-shrink-0 w-11 h-6 rounded-full transition-colors disabled:opacity-60 ${
+                funcionario.mostrar_cumpleanos ? 'bg-brand-600' : 'bg-dark-300'
+              }`}
+            >
+              <motion.span
+                className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow"
+                animate={{ x: funcionario.mostrar_cumpleanos ? 20 : 0 }}
+                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+              />
+            </button>
+          </div>
         </motion.div>
       )}
 

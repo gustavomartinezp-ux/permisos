@@ -5,6 +5,7 @@ import { Menu, X } from 'lucide-react';
 import Sidebar from './Sidebar';
 import CentroDescargas from './CentroDescargas';
 import CambiarPasswordModal from './CambiarPasswordModal';
+import CumpleanosBanner from './CumpleanosBanner';
 import { useAuth } from '../context/AuthContext';
 import { SISTEMA } from '../config/sistema';
 
@@ -66,6 +67,8 @@ export default function Layout() {
           </button>
           <p className="font-semibold text-dark-800 text-sm">CESFAM Los Cerros</p>
         </div>
+
+        <CumpleanosBanner />
 
         {/* Page content */}
         <main className="flex-1 overflow-y-auto">

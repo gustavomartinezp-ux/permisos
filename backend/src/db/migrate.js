@@ -220,6 +220,31 @@ const migrations = [
       ON CONFLICT DO NOTHING;
     `,
   },
+  {
+    // Bono de antigüedad en feriado legal: +5 días al cumplir 15 y 20 años de
+    // servicio (fecha_ingreso). Un solo registro por funcionario+tramo evita
+    // aplicar el bono más de una vez, y sirve a la vez como la alerta (se crea
+    // apenas se entra en la ventana de anticipación, antes de aplicarse).
+    id: 'hitos_antiguedad_v1',
+    sql: `
+      CREATE TABLE IF NOT EXISTS hitos_antiguedad (
+        id                   SERIAL PRIMARY KEY,
+        funcionario_id       INTEGER NOT NULL REFERENCES funcionarios(id) ON DELETE CASCADE,
+        tramo_anios          INTEGER NOT NULL CHECK (tramo_anios IN (15, 20)),
+        fecha_cumplimiento   DATE NOT NULL,
+        dias_agregados       INTEGER NOT NULL DEFAULT 5,
+        aplicado             BOOLEAN NOT NULL DEFAULT FALSE,
+        aplicado_en          TIMESTAMPTZ,
+        created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        UNIQUE (funcionario_id, tramo_anios)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_hitos_antiguedad_funcionario
+        ON hitos_antiguedad(funcionario_id);
+      CREATE INDEX IF NOT EXISTS idx_hitos_antiguedad_pendientes
+        ON hitos_antiguedad(fecha_cumplimiento) WHERE aplicado = FALSE;
+    `,
+  },
 ];
 
 async function runMigrations() {

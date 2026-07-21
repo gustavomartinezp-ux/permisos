@@ -54,6 +54,12 @@ export const birthdaysApi = {
   likers: (id) => api.get(`/birthdays/${id}/likers`),
 };
 
+export const feriadoLegalApi = {
+  misAlertas: () => api.get('/feriado-legal/alertas'),
+  alertasDe: (funcionarioId) => api.get(`/feriado-legal/alertas/${funcionarioId}`),
+  verificarHitos: () => api.post('/feriado-legal/verificar-hitos'),
+};
+
 export const tiposPermisosApi = {
   listar: () => api.get('/tipos-permisos'),
   crear: (data) => api.post('/tipos-permisos', data),

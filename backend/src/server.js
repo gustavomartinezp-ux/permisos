@@ -23,6 +23,8 @@ const rolesRoutes               = require('./routes/roles');
 const subrogacionesRoutes       = require('./routes/subrogaciones');
 const reporteTareasRoutes       = require('./routes/reporte-tareas');
 const birthdaysRoutes           = require('./routes/birthdays');
+const feriadoLegalRoutes        = require('./routes/feriado-legal');
+const { evaluarHitosAntiguedad } = require('./workers/antiguedadWorker');
 
 const app = express();
 
@@ -62,6 +64,7 @@ app.use('/api/roles',                    rolesRoutes);
 app.use('/api/subrogaciones',            subrogacionesRoutes);
 app.use('/api/reporte-tareas',           reporteTareasRoutes);
 app.use('/api/birthdays',                birthdaysRoutes);
+app.use('/api/feriado-legal',            feriadoLegalRoutes);
 
 app.get('/api/health', async (req, res) => {
   try {
@@ -83,6 +86,15 @@ runMigrations()
     app.listen(PORT, () => {
       console.log(`Servidor CESFAM Los Cerros corriendo en puerto ${PORT}`);
     });
+
+    // Monitoreo continuo de hitos de antigüedad (bono de +5 días a los 15/20
+    // años de servicio): se corre al levantar el servidor (por si estuvo
+    // dormido el día exacto de algún hito) y luego cada 6 horas. Sin cron
+    // externo — mismo criterio que el resto del proyecto (Render free tier).
+    evaluarHitosAntiguedad().catch((err) => console.error('[antiguedad] error en verificación inicial:', err.message));
+    setInterval(() => {
+      evaluarHitosAntiguedad().catch((err) => console.error('[antiguedad] error en verificación periódica:', err.message));
+    }, 6 * 60 * 60 * 1000);
   })
   .catch((err) => {
     console.error('No se pudieron ejecutar las migraciones:', err.message);

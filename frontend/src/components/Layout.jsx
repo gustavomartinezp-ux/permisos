@@ -6,6 +6,7 @@ import Sidebar from './Sidebar';
 import CentroDescargas from './CentroDescargas';
 import CambiarPasswordModal from './CambiarPasswordModal';
 import CumpleanosBanner from './CumpleanosBanner';
+import AlertaAntiguedad from './AlertaAntiguedad';
 import { useAuth } from '../context/AuthContext';
 import { SISTEMA } from '../config/sistema';
 
@@ -69,6 +70,7 @@ export default function Layout() {
         </div>
 
         <CumpleanosBanner />
+        <AlertaAntiguedad />
 
         {/* Page content */}
         <main className="flex-1 overflow-y-auto">

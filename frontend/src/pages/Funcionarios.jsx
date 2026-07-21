@@ -189,7 +189,7 @@ function CardSuplentes({ funcionario }) {
 }
 
 // ─── Tarjeta genérica ─────────────────────────────────────────────────────────
-function FuncionarioCard({ funcionario, index, onSolicitar, grupo, esAdmin, onPasivar, onActivar, onEliminar }) {
+function FuncionarioCard({ funcionario, index, onSolicitar, grupo, puedeEditar, puedeEliminar, onPasivar, onActivar, onEliminar }) {
   const cfg = GRUPOS[grupo] || GRUPOS.contrata;
   const [generandoPDF, setGenerandoPDF] = useState(false);
 
@@ -265,8 +265,8 @@ function FuncionarioCard({ funcionario, index, onSolicitar, grupo, esAdmin, onPa
             }
           </button>
 
-          {/* Acciones de admin */}
-          {esAdmin && funcionario.activo !== false && (
+          {/* Pasivar/activar: funcionarios.editar. Eliminar: funcionarios.eliminar (aparte, ADMIN_TI). */}
+          {puedeEditar && funcionario.activo !== false && (
             <button
               onClick={() => onPasivar(funcionario)}
               title="Pasivar funcionario"
@@ -275,22 +275,26 @@ function FuncionarioCard({ funcionario, index, onSolicitar, grupo, esAdmin, onPa
               <PowerOff size={15} />
             </button>
           )}
-          {esAdmin && funcionario.activo === false && (
+          {funcionario.activo === false && (
             <>
-              <button
-                onClick={() => onActivar(funcionario)}
-                title="Activar funcionario"
-                className="p-1.5 rounded-lg hover:bg-emerald-50 text-dark-400 hover:text-emerald-600 transition-colors"
-              >
-                <Power size={15} />
-              </button>
-              <button
-                onClick={() => onEliminar(funcionario)}
-                title="Eliminar definitivamente"
-                className="p-1.5 rounded-lg hover:bg-red-50 text-dark-400 hover:text-red-600 transition-colors"
-              >
-                <Trash2 size={15} />
-              </button>
+              {puedeEditar && (
+                <button
+                  onClick={() => onActivar(funcionario)}
+                  title="Activar funcionario"
+                  className="p-1.5 rounded-lg hover:bg-emerald-50 text-dark-400 hover:text-emerald-600 transition-colors"
+                >
+                  <Power size={15} />
+                </button>
+              )}
+              {puedeEliminar && (
+                <button
+                  onClick={() => onEliminar(funcionario)}
+                  title="Eliminar definitivamente"
+                  className="p-1.5 rounded-lg hover:bg-red-50 text-dark-400 hover:text-red-600 transition-colors"
+                >
+                  <Trash2 size={15} />
+                </button>
+              )}
             </>
           )}
 
@@ -323,7 +327,11 @@ function FuncionarioCard({ funcionario, index, onSolicitar, grupo, esAdmin, onPa
 
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function Funcionarios({ grupo }) {
-  const { esSupervisor, esAdmin } = useAuth();
+  const { esSupervisor, tienePermiso } = useAuth();
+  const puedeCrear = tienePermiso('funcionarios.crear');
+  const puedeEditar = tienePermiso('funcionarios.editar', 'funcionarios.editar_basico');
+  const puedeEliminar = tienePermiso('funcionarios.eliminar');
+  const puedeVerPasivos = tienePermiso('funcionarios.editar', 'funcionarios.eliminar');
   const cfg = GRUPOS[grupo] || GRUPOS.contrata;
 
   const [funcionarios, setFuncionarios] = useState([]);
@@ -446,7 +454,7 @@ export default function Funcionarios({ grupo }) {
           <p className="text-dark-500 text-sm mt-0.5">{cfg.desc}</p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
-          {esAdmin && (
+          {puedeVerPasivos && (
             <div className="flex rounded-lg border border-dark-200 overflow-hidden text-xs font-medium">
               <button
                 onClick={() => { setVerPasivos(false); setBusqueda(''); }}
@@ -462,7 +470,7 @@ export default function Funcionarios({ grupo }) {
               </button>
             </div>
           )}
-          {esAdmin && !verPasivos && (
+          {puedeCrear && !verPasivos && (
             <>
               <button onClick={() => setShowBulk(true)} className="btn-secondary">
                 <Upload size={15} />
@@ -533,7 +541,8 @@ export default function Funcionarios({ grupo }) {
               funcionario={f}
               index={i}
               grupo={grupo}
-              esAdmin={esAdmin}
+              puedeEditar={puedeEditar}
+              puedeEliminar={puedeEliminar}
               onSolicitar={esSupervisor && grupo !== 'honorarios' ? setModalSolicitud : null}
               onPasivar={setConfirmPasivar}
               onActivar={handleActivar}

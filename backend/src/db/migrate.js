@@ -198,6 +198,28 @@ const migrations = [
         ON birthday_likes(birthday_funcionario_id, dia);
     `,
   },
+  {
+    // RRHH_ADMIN y SECRETARY pasan a tener todos los permisos operativos/de
+    // personal (funcionarios, solicitudes, saldos, reportes, auditoría de
+    // solo lectura) — deliberadamente SIN funcionarios.eliminar (sigue
+    // exclusivo de ADMIN_TI) ni usuarios.gestionar_roles/configuracion.gestionar
+    // (funciones de administración técnica del sistema, no de personal).
+    id: 'permisos_v2_rrhh_secretaria_amplios',
+    sql: `
+      INSERT INTO role_permissions (role_id, permission_id)
+      SELECT r.id, p.id FROM roles r JOIN permissions p ON
+        r.codigo IN ('RRHH_ADMIN', 'SECRETARY')
+        AND p.codigo IN (
+          'funcionarios.crear', 'funcionarios.editar', 'funcionarios.editar_basico',
+          'funcionarios.gestionar_credenciales',
+          'solicitudes.crear_terceros', 'solicitudes.pre_aprobar', 'solicitudes.aprobar', 'solicitudes.reintegrar',
+          'saldos.ajustar',
+          'reportes.ver_globales', 'reportes.ver_operativos',
+          'auditoria.ver_todo'
+        )
+      ON CONFLICT DO NOTHING;
+    `,
+  },
 ];
 
 async function runMigrations() {

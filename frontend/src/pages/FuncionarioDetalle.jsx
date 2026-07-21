@@ -72,6 +72,10 @@ export default function FuncionarioDetalle() {
   const navigate = useNavigate();
   const { esAdmin, esSupervisor, esFuncionario, usuario, tienePermiso } = useAuth();
   const puedeGestionarCredenciales = tienePermiso('funcionarios.gestionar_credenciales');
+  const puedeEditarFuncionario = tienePermiso('funcionarios.editar', 'funcionarios.editar_basico');
+  const puedeCrearParaTerceros = tienePermiso('solicitudes.crear_terceros');
+  const puedeAjustarSaldos = tienePermiso('saldos.ajustar');
+  const puedeEliminarFuncionario = tienePermiso('funcionarios.eliminar');
   const esPropioFuncionario = esFuncionario && String(usuario?.funcionario_id) === String(id);
   // Deliberadamente NO auto-servicio: el propio funcionario no controla su
   // publicación, solo quien ya puede editar datos básicos (RRHH/Admin/Secretaría).
@@ -401,7 +405,7 @@ export default function FuncionarioDetalle() {
                 : <span>{funcionario.nombres[0]}{funcionario.apellidos[0]}</span>
               }
             </div>
-            {esAdmin && (
+            {puedeEditarFuncionario && (
               <button
                 onClick={() => fotoInputRef.current?.click()}
                 disabled={subiendoFoto}
@@ -414,7 +418,7 @@ export default function FuncionarioDetalle() {
                 }
               </button>
             )}
-            {funcionario.foto_url && esAdmin && (
+            {funcionario.foto_url && puedeEditarFuncionario && (
               <button
                 onClick={eliminarFoto}
                 disabled={subiendoFoto}
@@ -515,13 +519,13 @@ export default function FuncionarioDetalle() {
             </div>
           </div>
           <div className="flex flex-col gap-2 flex-shrink-0">
-            {(esAdmin || esPropioFuncionario) && (
+            {(esAdmin || esPropioFuncionario || puedeCrearParaTerceros) && (
               <button onClick={() => setShowModal(true)} className="btn-primary">
                 <Plus size={16} />
                 <span className="hidden sm:inline">Nueva solicitud</span>
               </button>
             )}
-            {esAdmin && (
+            {puedeEditarFuncionario && (
               <button onClick={() => setShowEditModal(true)} className="btn-secondary">
                 <Edit2 size={15} />
                 <span className="hidden sm:inline">Editar datos</span>
@@ -554,7 +558,7 @@ export default function FuncionarioDetalle() {
       </motion.div>
 
       {/* Gestión de cuenta / credenciales institucionales */}
-      {(puedeGestionarCredenciales || (esAdmin && funcionario.activo === false)) && (
+      {(puedeGestionarCredenciales || (puedeEliminarFuncionario && funcionario.activo === false)) && (
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -599,7 +603,7 @@ export default function FuncionarioDetalle() {
             );
           })()}
 
-          {esAdmin && funcionario.activo === false && (
+          {puedeEliminarFuncionario && funcionario.activo === false && (
             <div className="pt-1 border-t border-dark-100">
               <button
                 onClick={() => abrirAccion('eliminar')}
@@ -719,7 +723,7 @@ export default function FuncionarioDetalle() {
 
       {/* Tabs */}
       {(() => {
-        const mostrarSuplencias = funcionario?.tipo_contrato === 'Suplencia' || (esAdmin || esSupervisor);
+        const mostrarSuplencias = funcionario?.tipo_contrato === 'Suplencia' || esAdmin || esSupervisor || puedeEditarFuncionario;
         const tabs = [
           { id: 'saldos',      label: 'Saldos',      icon: BarChart3 },
           { id: 'historial',   label: 'Historial',   icon: Clock },
@@ -747,7 +751,7 @@ export default function FuncionarioDetalle() {
       {/* Tab: Saldos */}
       {tab === 'saldos' && (
         <div className="space-y-4">
-          {esAdmin && !editandoSaldos && funcionario.saldos?.length > 0 && (
+          {puedeAjustarSaldos && !editandoSaldos && funcionario.saldos?.length > 0 && (
             <div className="flex justify-end">
               <button onClick={iniciarEdicionSaldos} className="btn-secondary gap-2">
                 <Edit2 size={15} />
@@ -892,7 +896,7 @@ export default function FuncionarioDetalle() {
             <p className="text-sm text-dark-500">
               Historial completo de suplencias realizadas por este funcionario
             </p>
-            {esAdmin && (
+            {puedeEditarFuncionario && (
               <button
                 onClick={() => { setSupForm({ funcionario_reemplazado_id: '', nombre_reemplazado: '', rut_reemplazado: '', cargo_reemplazado: '', unidad: '', motivo_reemplazo: '', fecha_inicio: '', fecha_termino: '', observaciones: '', documento_respaldo: '' }); setShowNuevaSup(true); }}
                 className="btn-primary"
@@ -960,7 +964,7 @@ export default function FuncionarioDetalle() {
                         </span>
                         <span className="text-xs text-dark-400 italic">Sin registro formal en historial</span>
                       </div>
-                      {esAdmin && (
+                      {puedeEditarFuncionario && (
                         <button
                           onClick={() => {
                             setSupForm({
@@ -1093,7 +1097,7 @@ export default function FuncionarioDetalle() {
                           </span>
                         )}
                       </div>
-                      {esAdmin && s.estado !== 'finalizada' && (
+                      {puedeEditarFuncionario && s.estado !== 'finalizada' && (
                         <div className="flex gap-2">
                           <button
                             onClick={() => { setProrrogaForm({ fecha: '', obs: '' }); setProrrogarSup(s); }}

@@ -17,7 +17,9 @@ router.get('/', async (req, res) => {
   try {
     const anio = req.query.anio || new Date().getFullYear();
 
-    const soloInactivos = req.usuario.rol === 'admin' && req.query.activo === 'false';
+    const puedeVerPasivos = req.usuario.rol === 'admin'
+      || (req.usuario.permisos || []).some((p) => ['funcionarios.editar', 'funcionarios.eliminar'].includes(p));
+    const soloInactivos = puedeVerPasivos && req.query.activo === 'false';
     const whereParts = [soloInactivos ? 'f.activo = false' : 'f.activo = true'];
     const queryParams = [anio];
 

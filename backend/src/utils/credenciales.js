@@ -1,13 +1,12 @@
 const bcrypt = require('bcryptjs');
 
-// Regla institucional: la contraseña por defecto es el RUT del funcionario
-// sin puntos ni guión (ej. "12.345.678-9" -> "123456789K" si el DV es letra).
-const limpiarRut = (rut) => (rut || '').replace(/[^0-9kK]/g, '').toUpperCase();
+// Contraseña por defecto institucional, la misma que ya usa la creación de
+// funcionarios (POST /funcionarios, /bulk) vía INITIAL_PASSWORD — se unifica
+// aquí para que exista una única definición de "contraseña por defecto".
+const generarPasswordDefault = () => process.env.INITIAL_PASSWORD || 'cesfam2026';
 
-const generarPasswordDefault = (rut) => limpiarRut(rut);
-
-const hashPasswordDefault = async (rut) => bcrypt.hash(generarPasswordDefault(rut), 10);
+const hashPasswordDefault = async () => bcrypt.hash(generarPasswordDefault(), 10);
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-module.exports = { limpiarRut, generarPasswordDefault, hashPasswordDefault, EMAIL_REGEX };
+module.exports = { generarPasswordDefault, hashPasswordDefault, EMAIL_REGEX };

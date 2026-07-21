@@ -49,7 +49,9 @@ const CONTRATO_COLORS = {
 
 const TABS_VALIDOS = ['saldos', 'historial', 'solicitudes', 'suplencias'];
 
-const limpiarRut = (rut) => (rut || '').replace(/[^0-9kK]/g, '').toUpperCase();
+// Contraseña por defecto institucional — debe coincidir con INITIAL_PASSWORD
+// en backend/.env (ver backend/src/utils/credenciales.js).
+const PASSWORD_DEFAULT = 'cesfam2026';
 
 // Estado de cuenta institucional: rojo (sin correo) / amarillo (contraseña por
 // defecto sin cambiar) / verde (contraseña personalizada ya definida).
@@ -326,7 +328,7 @@ export default function FuncionarioDetalle() {
   // al portapapeles para que el staff se las entregue por el canal que use
   // habitualmente (WhatsApp, papel, llamada).
   const copiarCredenciales = async () => {
-    const texto = `Correo: ${funcionario.usuario_email}\nContraseña temporal: ${limpiarRut(funcionario.rut)}\nDebe cambiarla en su primer inicio de sesión.`;
+    const texto = `Correo: ${funcionario.usuario_email}\nContraseña temporal: ${PASSWORD_DEFAULT}\nDebe cambiarla en su primer inicio de sesión.`;
     try {
       await navigator.clipboard.writeText(texto);
       toast.success('Credenciales copiadas al portapapeles');
@@ -592,7 +594,7 @@ export default function FuncionarioDetalle() {
               )}
               {accionCuenta === 'reset-password' && (
                 <p className="text-xs text-dark-500">
-                  La nueva contraseña será el RUT sin puntos ni guión (<span className="font-mono font-medium text-dark-700">{limpiarRut(funcionario.rut)}</span>).
+                  La nueva contraseña será <span className="font-mono font-medium text-dark-700">{PASSWORD_DEFAULT}</span>.
                   Deberá cambiarla al iniciar sesión.
                 </p>
               )}

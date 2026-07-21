@@ -537,7 +537,7 @@ router.put('/:id', async (req, res, next) => {
 });
 
 // Registrar/actualizar el email institucional de un funcionario. Si aún no
-// tenía cuenta de usuario, la crea con la contraseña por defecto (RUT limpio)
+// tenía cuenta de usuario, la crea con la contraseña por defecto (INITIAL_PASSWORD)
 // y must_change_password=true. Solo ADMIN_TI / RRHH_ADMIN / SECRETARY.
 router.put('/:id/email', requierePermiso('funcionarios.gestionar_credenciales'), async (req, res) => {
   const { email } = req.body;
@@ -552,7 +552,7 @@ router.put('/:id/email', requierePermiso('funcionarios.gestionar_credenciales'),
   try {
     await client.query('BEGIN');
 
-    const func = await client.query('SELECT rut FROM funcionarios WHERE id = $1 FOR UPDATE', [funcId]);
+    const func = await client.query('SELECT id FROM funcionarios WHERE id = $1 FOR UPDATE', [funcId]);
     if (func.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Funcionario no encontrado' });
@@ -575,7 +575,7 @@ router.put('/:id/email', requierePermiso('funcionarios.gestionar_credenciales'),
     let usuarioId, mustChangePassword, cuentaCreada = false;
 
     if (existente.rows.length === 0) {
-      const hash = await hashPasswordDefault(func.rows[0].rut);
+      const hash = await hashPasswordDefault();
       const nuevo = await client.query(
         `INSERT INTO usuarios (email, password_hash, rol, funcionario_id, must_change_password)
          VALUES ($1, $2, 'funcionario', $3, TRUE) RETURNING id`,
@@ -627,15 +627,16 @@ router.put('/:id/email', requierePermiso('funcionarios.gestionar_credenciales'),
   }
 });
 
-// Asignar/resetear la contraseña por defecto (RUT limpio) — requiere que el
-// funcionario ya tenga email/cuenta registrada. Marca must_change_password=true.
+// Asignar/resetear la contraseña por defecto (INITIAL_PASSWORD, ej. "cesfam2026")
+// — requiere que el funcionario ya tenga email/cuenta registrada.
+// Marca must_change_password=true.
 router.post('/:id/credenciales/reset-password', requierePermiso('funcionarios.gestionar_credenciales'), async (req, res) => {
   const funcId = req.params.id;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    const func = await client.query('SELECT rut FROM funcionarios WHERE id = $1', [funcId]);
+    const func = await client.query('SELECT id FROM funcionarios WHERE id = $1', [funcId]);
     if (func.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Funcionario no encontrado' });
@@ -650,7 +651,7 @@ router.post('/:id/credenciales/reset-password', requierePermiso('funcionarios.ge
       return res.status(400).json({ error: 'Debe registrar un correo institucional antes de asignar una contraseña' });
     }
 
-    const hash = await hashPasswordDefault(func.rows[0].rut);
+    const hash = await hashPasswordDefault();
     await client.query(
       'UPDATE usuarios SET password_hash = $1, must_change_password = TRUE WHERE id = $2',
       [hash, usuario.rows[0].id]

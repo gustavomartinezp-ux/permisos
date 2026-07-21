@@ -62,6 +62,16 @@ export const licenciasMedicasApi = {
   eliminar: (id) => api.delete(`/licencias-medicas/${id}`),
 };
 
+export const cometidosComisionesApi = {
+  listar: (params = {}) => api.get('/cometidos-comisiones', { params }),
+  obtener: (id) => api.get(`/cometidos-comisiones/${id}`),
+  limiteComision: (funcionarioId, anio) => api.get(`/cometidos-comisiones/limite-comision/${funcionarioId}`, { params: { anio } }),
+  crear: (data) => api.post('/cometidos-comisiones', data),
+  aprobarJefatura: (id) => api.patch(`/cometidos-comisiones/${id}/aprobar-jefatura`),
+  aprobarDireccion: (id) => api.patch(`/cometidos-comisiones/${id}/aprobar-direccion`),
+  rechazar: (id, observaciones) => api.patch(`/cometidos-comisiones/${id}/rechazar`, { observaciones }),
+};
+
 export const feriadoLegalApi = {
   misAlertas: () => api.get('/feriado-legal/alertas'),
   alertasDe: (funcionarioId) => api.get(`/feriado-legal/alertas/${funcionarioId}`),

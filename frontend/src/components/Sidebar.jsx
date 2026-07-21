@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import {
   LayoutDashboard, Users, FileText, Clock, LogOut,
   ChevronRight, Settings, UserCircle, KeyRound, Hourglass, BarChart2, UserCheck, Briefcase, UserCog, Info, ShieldCheck,
-  HeartPulse,
+  HeartPulse, Plane,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import CambiarPasswordModal from './CambiarPasswordModal';
@@ -23,6 +23,7 @@ const NAV_SUPERVISOR = [
   { to: '/suplentes',            label: 'Personal Suplente',   icon: UserCog,   groupColor: 'text-purple-400',  roles: ELEVADOS },
   { header: 'Gestión',           roles: ELEVADOS },
   { to: '/solicitudes',          label: 'Solicitudes',         icon: FileText,    roles: ELEVADOS },
+  { to: '/cometidos-comisiones', label: 'Cometidos/Comisiones',icon: Plane,       roles: ELEVADOS },
   { to: '/horas-compensatorias', label: 'Hrs. Compensat.',     icon: Hourglass,   roles: ELEVADOS },
   { to: '/historial',            label: 'Historial',           icon: Clock,       roles: ELEVADOS },
   { to: '/suplencias',           label: 'Hist. Suplencias',    icon: UserCheck,   roles: ELEVADOS },
@@ -69,6 +70,7 @@ export default function Sidebar({ mobile = false, onClose }) {
     { to: '/solicitudes',            label: 'Mis Solicitudes',    icon: FileText },
     { to: '/horas-compensatorias',   label: 'Hrs. Compensatorias',icon: Hourglass },
     { to: '/historial',              label: 'Mi Historial',       icon: Clock },
+    { to: '/cometidos-comisiones',   label: 'Cometidos/Comisiones',icon: Plane },
     { header: 'Información' },
     { to: '/acerca',                 label: 'Acerca del Sistema',  icon: Info },
   ];

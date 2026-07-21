@@ -286,6 +286,67 @@ const migrations = [
       ON CONFLICT DO NOTHING;
     `,
   },
+  {
+    // Cometidos Funcionarios y Comisiones de Servicio (Ley 19.378 / 18.883):
+    // una sola tabla con discriminador `tipo`, mismo criterio que
+    // tipos_permisos/solicitudes en este proyecto (una entidad, variantes por
+    // columna/flag, en vez de tablas paralelas casi idénticas). Reutiliza los
+    // permisos ya existentes de aprobación de solicitudes (mismo concepto de
+    // autoridad: jefatura pre-aprueba, dirección aprueba en definitiva).
+    id: 'cometidos_comisiones_v1',
+    sql: `
+      CREATE TABLE IF NOT EXISTS cometidos_comisiones (
+        id                      SERIAL PRIMARY KEY,
+        tipo                    VARCHAR(10) NOT NULL CHECK (tipo IN ('cometido', 'comision')),
+        funcionario_id          INTEGER NOT NULL REFERENCES funcionarios(id) ON DELETE CASCADE,
+        origen                  VARCHAR(150) NOT NULL,
+        destino                 VARCHAR(150) NOT NULL,
+        motivo                  TEXT NOT NULL,
+        fecha_inicio            DATE NOT NULL,
+        fecha_fin               DATE NOT NULL,
+        dias                    INTEGER NOT NULL,
+
+        -- Cometido Funcionario
+        sale_de_comuna          BOOLEAN NOT NULL DEFAULT FALSE,
+        sale_de_region          BOOLEAN NOT NULL DEFAULT FALSE,
+        requiere_movilizacion   BOOLEAN NOT NULL DEFAULT FALSE,
+        monto_movilizacion      NUMERIC(10,0),
+        vehiculo_institucional  VARCHAR(30),
+
+        -- Comisión de Servicio
+        pernocta                BOOLEAN NOT NULL DEFAULT FALSE,
+        decreto_asociado        VARCHAR(50),
+        documento_respaldo      TEXT,
+
+        -- Viático (aplica a ambos, con reglas distintas)
+        requiere_viatico        BOOLEAN NOT NULL DEFAULT FALSE,
+        tipo_viatico            VARCHAR(10) CHECK (tipo_viatico IN ('completo', 'parcial')),
+        monto_viatico           NUMERIC(10,0),
+
+        -- Workflow
+        estado                  VARCHAR(20) NOT NULL DEFAULT 'pendiente'
+          CHECK (estado IN ('pendiente', 'aprobado_jefatura', 'aprobado_direccion', 'rechazado')),
+        aprobado_jefatura_por   INTEGER REFERENCES usuarios(id),
+        aprobado_jefatura_en    TIMESTAMPTZ,
+        aprobado_direccion_por  INTEGER REFERENCES usuarios(id),
+        aprobado_direccion_en   TIMESTAMPTZ,
+        rechazado_por           INTEGER REFERENCES usuarios(id),
+        rechazado_en            TIMESTAMPTZ,
+        observaciones_rechazo   TEXT,
+
+        creado_por              INTEGER REFERENCES usuarios(id),
+        created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+        CONSTRAINT cometido_comision_fecha_valida CHECK (fecha_fin >= fecha_inicio),
+        CONSTRAINT cometido_comision_dias_positivos CHECK (dias > 0)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_cometidos_comisiones_funcionario
+        ON cometidos_comisiones(funcionario_id, fecha_inicio DESC);
+      CREATE INDEX IF NOT EXISTS idx_cometidos_comisiones_tipo_anio
+        ON cometidos_comisiones(tipo, funcionario_id, fecha_inicio);
+    `,
+  },
 ];
 
 async function runMigrations() {

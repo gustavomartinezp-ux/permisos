@@ -51,6 +51,7 @@ import Suplencias from './pages/Suplencias';
 import AcercaDel from './pages/AcercaDel';
 import RolesPermisos from './pages/RolesPermisos';
 import LicenciasMedicas from './pages/LicenciasMedicas';
+import CometidosComisiones from './pages/CometidosComisiones';
 
 // Redirige según rol al entrar a la app
 function HomeRedirect() {
@@ -129,6 +130,7 @@ function AppRoutes() {
         {/* Accesibles a todos (backend filtra por funcionario_id) */}
         <Route path="/funcionarios/:id"        element={<FuncionarioDetalle />} />
         <Route path="/solicitudes"             element={<Solicitudes />} />
+        <Route path="/cometidos-comisiones"    element={<CometidosComisiones />} />
         <Route path="/horas-compensatorias"    element={<HorasCompensatorias />} />
         <Route path="/historial"               element={<Historial />} />
         <Route path="/roles"                   element={<SoloSupervisor><RolesPermisos /></SoloSupervisor>} />

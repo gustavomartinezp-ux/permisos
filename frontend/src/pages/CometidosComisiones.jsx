@@ -37,10 +37,10 @@ function EstadoBadge({ estado }) {
 }
 
 // ─── Modal: Nueva solicitud ────────────────────────────────────────────────────
-function NuevaSolicitudModal({ funcionarios, onClose, onSuccess }) {
+function NuevaSolicitudModal({ funcionarios, funcionarioPropio, onClose, onSuccess }) {
   const [tipo, setTipo] = useState('cometido');
   const [form, setForm] = useState({
-    funcionario_id: '', origen: '', destino: '', motivo: '', fecha_inicio: '', fecha_fin: '',
+    funcionario_id: funcionarioPropio?.funcionario_id || '', origen: '', destino: '', motivo: '', fecha_inicio: '', fecha_fin: '',
     sale_de_comuna: false, sale_de_region: false, requiere_movilizacion: false, monto_movilizacion: '',
     vehiculo_institucional: '', pernocta: false, decreto_asociado: '', documento_respaldo: '',
     requiere_viatico: false, monto_viatico: '',
@@ -119,28 +119,37 @@ function NuevaSolicitudModal({ funcionarios, onClose, onSuccess }) {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div ref={dropdownRef} className="relative">
-            <label className="block text-xs font-medium text-dark-700 mb-1.5">Funcionario</label>
-            <div className="relative">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-dark-400" />
-              <input type="text" value={busqueda}
-                onChange={(e) => { setBusqueda(e.target.value); setShowDropdown(true); set('funcionario_id', ''); }}
-                onFocus={() => setShowDropdown(true)}
-                placeholder="Buscar por nombre o RUT..." className="input-field pl-9" />
-            </div>
-            {showDropdown && sugerencias.length > 0 && (
-              <div className="absolute z-20 mt-1 w-full bg-white rounded-xl border border-dark-200 shadow-lg max-h-48 overflow-y-auto">
-                {sugerencias.map((f) => (
-                  <button type="button" key={f.id}
-                    onClick={() => { set('funcionario_id', f.id); setBusqueda(`${f.nombres} ${f.apellidos}`); setShowDropdown(false); }}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-dark-50 flex flex-col">
-                    <span className="font-medium text-dark-800">{f.nombres} {f.apellidos}</span>
-                    <span className="text-xs text-dark-400">{f.rut} · {f.cargo}</span>
-                  </button>
-                ))}
+          {funcionarioPropio ? (
+            <div>
+              <label className="block text-xs font-medium text-dark-700 mb-1.5">Funcionario</label>
+              <div className="input-field bg-dark-50 text-dark-600">
+                {funcionarioPropio.nombres} {funcionarioPropio.apellidos} (tú)
               </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div ref={dropdownRef} className="relative">
+              <label className="block text-xs font-medium text-dark-700 mb-1.5">Funcionario</label>
+              <div className="relative">
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-dark-400" />
+                <input type="text" value={busqueda}
+                  onChange={(e) => { setBusqueda(e.target.value); setShowDropdown(true); set('funcionario_id', ''); }}
+                  onFocus={() => setShowDropdown(true)}
+                  placeholder="Buscar por nombre o RUT..." className="input-field pl-9" />
+              </div>
+              {showDropdown && sugerencias.length > 0 && (
+                <div className="absolute z-20 mt-1 w-full bg-white rounded-xl border border-dark-200 shadow-lg max-h-48 overflow-y-auto">
+                  {sugerencias.map((f) => (
+                    <button type="button" key={f.id}
+                      onClick={() => { set('funcionario_id', f.id); setBusqueda(`${f.nombres} ${f.apellidos}`); setShowDropdown(false); }}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-dark-50 flex flex-col">
+                      <span className="font-medium text-dark-800">{f.nombres} {f.apellidos}</span>
+                      <span className="text-xs text-dark-400">{f.rut} · {f.cargo}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {limite && (
             <div className={`rounded-xl p-3 text-xs flex items-start gap-2 ${limite.dias_disponibles > 0 ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
@@ -251,7 +260,7 @@ function NuevaSolicitudModal({ funcionarios, onClose, onSuccess }) {
 
 // ─── Página principal ──────────────────────────────────────────────────────────
 export default function CometidosComisiones() {
-  const { esAdmin, esSupervisor, tienePermiso } = useAuth();
+  const { esAdmin, esSupervisor, esSoloAutoservicio, usuario, tienePermiso } = useAuth();
   const puedeAprobarDireccion = tienePermiso('solicitudes.aprobar');
   const [solicitudes, setSolicitudes] = useState([]);
   const [funcionarios, setFuncionarios] = useState([]);
@@ -263,14 +272,18 @@ export default function CometidosComisiones() {
 
   const cargar = useCallback(() => {
     setCargando(true);
+    // GET /funcionarios devuelve 403 para un funcionario en autoservicio puro
+    // (y el interceptor global trata cualquier 403 como sesión inválida y
+    // fuerza logout) — no se pide esa lista si no la va a poder ver de todos
+    // modos, ya que solo puede solicitar para sí mismo.
     Promise.all([
       cometidosComisionesApi.listar(filtroTipo ? { tipo: filtroTipo } : {}),
-      funcionariosApi.listar(),
+      esSoloAutoservicio ? Promise.resolve({ data: [] }) : funcionariosApi.listar(),
     ])
       .then(([sol, func]) => { setSolicitudes(sol.data); setFuncionarios(func.data); })
       .catch(() => toast.error('Error al cargar solicitudes'))
       .finally(() => setCargando(false));
-  }, [filtroTipo]);
+  }, [filtroTipo, esSoloAutoservicio]);
 
   useEffect(() => { cargar(); }, [cargar]);
 
@@ -362,7 +375,12 @@ export default function CometidosComisiones() {
 
       <AnimatePresence>
         {showModal && (
-          <NuevaSolicitudModal funcionarios={funcionarios} onClose={() => setShowModal(false)} onSuccess={() => { setShowModal(false); cargar(); }} />
+          <NuevaSolicitudModal
+            funcionarios={funcionarios}
+            funcionarioPropio={esSoloAutoservicio ? usuario : null}
+            onClose={() => setShowModal(false)}
+            onSuccess={() => { setShowModal(false); cargar(); }}
+          />
         )}
       </AnimatePresence>
 

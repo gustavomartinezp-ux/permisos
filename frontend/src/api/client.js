@@ -54,6 +54,14 @@ export const birthdaysApi = {
   likers: (id) => api.get(`/birthdays/${id}/likers`),
 };
 
+export const licenciasMedicasApi = {
+  listar: (params = {}) => api.get('/licencias-medicas', { params }),
+  porFuncionario: (id) => api.get(`/licencias-medicas/funcionario/${id}`),
+  crear: (data) => api.post('/licencias-medicas', data),
+  actualizar: (id, data) => api.put(`/licencias-medicas/${id}`, data),
+  eliminar: (id) => api.delete(`/licencias-medicas/${id}`),
+};
+
 export const feriadoLegalApi = {
   misAlertas: () => api.get('/feriado-legal/alertas'),
   alertasDe: (funcionarioId) => api.get(`/feriado-legal/alertas/${funcionarioId}`),

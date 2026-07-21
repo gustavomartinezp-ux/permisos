@@ -50,6 +50,7 @@ import Reportes from './pages/Reportes';
 import Suplencias from './pages/Suplencias';
 import AcercaDel from './pages/AcercaDel';
 import RolesPermisos from './pages/RolesPermisos';
+import LicenciasMedicas from './pages/LicenciasMedicas';
 
 // Redirige según rol al entrar a la app
 function HomeRedirect() {
@@ -114,6 +115,7 @@ function AppRoutes() {
         <Route path="/dashboard"      element={<SoloSupervisor><Dashboard /></SoloSupervisor>} />
         <Route path="/configuracion"  element={<RequiereRol roles={['ADMIN_TI']}><Configuracion /></RequiereRol>} />
         <Route path="/tipos-permisos" element={<RequiereRol roles={['ADMIN_TI', 'RRHH_ADMIN']}><TiposPermisos /></RequiereRol>} />
+        <Route path="/licencias-medicas" element={<RequiereRol roles={['RRHH_ADMIN', 'SECRETARY']}><LicenciasMedicas /></RequiereRol>} />
 
         {/* Accesibles a todos (backend filtra por funcionario_id) */}
         <Route path="/reportes"   element={<SoloSupervisor><Reportes /></SoloSupervisor>} />

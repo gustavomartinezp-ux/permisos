@@ -245,6 +245,47 @@ const migrations = [
         ON hitos_antiguedad(fecha_cumplimiento) WHERE aplicado = FALSE;
     `,
   },
+  {
+    // Licencias Médicas: entidad separada de tipos_permisos/solicitudes (no
+    // debe aparecer como "tipo de permiso" en los menús regulares). El tipo
+    // 'LICENCIA' existente se desactiva (no se borra: 0 solicitudes reales lo
+    // usaban nunca, solo saldos en 0 y unos pocos ajustes de prueba del propio
+    // usuario — se deja la fila por si alguna vez hace falta revisar historial,
+    // pero deja de aparecer en cualquier flujo de permisos regulares).
+    id: 'licencias_medicas_v1',
+    sql: `
+      UPDATE tipos_permisos SET activo = FALSE WHERE codigo = 'LICENCIA';
+
+      CREATE TABLE IF NOT EXISTS licencias_medicas (
+        id              SERIAL PRIMARY KEY,
+        funcionario_id  INTEGER NOT NULL REFERENCES funcionarios(id) ON DELETE CASCADE,
+        fecha_inicio    DATE NOT NULL,
+        fecha_fin       DATE NOT NULL,
+        dias            INTEGER NOT NULL,
+        folio           VARCHAR(50),
+        entidad_emisora VARCHAR(100),
+        observaciones   TEXT,
+        registrado_por  INTEGER REFERENCES usuarios(id),
+        created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CONSTRAINT licencia_fecha_valida CHECK (fecha_fin >= fecha_inicio),
+        CONSTRAINT licencia_dias_positivos CHECK (dias > 0)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_licencias_medicas_funcionario
+        ON licencias_medicas(funcionario_id, fecha_inicio DESC);
+
+      INSERT INTO permissions (codigo, descripcion) VALUES
+        ('licencias_medicas.gestionar', 'Registrar, editar y eliminar licencias médicas de funcionarios')
+      ON CONFLICT (codigo) DO NOTHING;
+
+      INSERT INTO role_permissions (role_id, permission_id)
+      SELECT r.id, p.id FROM roles r JOIN permissions p ON
+        p.codigo = 'licencias_medicas.gestionar'
+        AND r.codigo IN ('RRHH_ADMIN', 'SECRETARY')
+      ON CONFLICT DO NOTHING;
+    `,
+  },
 ];
 
 async function runMigrations() {

@@ -7,9 +7,9 @@ import {
   ArrowLeft, User, Calendar, Briefcase, Plus, Clock, BarChart3,
   Edit2, Save, X, Building2, ArrowLeftRight, FileDown, Printer, Camera, Trash2,
   KeyRound, Mail, ShieldAlert, RefreshCw, CheckCircle2, AlertTriangle, XCircle, Copy,
-  ArrowRight, History, CalendarRange, Search, PartyPopper,
+  ArrowRight, History, CalendarRange, Search, PartyPopper, HeartPulse,
 } from 'lucide-react';
-import { funcionariosApi, historialApi, solicitudesApi, suplenciasApi } from '../api/client';
+import { funcionariosApi, historialApi, solicitudesApi, suplenciasApi, licenciasMedicasApi } from '../api/client';
 import { generarReporteFuncionario, imprimirReporteFuncionario } from '../utils/reportePDF';
 import { useAuth } from '../context/AuthContext';
 import { NOMBRE_ROL, COLOR_ROL, ORDEN_ROL } from '../config/roles';
@@ -48,7 +48,7 @@ const CONTRATO_COLORS = {
   'Suplencia':  'bg-purple-100 text-purple-700',
 };
 
-const TABS_VALIDOS = ['saldos', 'historial', 'solicitudes', 'suplencias'];
+const TABS_VALIDOS = ['saldos', 'historial', 'solicitudes', 'suplencias', 'licencias'];
 
 // Contraseña por defecto institucional — debe coincidir con INITIAL_PASSWORD
 // en backend/.env (ver backend/src/utils/credenciales.js).
@@ -97,6 +97,8 @@ export default function FuncionarioDetalle() {
   // Suplencias
   const [suplencias, setSuplencias]         = useState([]);
   const [cargandoSup, setCargandoSup]       = useState(false);
+  const [licenciasMedicas, setLicenciasMedicas] = useState([]);
+  const [cargandoLicencias, setCargandoLicencias] = useState(false);
   const [showNuevaSup, setShowNuevaSup]     = useState(false);
   const [prorrogarSup, setProrrogarSup]     = useState(null);
   const [finalizarSup, setFinalizarSup]     = useState(null);
@@ -170,11 +172,20 @@ export default function FuncionarioDetalle() {
       .finally(() => setCargandoSup(false));
   };
 
+  const cargarLicenciasMedicas = () => {
+    setCargandoLicencias(true);
+    licenciasMedicasApi.porFuncionario(id)
+      .then(({ data }) => setLicenciasMedicas(data))
+      .catch(() => {})
+      .finally(() => setCargandoLicencias(false));
+  };
+
   useEffect(() => { cargarFuncionario(); }, [id]);
 
   useEffect(() => {
     if (tab === 'historial') cargarHistorial();
     if (tab === 'suplencias') cargarSuplencias();
+    if (tab === 'licencias') cargarLicenciasMedicas();
   }, [tab, id]);
 
   // Carga lista de funcionarios al abrir el modal de nueva suplencia
@@ -729,6 +740,7 @@ export default function FuncionarioDetalle() {
           { id: 'historial',   label: 'Historial',   icon: Clock },
           { id: 'solicitudes', label: 'Solicitudes', icon: Calendar },
           ...(mostrarSuplencias ? [{ id: 'suplencias', label: 'Suplencias', icon: History }] : []),
+          { id: 'licencias', label: 'Licencias Médicas', icon: HeartPulse },
         ];
         return (
           <div className="flex gap-1 bg-dark-100 p-1 rounded-xl w-fit flex-wrap">
@@ -1238,6 +1250,40 @@ export default function FuncionarioDetalle() {
               </div>
             );
           })()}
+        </div>
+      )}
+
+      {/* Tab: Licencias Médicas — siempre de solo lectura en la ficha; el
+          ingreso/edición se hace desde el módulo exclusivo (RRHH/Secretaría). */}
+      {tab === 'licencias' && (
+        <div className="space-y-3">
+          {cargandoLicencias ? (
+            <div className="space-y-2">
+              {[1, 2].map((i) => <div key={i} className="card h-16 animate-pulse bg-dark-100" />)}
+            </div>
+          ) : licenciasMedicas.length === 0 ? (
+            <div className="text-center py-12 text-dark-400">
+              <HeartPulse size={36} className="mx-auto mb-3 opacity-40" />
+              <p className="font-medium text-sm">Sin licencias médicas registradas</p>
+            </div>
+          ) : (
+            licenciasMedicas.map((l) => (
+              <div key={l.id} className="card p-4">
+                <p className="text-sm font-medium text-dark-800">
+                  {format(parseISO(l.fecha_inicio.toString().substring(0,10)), 'd MMM yyyy', { locale: es })}
+                  {' — '}
+                  {format(parseISO(l.fecha_fin.toString().substring(0,10)), 'd MMM yyyy', { locale: es })}
+                  <span className="text-dark-400 font-normal"> · {l.dias} día{l.dias !== 1 ? 's' : ''}</span>
+                </p>
+                {(l.folio || l.entidad_emisora) && (
+                  <p className="text-xs text-dark-500 mt-1">
+                    {l.folio && `Folio ${l.folio}`}{l.folio && l.entidad_emisora && ' · '}{l.entidad_emisora}
+                  </p>
+                )}
+                {l.observaciones && <p className="text-xs text-dark-400 mt-1">{l.observaciones}</p>}
+              </div>
+            ))
+          )}
         </div>
       )}
 

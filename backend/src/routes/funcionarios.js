@@ -65,7 +65,7 @@ router.get('/', async (req, res) => {
                'dias_pendientes', sf.dias_pendientes,
                'dias_disponibles', (sf.dias_asignados - sf.dias_usados - sf.dias_pendientes)
              ) ORDER BY tp.nombre
-           ) FILTER (WHERE sf.id IS NOT NULL),
+           ) FILTER (WHERE sf.id IS NOT NULL AND tp.activo = TRUE),
            '[]'
          ) AS saldos
        FROM funcionarios f
@@ -166,7 +166,7 @@ router.get('/:id', async (req, res) => {
               ), 0) AS dias_parciales_usados
        FROM saldos_funcionarios sf
        JOIN tipos_permisos tp ON sf.tipo_permiso_id = tp.id
-       WHERE sf.funcionario_id = $1 AND sf.anio = $2 AND tp.es_especial = FALSE
+       WHERE sf.funcionario_id = $1 AND sf.anio = $2 AND tp.es_especial = FALSE AND tp.activo = TRUE
        ORDER BY tp.es_feriado_legal DESC, tp.nombre`,
       [id, anio]
     );

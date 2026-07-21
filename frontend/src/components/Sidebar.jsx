@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import {
   LayoutDashboard, Users, FileText, Clock, LogOut,
   ChevronRight, Settings, UserCircle, KeyRound, Hourglass, BarChart2, UserCheck, Briefcase, UserCog, Info, ShieldCheck,
+  HeartPulse,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import CambiarPasswordModal from './CambiarPasswordModal';
@@ -25,6 +26,7 @@ const NAV_SUPERVISOR = [
   { to: '/horas-compensatorias', label: 'Hrs. Compensat.',     icon: Hourglass,   roles: ELEVADOS },
   { to: '/historial',            label: 'Historial',           icon: Clock,       roles: ELEVADOS },
   { to: '/suplencias',           label: 'Hist. Suplencias',    icon: UserCheck,   roles: ELEVADOS },
+  { to: '/licencias-medicas',    label: 'Licencias Médicas',   icon: HeartPulse,  roles: ['RRHH_ADMIN', 'SECRETARY'] }, // 👈 módulo exclusivo
   { to: '/reportes',             label: 'Reportes',            icon: BarChart2,   roles: ELEVADOS },
   { to: '/configuracion',        label: 'Configuración',       icon: Settings,    roles: ['ADMIN_TI'] }, // 👈 único visible para ADMIN_TI
   { to: '/roles',                label: 'Roles y Permisos',    icon: ShieldCheck, roles: ['ADMIN_TI', 'SUPERVISOR'] },

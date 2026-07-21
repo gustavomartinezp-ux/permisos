@@ -599,6 +599,12 @@ function TabEjecutivos() {
 
 // ─── Tab Exportar ──────────────────────────────────────────────────────────────
 function TabExportar({ anio }) {
+  const { tienePermiso } = useAuth();
+  // El backend exige reportes.ver_globales/auditoria.ver_todo específicamente
+  // para este export (contiene el detalle completo de todos los funcionarios,
+  // no solo lo "operativo") — se oculta el botón para quien no lo tiene,
+  // en vez de mostrarlo y que falle con 403.
+  const puedeExportarFuncionarios = tienePermiso('reportes.ver_globales', 'auditoria.ver_todo');
   const [descargando, setDescargando] = useState(null);
   const [filtrosCSV, setFiltrosCSV]   = useState({ fecha_inicio: '', fecha_fin: '', estado: '', sector: '' });
 
@@ -630,22 +636,24 @@ function TabExportar({ anio }) {
     <div className="space-y-6 max-w-2xl">
 
       {/* Excel funcionarios */}
-      <div className="card p-5 space-y-3">
-        <h3 className="font-semibold text-dark-800 flex items-center gap-2">
-          <FileSpreadsheet size={16} className="text-emerald-600" />
-          Exportación de Funcionarios
-        </h3>
-        <p className="text-sm text-dark-500">
-          Excel profesional con 3 hojas: funcionarios, saldos y ranking de ausentismo.
-          Incluye encabezado institucional, filtros automáticos y formato CESFAM.
-        </p>
-        <BtnDescarga
-          onClick={() => descargar(`/reportes/exportar/funcionarios?anio=${anio}`, `funcionarios_${anio}.xlsx`)}
-          nombre={`Funcionarios ${anio}`}
-          desc="Datos completos + saldos + ausentismo"
-          ext=".xlsx"
-        />
-      </div>
+      {puedeExportarFuncionarios && (
+        <div className="card p-5 space-y-3">
+          <h3 className="font-semibold text-dark-800 flex items-center gap-2">
+            <FileSpreadsheet size={16} className="text-emerald-600" />
+            Exportación de Funcionarios
+          </h3>
+          <p className="text-sm text-dark-500">
+            Excel profesional con 3 hojas: funcionarios, saldos y ranking de ausentismo.
+            Incluye encabezado institucional, filtros automáticos y formato CESFAM.
+          </p>
+          <BtnDescarga
+            onClick={() => descargar(`/reportes/exportar/funcionarios?anio=${anio}`, `funcionarios_${anio}.xlsx`)}
+            nombre={`Funcionarios ${anio}`}
+            desc="Datos completos + saldos + ausentismo"
+            ext=".xlsx"
+          />
+        </div>
+      )}
 
       {/* CSV permisos */}
       <div className="card p-5 space-y-4">
@@ -720,11 +728,17 @@ function TabExportar({ anio }) {
 
 // ─── Página principal ──────────────────────────────────────────────────────────
 export default function Reportes() {
-  const { esAdmin, esSupervisor } = useAuth();
+  const { esSupervisor, tienePermiso } = useAuth();
   const [tab,  setTab]  = useState('dashboard');
   const [anio, setAnio] = useState(new Date().getFullYear());
 
-  if (!esAdmin && !esSupervisor) {
+  // Mismo criterio que el backend (ver middleware de acceso en reportes.js):
+  // rol legacy admin/supervisor, o permiso RBAC de reportes/auditoría
+  // (RRHH_ADMIN, SECRETARY, AUDITOR).
+  const puedeVerReportes = esSupervisor
+    || tienePermiso('reportes.ver_globales', 'reportes.ver_operativos', 'auditoria.ver_todo');
+
+  if (!puedeVerReportes) {
     return (
       <div className="p-6 flex items-center justify-center min-h-64">
         <div className="text-center">

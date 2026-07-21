@@ -9,6 +9,8 @@ const {
   calcularFechaFinEspecial,
   validarBloqueObligatorio10Dias,
   verificarSolapamiento,
+  fechaEnesimoDiaHabil,
+  siguienteDiaHabil,
 } = require('../utils/feriadoLegal');
 
 const router = express.Router();
@@ -272,7 +274,7 @@ router.post('/', [
         }
       }
 
-      // Reservar días en saldo
+      // Reservar días en saldo (una sola reserva total, se divida o no en 2 solicitudes)
       await client.query(
         `UPDATE saldos_funcionarios
          SET arrastre_pendientes = arrastre_pendientes + $1,
@@ -282,7 +284,64 @@ router.post('/', [
         [fromArrastre, fromActual, s.id]
       );
 
-      // Insertar solicitud con desglose
+      const saldoAnteriorDisponible = totalDisponible;
+
+      // Regla institucional: si la solicitud mezcla días de arrastre y de
+      // período actual, el arrastre debe solicitarse primero — se generan
+      // DOS solicitudes independientes (una 100% arrastre, otra 100%
+      // período actual) en vez de una sola con desglose interno, para que
+      // cada tramo quede como su propio trámite/folio administrativo.
+      if (fromArrastre > 0 && fromActual > 0) {
+        const fechaFinArrastre = fechaEnesimoDiaHabil(fecha_inicio, fromArrastre);
+        const fechaInicioActual = (() => {
+          const d = siguienteDiaHabil(new Date(`${fechaFinArrastre}T12:00:00`));
+          return d.toISOString().split('T')[0];
+        })();
+
+        const solArrastre = await client.query(
+          `INSERT INTO solicitudes
+             (funcionario_id, tipo_permiso_id, fecha_inicio, fecha_fin,
+              dias_solicitados, dias_arrastre, dias_periodo_actual, motivo, jornada_medio_dia)
+           VALUES ($1, $2, $3, $4, $5, $5, 0, $6, $7) RETURNING *`,
+          [funcionario_id, tipo_permiso_id, fecha_inicio, fechaFinArrastre, fromArrastre, motivo, jornadaMedioDiaFinal]
+        );
+        const solActual = await client.query(
+          `INSERT INTO solicitudes
+             (funcionario_id, tipo_permiso_id, fecha_inicio, fecha_fin,
+              dias_solicitados, dias_arrastre, dias_periodo_actual, motivo, jornada_medio_dia)
+           VALUES ($1, $2, $3, $4, $5, 0, $5, $6, $7) RETURNING *`,
+          [funcionario_id, tipo_permiso_id, fechaInicioActual, fecha_fin, fromActual, motivo, jornadaMedioDiaFinal]
+        );
+
+        await registrarMovimiento(client, {
+          funcionarioId: funcionario_id, solicitudId: solArrastre.rows[0].id,
+          tipoPermisoId: tipo_permiso_id, tipoMovimiento: 'reserva',
+          diasMovimiento: fromArrastre,
+          saldoAnterior: saldoAnteriorDisponible,
+          saldoNuevo: saldoAnteriorDisponible - fromArrastre,
+          descripcion: `Solicitud feriado legal (arrastre): ${fromArrastre} día(s) del período anterior en trámite`,
+          usuarioId: req.usuario.id,
+        });
+        await registrarMovimiento(client, {
+          funcionarioId: funcionario_id, solicitudId: solActual.rows[0].id,
+          tipoPermisoId: tipo_permiso_id, tipoMovimiento: 'reserva',
+          diasMovimiento: fromActual,
+          saldoAnterior: saldoAnteriorDisponible - fromArrastre,
+          saldoNuevo: saldoAnteriorDisponible - fromArrastre - fromActual,
+          descripcion: `Solicitud feriado legal (período actual): ${fromActual} día(s) en trámite`,
+          usuarioId: req.usuario.id,
+        });
+
+        await client.query('COMMIT');
+        return res.status(201).json({
+          dividida: true,
+          solicitud_arrastre: solArrastre.rows[0],
+          solicitud_actual: solActual.rows[0],
+          distribucion: { fromArrastre, fromActual },
+        });
+      }
+
+      // Insertar solicitud con desglose (caso normal: todo arrastre o todo período actual)
       const nuevaSolicitud = await client.query(
         `INSERT INTO solicitudes
            (funcionario_id, tipo_permiso_id, fecha_inicio, fecha_fin,
@@ -292,7 +351,6 @@ router.post('/', [
          dias_solicitados, fromArrastre, fromActual, motivo, jornadaMedioDiaFinal]
       );
 
-      const saldoAnteriorDisponible = totalDisponible;
       await registrarMovimiento(client, {
         funcionarioId: funcionario_id, solicitudId: nuevaSolicitud.rows[0].id,
         tipoPermisoId: tipo_permiso_id, tipoMovimiento: 'reserva',
@@ -468,7 +526,10 @@ router.patch('/:id/aprobar', requierePermiso('solicitudes.aprobar'), async (req,
 
     const s = saldo.rows[0];
     const diasArrastre = sol.dias_arrastre || 0;
-    const diasActual = sol.dias_periodo_actual || sol.dias_solicitados;
+    // OJO: no usar `||` acá — dias_periodo_actual=0 es un valor legítimo
+    // (solicitud 100% arrastre) y `0 || x` cae igual al fallback, duplicando
+    // el descuento/reintegro contra el período actual.
+    const diasActual = sol.dias_periodo_actual != null ? sol.dias_periodo_actual : sol.dias_solicitados;
 
     if (sol.es_feriado_legal) {
       // ── Aprobar feriado legal ─────────────────────────────────────────────
@@ -612,7 +673,10 @@ router.patch('/:id/rechazar', adminOSupervisor, async (req, res) => {
 
     const anio = new Date(sol.fecha_inicio).getFullYear();
     const diasArrastre = sol.dias_arrastre || 0;
-    const diasActual = sol.dias_periodo_actual || sol.dias_solicitados;
+    // OJO: no usar `||` acá — dias_periodo_actual=0 es un valor legítimo
+    // (solicitud 100% arrastre) y `0 || x` cae igual al fallback, duplicando
+    // el descuento/reintegro contra el período actual.
+    const diasActual = sol.dias_periodo_actual != null ? sol.dias_periodo_actual : sol.dias_solicitados;
 
     const saldo = await client.query(
       `SELECT * FROM saldos_funcionarios
@@ -727,7 +791,9 @@ router.patch('/:id/reintegrar', requierePermiso('solicitudes.reintegrar'), async
 
     const anio = new Date(sol.fecha_inicio).getFullYear();
     const diasArrastre = parseFloat(sol.dias_arrastre) || 0;
-    const diasActual = parseFloat(sol.dias_periodo_actual) || parseFloat(sol.dias_solicitados);
+    // Mismo cuidado que en /aprobar y /rechazar: dias_periodo_actual=0 es
+    // legítimo (solicitud 100% arrastre), no debe caer al fallback.
+    const diasActual = sol.dias_periodo_actual != null ? parseFloat(sol.dias_periodo_actual) : parseFloat(sol.dias_solicitados);
 
     const saldo = await client.query(
       `SELECT * FROM saldos_funcionarios

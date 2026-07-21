@@ -220,19 +220,38 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
         motivo:            form.motivo,
         jornada_medio_dia: medioDia ? jornadaMedioDia : undefined,
       });
-      toast.success('Solicitud registrada exitosamente');
-      onSuccess?.();
-      setSolicitudCreada({
-        ...data,
-        tipo_nombre:       saldoSel?.tipo_nombre,
-        es_feriado_legal:  saldoSel?.es_feriado_legal || false,
-        jornada_medio_dia: medioDia ? jornadaMedioDia : null,
-        _saldoInfo: {
-          total_dias:     totalDisp,
-          saldo_pendiente: Math.max(totalDisp - diasSolicitados, 0),
-          tiene_arrastre:  (saldoSel?.saldo_arrastre || 0) > 0,
-        },
-      });
+      const saldoInfo = {
+        total_dias:     totalDisp,
+        saldo_pendiente: Math.max(totalDisp - diasSolicitados, 0),
+        tiene_arrastre:  (saldoSel?.saldo_arrastre || 0) > 0,
+      };
+
+      if (data.dividida) {
+        // El arrastre debe solicitarse antes que el período actual: quedaron
+        // 2 solicitudes independientes, cada una con su propio formato oficial.
+        toast.success('Se registraron 2 solicitudes: arrastre debe tramitarse antes del período actual');
+        onSuccess?.();
+        setSolicitudCreada({
+          dividida: true,
+          tipo_nombre: saldoSel?.tipo_nombre,
+          jornada_medio_dia: medioDia ? jornadaMedioDia : null,
+          _saldoInfo: saldoInfo,
+          tramos: [
+            { ...data.solicitud_arrastre, _etiqueta: `${data.distribucion.fromArrastre} día(s) de arrastre (período anterior)` },
+            { ...data.solicitud_actual,   _etiqueta: `${data.distribucion.fromActual} día(s) del período actual` },
+          ],
+        });
+      } else {
+        toast.success('Solicitud registrada exitosamente');
+        onSuccess?.();
+        setSolicitudCreada({
+          ...data,
+          tipo_nombre:       saldoSel?.tipo_nombre,
+          es_feriado_legal:  saldoSel?.es_feriado_legal || false,
+          jornada_medio_dia: medioDia ? jornadaMedioDia : null,
+          _saldoInfo: saldoInfo,
+        });
+      }
     } catch (err) {
       setError(err.response?.data?.error || 'Error al registrar solicitud');
     } finally {
@@ -258,36 +277,78 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
                 <CheckCircle2 size={36} className="text-green-600" />
               </div>
             </div>
-            <h2 className="text-xl font-semibold text-dark-900 mb-1">Solicitud registrada</h2>
+            <h2 className="text-xl font-semibold text-dark-900 mb-1">
+              {solicitudCreada.dividida ? '2 solicitudes registradas' : 'Solicitud registrada'}
+            </h2>
             <p className="text-sm text-dark-500 mb-1">
               {funcionario?.nombres} {funcionario?.apellidos}
             </p>
-            <p className="text-sm text-dark-500 mb-6">
-              <span className="font-medium text-dark-700">{solicitudCreada.tipo_nombre}</span>
-              {' · '}N° {String(solicitudCreada.id || '').padStart(5, '0')}
-            </p>
-            <p className="text-sm text-dark-600 mb-5">
-              Descarga o imprime el formato oficial precargado con los datos registrados para obtener las firmas correspondientes.
-            </p>
-            <div className="flex flex-col gap-3">
-              <button
-                onClick={() => descargarFormularioOficial(solicitudCreada, funcionario, solicitudCreada._saldoInfo)}
-                className="btn-primary justify-center gap-2 py-3"
-              >
-                <Download size={17} />
-                Descargar formato oficial (PDF)
-              </button>
-              <button
-                onClick={() => imprimirFormularioOficial(solicitudCreada, funcionario, solicitudCreada._saldoInfo)}
-                className="btn-secondary justify-center gap-2 py-3"
-              >
-                <Printer size={17} />
-                Imprimir formato oficial
-              </button>
-              <button onClick={onClose} className="text-sm text-dark-400 hover:text-dark-600 transition-colors py-2">
-                Cerrar sin imprimir
-              </button>
-            </div>
+
+            {solicitudCreada.dividida ? (
+              <>
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-5">
+                  El arrastre del período anterior debe tramitarse antes que el período actual, así que se generaron
+                  dos solicitudes independientes.
+                </p>
+                <div className="space-y-4 mb-2 text-left">
+                  {solicitudCreada.tramos.map((tramo) => (
+                    <div key={tramo.id} className="rounded-xl border border-dark-200 p-3">
+                      <p className="text-sm text-dark-700 mb-2">
+                        <span className="font-medium">{solicitudCreada.tipo_nombre}</span>
+                        {' · '}N° {String(tramo.id || '').padStart(5, '0')}
+                        <span className="block text-xs text-dark-400 mt-0.5">{tramo._etiqueta}</span>
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => descargarFormularioOficial(tramo, funcionario, solicitudCreada._saldoInfo)}
+                          className="btn-secondary text-xs py-1.5 px-3 flex-1 justify-center gap-1.5"
+                        >
+                          <Download size={14} /> PDF
+                        </button>
+                        <button
+                          onClick={() => imprimirFormularioOficial(tramo, funcionario, solicitudCreada._saldoInfo)}
+                          className="btn-secondary text-xs py-1.5 px-3 flex-1 justify-center gap-1.5"
+                        >
+                          <Printer size={14} /> Imprimir
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <button onClick={onClose} className="text-sm text-dark-400 hover:text-dark-600 transition-colors py-2 mt-3">
+                  Cerrar
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-dark-500 mb-6">
+                  <span className="font-medium text-dark-700">{solicitudCreada.tipo_nombre}</span>
+                  {' · '}N° {String(solicitudCreada.id || '').padStart(5, '0')}
+                </p>
+                <p className="text-sm text-dark-600 mb-5">
+                  Descarga o imprime el formato oficial precargado con los datos registrados para obtener las firmas correspondientes.
+                </p>
+                <div className="flex flex-col gap-3">
+                  <button
+                    onClick={() => descargarFormularioOficial(solicitudCreada, funcionario, solicitudCreada._saldoInfo)}
+                    className="btn-primary justify-center gap-2 py-3"
+                  >
+                    <Download size={17} />
+                    Descargar formato oficial (PDF)
+                  </button>
+                  <button
+                    onClick={() => imprimirFormularioOficial(solicitudCreada, funcionario, solicitudCreada._saldoInfo)}
+                    className="btn-secondary justify-center gap-2 py-3"
+                  >
+                    <Printer size={17} />
+                    Imprimir formato oficial
+                  </button>
+                  <button onClick={onClose} className="text-sm text-dark-400 hover:text-dark-600 transition-colors py-2">
+                    Cerrar sin imprimir
+                  </button>
+                </div>
+              </>
+            )}
           </motion.div>
         </motion.div>
       </AnimatePresence>

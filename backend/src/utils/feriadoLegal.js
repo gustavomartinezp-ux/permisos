@@ -50,6 +50,22 @@ function calcularDiasHabiles(inicio, fin) {
   return count;
 }
 
+// Retorna la fecha (ISO) del n-ésimo día hábil contando desde `inicio`
+// (inclusive). Se usa para partir en dos un rango de fechas cuando una
+// solicitud de feriado legal mezcla días de arrastre y de período actual —
+// cada tramo necesita su propia fecha_inicio/fecha_fin real, no solo un
+// conteo de días.
+function fechaEnesimoDiaHabil(inicio, n) {
+  let cur = new Date(`${toISO(inicio)}T12:00:00`);
+  if (!esDiaHabil(cur)) cur = siguienteDiaHabil(new Date(cur.getTime() - 86400000));
+  let count = 1;
+  while (count < n) {
+    cur = siguienteDiaHabil(cur);
+    count++;
+  }
+  return toISO(cur);
+}
+
 // Arrastre primero obligatoriamente
 function calcularDistribucion(diasSolicitados, arrastreDisponible, actualDisponible) {
   const fromArrastre = Math.min(diasSolicitados, arrastreDisponible);
@@ -171,7 +187,9 @@ function calcularFechaFinEspecial(fechaInicio, diasFijos, tipoDias) {
 module.exports = {
   FERIADOS_CHILE,
   esDiaHabil,
+  siguienteDiaHabil,
   calcularDiasHabiles,
+  fechaEnesimoDiaHabil,
   calcularDistribucion,
   calcularFechaFinEspecial,
   validarBloqueObligatorio10Dias,

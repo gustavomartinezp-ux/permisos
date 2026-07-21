@@ -82,4 +82,40 @@ const esSoloAutoservicio = (req) => {
   return !roles.some((r) => r !== 'EMPLOYEE');
 };
 
-module.exports = { cargarPermisos, requierePermiso, noAutoAprobacion, esSoloAutoservicio };
+// Roles RBAC que implican visibilidad global (no acotada a sector/área) sin
+// importar qué rol legacy arrastre la cuenta — ej. una cuenta con rol legacy
+// 'supervisor' a la que además se le asignó ADMIN_TI vía la UI de Roles no
+// debe seguir viendo solo su sector.
+const ROLES_VISIBILIDAD_GLOBAL = ['ADMIN_TI', 'RRHH_ADMIN', 'AUDITOR'];
+
+// Variante para middlewares/rutas ya autenticadas (usa req.usuario.rolesRBAC,
+// cargado por cargarPermisos).
+const tieneVisibilidadGlobal = (req) => {
+  if (req.usuario.rol === 'admin') return true;
+  const roles = req.usuario.rolesRBAC || [];
+  return roles.some((r) => ROLES_VISIBILIDAD_GLOBAL.includes(r));
+};
+
+// Variante para contextos sin request (ej. el worker de reportería), que
+// resuelve la visibilidad global consultando roles RBAC directamente por id.
+const tieneVisibilidadGlobalPorUsuarioId = async (usuarioId) => {
+  const { rows } = await pool.query(
+    `SELECT u.rol,
+            ARRAY_AGG(r.codigo) FILTER (WHERE r.codigo IS NOT NULL) AS roles
+     FROM usuarios u
+     LEFT JOIN user_roles ur ON ur.usuario_id = u.id
+     LEFT JOIN roles r ON r.id = ur.role_id
+     WHERE u.id = $1
+     GROUP BY u.rol`,
+    [usuarioId]
+  );
+  const row = rows[0];
+  if (!row) return false;
+  if (row.rol === 'admin') return true;
+  return (row.roles || []).some((r) => ROLES_VISIBILIDAD_GLOBAL.includes(r));
+};
+
+module.exports = {
+  cargarPermisos, requierePermiso, noAutoAprobacion, esSoloAutoservicio,
+  tieneVisibilidadGlobal, tieneVisibilidadGlobalPorUsuarioId,
+};

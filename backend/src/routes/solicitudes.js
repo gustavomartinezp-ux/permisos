@@ -2,7 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { pool } = require('../db');
 const { verificarToken, soloAdmin, adminOSupervisor } = require('../middleware/auth');
-const { cargarPermisos, requierePermiso, noAutoAprobacion, esSoloAutoservicio } = require('../middleware/rbac');
+const { cargarPermisos, requierePermiso, noAutoAprobacion, esSoloAutoservicio, tieneVisibilidadGlobal } = require('../middleware/rbac');
 const {
   calcularDiasHabiles,
   calcularDistribucion,
@@ -54,7 +54,7 @@ router.get('/', async (req, res) => {
         params.push(funcionario_id);
       }
       // Supervisor solo ve su sector o su área
-      if (req.usuario.rol === 'supervisor') {
+      if (req.usuario.rol === 'supervisor' && !tieneVisibilidadGlobal(req)) {
         if (req.usuario.sector) {
           whereClause += ` AND f.sector = $${paramIdx++}`;
           params.push(req.usuario.sector);
@@ -591,7 +591,7 @@ router.patch('/:id/rechazar', adminOSupervisor, async (req, res) => {
     }
 
     // Supervisor solo puede rechazar de su sector
-    if (req.usuario.rol === 'supervisor' && req.usuario.sector && sol.sector !== req.usuario.sector) {
+    if (req.usuario.rol === 'supervisor' && req.usuario.sector && sol.sector !== req.usuario.sector && !tieneVisibilidadGlobal(req)) {
       await client.query('ROLLBACK');
       return res.status(403).json({ error: 'No puede rechazar solicitudes de otro sector' });
     }

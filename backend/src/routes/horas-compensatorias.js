@@ -3,7 +3,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { pool } = require('../db');
 const { verificarToken } = require('../middleware/auth');
-const { cargarPermisos, requierePermiso, esSoloAutoservicio } = require('../middleware/rbac');
+const { cargarPermisos, requierePermiso, esSoloAutoservicio, tieneVisibilidadGlobal } = require('../middleware/rbac');
 const { FERIADOS_CHILE } = require('../utils/feriadoLegal');
 
 const router = express.Router();
@@ -78,7 +78,7 @@ router.get('/', async (req, res) => {
     if (esSoloAutoservicio(req)) {
       whereClause += ` AND hc.funcionario_id = $${params.length + 1}`;
       params.push(req.usuario.funcionario_id);
-    } else if (req.usuario.rol === 'supervisor') {
+    } else if (req.usuario.rol === 'supervisor' && !tieneVisibilidadGlobal(req)) {
       // Supervisor solo ve horas de funcionarios de su sector/área
       if (req.usuario.sector) {
         whereClause += ` AND f.sector = $${params.length + 1}`;
@@ -123,7 +123,7 @@ router.get('/funcionario/:id', async (req, res) => {
     return res.status(403).json({ error: 'Acceso denegado' });
   }
   // Supervisor solo puede ver funcionarios de su sector/área o su propio perfil
-  if (req.usuario.rol === 'supervisor' && req.usuario.funcionario_id != id) {
+  if (req.usuario.rol === 'supervisor' && req.usuario.funcionario_id != id && !tieneVisibilidadGlobal(req)) {
     const check = await pool.query('SELECT sector, area FROM funcionarios WHERE id = $1', [id]);
     if (check.rows.length > 0) {
       const f = check.rows[0];

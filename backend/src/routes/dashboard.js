@@ -1,7 +1,7 @@
 const express = require('express');
 const { pool } = require('../db');
 const { verificarToken } = require('../middleware/auth');
-const { cargarPermisos, esSoloAutoservicio } = require('../middleware/rbac');
+const { cargarPermisos, esSoloAutoservicio, tieneVisibilidadGlobal } = require('../middleware/rbac');
 const { SECTORES_VALIDOS, AREAS_VALIDAS } = require('../config/catalogos');
 
 const router = express.Router();
@@ -12,7 +12,7 @@ router.get('/stats', async (req, res) => {
     return res.status(403).json({ error: 'Acceso denegado' });
   }
   const anio = req.query.anio || new Date().getFullYear();
-  const esSupervisor = req.usuario.rol === 'supervisor';
+  const esSupervisor = req.usuario.rol === 'supervisor' && !tieneVisibilidadGlobal(req);
   const sectorFiltro = esSupervisor && req.usuario.sector ? req.usuario.sector : null;
   const areaFiltro   = esSupervisor && !req.usuario.sector && req.usuario.area ? req.usuario.area : null;
 

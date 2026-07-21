@@ -2,10 +2,11 @@
 const express = require('express');
 const { pool } = require('../db');
 const { verificarToken, adminOSupervisor } = require('../middleware/auth');
+const { cargarPermisos, tieneVisibilidadGlobal } = require('../middleware/rbac');
 const { calcularSaldo } = require('./horas-compensatorias');
 
 const router = express.Router();
-router.use(verificarToken);
+router.use(verificarToken, cargarPermisos);
 
 // ─── FIFO: registra qué horas específicas se consumieron al aprobar ───────────
 async function registrarConsumoFIFO(client, solicitudId, funcionarioId, horasSolicitadas) {
@@ -46,7 +47,7 @@ router.get('/', async (req, res) => {
     if (req.usuario.rol === 'funcionario') {
       where += ` AND sc.funcionario_id = $${params.length + 1}`;
       params.push(req.usuario.funcionario_id);
-    } else if (req.usuario.rol === 'supervisor') {
+    } else if (req.usuario.rol === 'supervisor' && !tieneVisibilidadGlobal(req)) {
       // Supervisor ve sus propias solicitudes + las de su sector/área
       const condiciones = [];
       if (req.usuario.funcionario_id) {
@@ -195,7 +196,7 @@ router.patch('/:id/aprobar', adminOSupervisor, async (req, res) => {
     }
 
     // Supervisor solo puede aprobar solicitudes de funcionarios bajo su cargo
-    if (req.usuario.rol === 'supervisor') {
+    if (req.usuario.rol === 'supervisor' && !tieneVisibilidadGlobal(req)) {
       const funcCheck = await client.query('SELECT sector, area FROM funcionarios WHERE id = $1', [s.funcionario_id]);
       const f = funcCheck.rows[0];
       const inSector = req.usuario.sector && f?.sector === req.usuario.sector;
@@ -245,7 +246,7 @@ router.patch('/:id/rechazar', adminOSupervisor, async (req, res) => {
   const { observaciones } = req.body;
   try {
     // Verificar existencia y scope antes de rechazar
-    if (req.usuario.rol === 'supervisor') {
+    if (req.usuario.rol === 'supervisor' && !tieneVisibilidadGlobal(req)) {
       const solCheck = await pool.query(
         `SELECT sc.funcionario_id, f.sector, f.area
          FROM solicitudes_compensacion sc

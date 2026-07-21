@@ -3,7 +3,7 @@ const { body, validationResult } = require('express-validator');
 const bcrypt = require('bcryptjs');
 const { pool } = require('../db');
 const { verificarToken } = require('../middleware/auth');
-const { cargarPermisos, requierePermiso, esSoloAutoservicio } = require('../middleware/rbac');
+const { cargarPermisos, requierePermiso, esSoloAutoservicio, tieneVisibilidadGlobal } = require('../middleware/rbac');
 const { EMAIL_REGEX, hashPasswordDefault } = require('../utils/credenciales');
 
 const router = express.Router();
@@ -21,8 +21,9 @@ router.get('/', async (req, res) => {
     const whereParts = [soloInactivos ? 'f.activo = false' : 'f.activo = true'];
     const queryParams = [anio];
 
-    // Supervisor solo ve su sector o su área
-    if (req.usuario.rol === 'supervisor') {
+    // Supervisor solo ve su sector o su área — salvo que tenga un rol RBAC de
+    // visibilidad global (ADMIN_TI/RRHH_ADMIN/AUDITOR) por encima.
+    if (req.usuario.rol === 'supervisor' && !tieneVisibilidadGlobal(req)) {
       if (req.usuario.sector) {
         whereParts.push(`f.sector = $2`);
         queryParams.push(req.usuario.sector);
@@ -95,7 +96,7 @@ router.get('/:id', async (req, res) => {
     }
 
     // Supervisor solo puede ver funcionarios de su sector/área o su propio perfil
-    if (req.usuario.rol === 'supervisor' && req.usuario.funcionario_id != id) {
+    if (req.usuario.rol === 'supervisor' && req.usuario.funcionario_id != id && !tieneVisibilidadGlobal(req)) {
       const check = await pool.query(
         'SELECT sector, area FROM funcionarios WHERE id = $1 AND activo = true', [id]
       );

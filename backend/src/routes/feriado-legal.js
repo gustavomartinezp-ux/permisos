@@ -11,12 +11,16 @@ const router = express.Router();
 router.use(verificarToken, cargarPermisos);
 
 async function obtenerAlertas(funcionarioId) {
+  // Solo hitos de hoy en adelante — evita mostrar el mensaje (redactado en
+  // futuro: "cumplirá", "se agregarán") para hitos históricos ya resueltos
+  // hace años, que quedarían leyéndose de forma confusa fuera de contexto.
   const { rows } = await pool.query(
     `SELECT h.id, h.tramo_anios, h.fecha_cumplimiento, h.dias_agregados, h.aplicado, h.aplicado_en,
             f.nombres, f.apellidos
      FROM hitos_antiguedad h
      JOIN funcionarios f ON f.id = h.funcionario_id
      WHERE h.funcionario_id = $1
+       AND h.fecha_cumplimiento >= CURRENT_DATE
      ORDER BY h.fecha_cumplimiento DESC`,
     [funcionarioId]
   );

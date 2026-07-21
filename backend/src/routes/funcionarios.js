@@ -909,16 +909,15 @@ router.put('/:id/saldos', requierePermiso('saldos.ajustar'), async (req, res) =>
   }
 });
 
-// Opt-out del módulo de cumpleaños — el propio funcionario decide si su
-// cumpleaños se publica en el muro social. Editable por el propio funcionario
-// o por quien ya puede editar sus datos básicos (RRHH/Admin/Secretaría).
+// Opt-out del módulo de cumpleaños. Deliberadamente NO auto-servicio: solo
+// quien ya puede editar datos básicos (RRHH/Admin/Secretaría) la cambia,
+// el propio funcionario no controla su publicación.
 router.patch('/:id/mostrar-cumpleanos', async (req, res) => {
   const { mostrar_cumpleanos } = req.body;
   if (typeof mostrar_cumpleanos !== 'boolean') {
     return res.status(400).json({ error: 'El campo mostrar_cumpleanos debe ser booleano' });
   }
-  const esPropio = req.usuario.funcionario_id != null && req.usuario.funcionario_id == req.params.id;
-  if (!esPropio && !puedeEditarBasico(req)) {
+  if (!puedeEditarBasico(req)) {
     return res.status(403).json({ error: 'No tienes permiso para cambiar esta preferencia' });
   }
   try {

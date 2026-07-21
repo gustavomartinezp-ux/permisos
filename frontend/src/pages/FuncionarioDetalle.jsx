@@ -72,10 +72,9 @@ export default function FuncionarioDetalle() {
   const { esAdmin, esSupervisor, esFuncionario, usuario, tienePermiso } = useAuth();
   const puedeGestionarCredenciales = tienePermiso('funcionarios.gestionar_credenciales');
   const esPropioFuncionario = esFuncionario && String(usuario?.funcionario_id) === String(id);
-  // Mismo criterio que el backend: dueño del perfil (sin importar su rol
-  // legacy) o alguien con permiso de edición de funcionarios.
-  const puedeVerToggleCumpleanos = String(usuario?.funcionario_id) === String(id)
-    || tienePermiso('funcionarios.editar_basico', 'funcionarios.editar');
+  // Deliberadamente NO auto-servicio: el propio funcionario no controla su
+  // publicación, solo quien ya puede editar datos básicos (RRHH/Admin/Secretaría).
+  const puedeVerToggleCumpleanos = tienePermiso('funcionarios.editar_basico', 'funcionarios.editar');
   const [funcionario, setFuncionario] = useState(null);
   const [historial, setHistorial] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -134,7 +133,7 @@ export default function FuncionarioDetalle() {
     try {
       await funcionariosApi.toggleCumpleanos(id, nuevoValor);
       setFuncionario((prev) => ({ ...prev, mostrar_cumpleanos: nuevoValor }));
-      toast.success(nuevoValor ? 'Tu cumpleaños se mostrará en el muro social' : 'Tu cumpleaños ya no se mostrará');
+      toast.success(nuevoValor ? 'Su cumpleaños se mostrará en el muro social' : 'Su cumpleaños ya no se mostrará');
     } catch (err) {
       toast.error(err?.response?.data?.error || 'Error al actualizar la preferencia');
     } finally {
@@ -673,8 +672,8 @@ export default function FuncionarioDetalle() {
                 <h3 className="text-sm font-semibold text-dark-700">Muro social de cumpleaños</h3>
                 <p className="text-xs text-dark-500">
                   {funcionario.mostrar_cumpleanos
-                    ? 'Tu cumpleaños se publica y tus compañeros pueden felicitarte.'
-                    : 'Tu cumpleaños no se publica en el muro social.'}
+                    ? 'Su cumpleaños se publica y sus compañeros pueden felicitarlo.'
+                    : 'Su cumpleaños no se publica en el muro social.'}
                 </p>
               </div>
             </div>

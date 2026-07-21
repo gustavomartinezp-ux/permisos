@@ -43,6 +43,8 @@ export const funcionariosApi = {
   actualizarFoto: (id, foto_base64) => api.put(`/funcionarios/${id}/foto`, { foto_base64 }),
   eliminarFoto: (id) => api.delete(`/funcionarios/${id}/foto`),
   bulk: (funcionarios) => api.post('/funcionarios/bulk', { funcionarios }),
+  actualizarEmailCuenta: (id, email) => api.put(`/funcionarios/${id}/email`, { email }),
+  resetearPasswordDefault: (id) => api.post(`/funcionarios/${id}/credenciales/reset-password`),
 };
 
 export const tiposPermisosApi = {

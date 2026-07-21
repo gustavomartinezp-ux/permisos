@@ -4,7 +4,7 @@ import { X, KeyRound, Eye, EyeOff } from 'lucide-react';
 import { authApi } from '../api/client';
 import toast from 'react-hot-toast';
 
-export default function CambiarPasswordModal({ onClose }) {
+export default function CambiarPasswordModal({ onClose, obligatorio = false, onSuccess }) {
   const [form, setForm] = useState({ actual: '', nueva: '', confirmar: '' });
   const [mostrar, setMostrar] = useState({ actual: false, nueva: false, confirmar: false });
   const [guardando, setGuardando] = useState(false);
@@ -20,7 +20,8 @@ export default function CambiarPasswordModal({ onClose }) {
     try {
       await authApi.cambiarPassword(form.actual, form.nueva);
       toast.success('Contraseña actualizada exitosamente');
-      onClose();
+      onSuccess?.();
+      onClose?.();
     } catch (err) {
       toast.error(err?.response?.data?.error || 'Error al cambiar contraseña');
     } finally {
@@ -36,7 +37,7 @@ export default function CambiarPasswordModal({ onClose }) {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="absolute inset-0 bg-black/50"
-          onClick={onClose}
+          onClick={obligatorio ? undefined : onClose}
         />
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 10 }}
@@ -51,14 +52,22 @@ export default function CambiarPasswordModal({ onClose }) {
               </div>
               <h2 className="text-lg font-semibold text-dark-900">Cambiar contraseña</h2>
             </div>
-            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-dark-100 text-dark-400">
-              <X size={18} />
-            </button>
+            {!obligatorio && (
+              <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-dark-100 text-dark-400">
+                <X size={18} />
+              </button>
+            )}
           </div>
+
+          {obligatorio && (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+              Estás usando una contraseña por defecto. Debes crear una contraseña personal antes de continuar.
+            </p>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {[
-              { key: 'actual', label: 'Contraseña actual' },
+              { key: 'actual', label: obligatorio ? 'Contraseña actual (la por defecto)' : 'Contraseña actual' },
               { key: 'nueva', label: 'Nueva contraseña' },
               { key: 'confirmar', label: 'Confirmar nueva contraseña' },
             ].map(({ key, label }) => (
@@ -85,9 +94,11 @@ export default function CambiarPasswordModal({ onClose }) {
             ))}
 
             <div className="flex gap-3 pt-1">
-              <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">
-                Cancelar
-              </button>
+              {!obligatorio && (
+                <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">
+                  Cancelar
+                </button>
+              )}
               <button type="submit" disabled={guardando} className="btn-primary flex-1 justify-center">
                 {guardando
                   ? <span className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />

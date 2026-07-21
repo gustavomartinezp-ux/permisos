@@ -46,6 +46,17 @@ export function AuthProvider({ children }) {
     setUsuario(null);
   }, []);
 
+  // Aplica cambios parciales al perfil en memoria y en localStorage sin re-hacer
+  // login — usado tras el cambio obligatorio de contraseña para limpiar
+  // must_change_password sin esperar un refresh completo de /auth/me.
+  const actualizarUsuario = useCallback((parcial) => {
+    setUsuario((prev) => {
+      const siguiente = { ...prev, ...parcial };
+      localStorage.setItem('usuario', JSON.stringify(siguiente));
+      return siguiente;
+    });
+  }, []);
+
   const esAdmin        = usuario?.rol === 'admin';
   const esSupervisor   = ['admin', 'supervisor'].includes(usuario?.rol);
   const esSupervisorPuro = usuario?.rol === 'supervisor' || (usuario?.rolesRBAC || []).includes('SUPERVISOR');
@@ -77,7 +88,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={{
-      usuario, cargando, login, logout,
+      usuario, cargando, login, logout, actualizarUsuario,
       esAdmin, esSupervisor, esSupervisorPuro, esFuncionario, esSoloAutoservicio,
       tienePermiso, tieneRolRBAC, rolesEfectivos,
     }}>

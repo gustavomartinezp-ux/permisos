@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const { pool } = require('../db');
 const { verificarToken } = require('../middleware/auth');
 const { cargarPermisos, requierePermiso, esSoloAutoservicio } = require('../middleware/rbac');
+const { EMAIL_REGEX, hashPasswordDefault } = require('../utils/credenciales');
 
 const router = express.Router();
 
@@ -48,7 +49,7 @@ router.get('/', async (req, res) => {
          s.nombre AS servicio,
          d.nombre AS dispositivo, d.id AS dispositivo_id,
          remp.nombres AS reemplaza_nombres, remp.apellidos AS reemplaza_apellidos,
-         u.rol AS usuario_rol, u.email AS usuario_email,
+         u.rol AS usuario_rol, u.email AS usuario_email, u.must_change_password,
          COALESCE(
            JSON_AGG(
              JSON_BUILD_OBJECT(
@@ -72,7 +73,7 @@ router.get('/', async (req, res) => {
        LEFT JOIN tipos_permisos tp ON sf.tipo_permiso_id = tp.id
        LEFT JOIN usuarios u ON u.funcionario_id = f.id AND u.activo = true
        WHERE ${whereParts.join(' AND ')}
-       GROUP BY f.id, s.nombre, d.nombre, d.id, remp.nombres, remp.apellidos, u.rol, u.email
+       GROUP BY f.id, s.nombre, d.nombre, d.id, remp.nombres, remp.apellidos, u.rol, u.email, u.must_change_password
        ORDER BY f.sector NULLS LAST, f.area NULLS LAST, f.apellidos, f.nombres`,
       queryParams
     );
@@ -89,7 +90,7 @@ router.get('/:id', async (req, res) => {
     const anio = req.query.anio || new Date().getFullYear();
     const { id } = req.params;
 
-    if (req.usuario.rol === 'funcionario' && req.usuario.funcionario_id != id) {
+    if (esSoloAutoservicio(req) && req.usuario.funcionario_id != id) {
       return res.status(403).json({ error: 'Acceso denegado' });
     }
 
@@ -117,6 +118,7 @@ router.get('/:id', async (req, res) => {
               u.id AS usuario_id,
               u.email AS usuario_email,
               u.rol AS usuario_rol,
+              u.must_change_password,
               u.sector AS supervisor_sector,
               u.area AS supervisor_area,
               f.grupo_contractual,
@@ -529,6 +531,142 @@ router.put('/:id', async (req, res, next) => {
     await client.query('ROLLBACK');
     console.error(err);
     res.status(500).json({ error: 'Error al actualizar funcionario' });
+  } finally {
+    client.release();
+  }
+});
+
+// Registrar/actualizar el email institucional de un funcionario. Si aún no
+// tenía cuenta de usuario, la crea con la contraseña por defecto (RUT limpio)
+// y must_change_password=true. Solo ADMIN_TI / RRHH_ADMIN / SECRETARY.
+router.put('/:id/email', requierePermiso('funcionarios.gestionar_credenciales'), async (req, res) => {
+  const { email } = req.body;
+  const funcId = req.params.id;
+  const emailNorm = (email || '').trim().toLowerCase();
+
+  if (!EMAIL_REGEX.test(emailNorm)) {
+    return res.status(400).json({ error: 'Email inválido' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const func = await client.query('SELECT rut FROM funcionarios WHERE id = $1 FOR UPDATE', [funcId]);
+    if (func.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Funcionario no encontrado' });
+    }
+
+    const duplicado = await client.query(
+      'SELECT id FROM usuarios WHERE email = $1 AND funcionario_id IS DISTINCT FROM $2',
+      [emailNorm, funcId]
+    );
+    if (duplicado.rows.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Ese correo ya está en uso por otro funcionario' });
+    }
+
+    const existente = await client.query(
+      'SELECT id, email, must_change_password FROM usuarios WHERE funcionario_id = $1 ORDER BY activo DESC, id DESC LIMIT 1',
+      [funcId]
+    );
+
+    let usuarioId, mustChangePassword, cuentaCreada = false;
+
+    if (existente.rows.length === 0) {
+      const hash = await hashPasswordDefault(func.rows[0].rut);
+      const nuevo = await client.query(
+        `INSERT INTO usuarios (email, password_hash, rol, funcionario_id, must_change_password)
+         VALUES ($1, $2, 'funcionario', $3, TRUE) RETURNING id`,
+        [emailNorm, hash, funcId]
+      );
+      usuarioId = nuevo.rows[0].id;
+      mustChangePassword = true;
+      cuentaCreada = true;
+
+      await client.query(
+        `INSERT INTO auditoria_credenciales (target_funcionario_id, target_usuario_id, accion, actualizado_por, detalle)
+         VALUES ($1,$2,'UPDATE_EMAIL',$3,$4)`,
+        [funcId, usuarioId, req.usuario.id, JSON.stringify({ email: emailNorm, cuenta_creada: true })]
+      );
+      await client.query(
+        `INSERT INTO auditoria_credenciales (target_funcionario_id, target_usuario_id, accion, actualizado_por, detalle)
+         VALUES ($1,$2,'RESET_DEFAULT_PASSWORD',$3,$4)`,
+        [funcId, usuarioId, req.usuario.id, JSON.stringify({ motivo: 'creacion_de_cuenta' })]
+      );
+    } else {
+      usuarioId = existente.rows[0].id;
+      mustChangePassword = existente.rows[0].must_change_password;
+
+      if (existente.rows[0].email !== emailNorm) {
+        await client.query('UPDATE usuarios SET email = $1 WHERE id = $2', [emailNorm, usuarioId]);
+        await client.query(
+          `INSERT INTO auditoria_credenciales (target_funcionario_id, target_usuario_id, accion, actualizado_por, detalle)
+           VALUES ($1,$2,'UPDATE_EMAIL',$3,$4)`,
+          [funcId, usuarioId, req.usuario.id, JSON.stringify({ email_anterior: existente.rows[0].email, email_nuevo: emailNorm })]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+    res.json({
+      mensaje: cuentaCreada ? 'Cuenta creada con contraseña por defecto' : 'Email actualizado',
+      usuario_id: usuarioId,
+      usuario_email: emailNorm,
+      must_change_password: mustChangePassword,
+      cuenta_creada: cuentaCreada,
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    if (err.code === '23505') return res.status(400).json({ error: 'Ese correo ya está en uso' });
+    console.error(err);
+    res.status(500).json({ error: 'Error al actualizar email' });
+  } finally {
+    client.release();
+  }
+});
+
+// Asignar/resetear la contraseña por defecto (RUT limpio) — requiere que el
+// funcionario ya tenga email/cuenta registrada. Marca must_change_password=true.
+router.post('/:id/credenciales/reset-password', requierePermiso('funcionarios.gestionar_credenciales'), async (req, res) => {
+  const funcId = req.params.id;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const func = await client.query('SELECT rut FROM funcionarios WHERE id = $1', [funcId]);
+    if (func.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Funcionario no encontrado' });
+    }
+
+    const usuario = await client.query(
+      'SELECT id FROM usuarios WHERE funcionario_id = $1 ORDER BY activo DESC, id DESC LIMIT 1',
+      [funcId]
+    );
+    if (usuario.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Debe registrar un correo institucional antes de asignar una contraseña' });
+    }
+
+    const hash = await hashPasswordDefault(func.rows[0].rut);
+    await client.query(
+      'UPDATE usuarios SET password_hash = $1, must_change_password = TRUE WHERE id = $2',
+      [hash, usuario.rows[0].id]
+    );
+    await client.query(
+      `INSERT INTO auditoria_credenciales (target_funcionario_id, target_usuario_id, accion, actualizado_por, detalle)
+       VALUES ($1,$2,'RESET_DEFAULT_PASSWORD',$3,$4)`,
+      [funcId, usuario.rows[0].id, req.usuario.id, JSON.stringify({ motivo: 'reset_manual' })]
+    );
+
+    await client.query('COMMIT');
+    res.json({ mensaje: 'Contraseña restablecida al valor por defecto', must_change_password: true });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    res.status(500).json({ error: 'Error al restablecer la contraseña' });
   } finally {
     client.release();
   }

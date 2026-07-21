@@ -81,6 +81,7 @@ router.post('/login', loginLimiter, [
         rut: usuario.rut,
         sector,
         area,
+        must_change_password: usuario.must_change_password,
       },
     });
   } catch (err) {
@@ -105,7 +106,10 @@ router.patch('/cambiar-password', verificarToken, [
     if (!valida) return res.status(401).json({ error: 'Contraseña actual incorrecta' });
 
     const hash = await bcrypt.hash(password_nueva, 10);
-    await pool.query('UPDATE usuarios SET password_hash = $1 WHERE id = $2', [hash, req.usuario.id]);
+    await pool.query(
+      'UPDATE usuarios SET password_hash = $1, must_change_password = FALSE WHERE id = $2',
+      [hash, req.usuario.id]
+    );
     res.json({ mensaje: 'Contraseña actualizada exitosamente' });
   } catch (err) {
     console.error(err);
@@ -116,7 +120,7 @@ router.patch('/cambiar-password', verificarToken, [
 router.get('/me', verificarToken, cargarPermisos, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT u.id, u.email, u.rol, u.funcionario_id, u.sector, u.area,
+      `SELECT u.id, u.email, u.rol, u.funcionario_id, u.sector, u.area, u.must_change_password,
               f.nombres, f.apellidos, f.cargo, f.rut,
               f.sector AS funcionario_sector, f.area AS funcionario_area
        FROM usuarios u

@@ -4,10 +4,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, X } from 'lucide-react';
 import Sidebar from './Sidebar';
 import CentroDescargas from './CentroDescargas';
+import CambiarPasswordModal from './CambiarPasswordModal';
+import { useAuth } from '../context/AuthContext';
 import { SISTEMA } from '../config/sistema';
 
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { usuario, actualizarUsuario } = useAuth();
 
   return (
     <div className="flex h-screen overflow-hidden bg-dark-50">
@@ -43,6 +46,13 @@ export default function Layout() {
       </AnimatePresence>
 
       <CentroDescargas />
+
+      {usuario?.must_change_password && (
+        <CambiarPasswordModal
+          obligatorio
+          onSuccess={() => actualizarUsuario({ must_change_password: false })}
+        />
+      )}
 
       {/* Main content */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">

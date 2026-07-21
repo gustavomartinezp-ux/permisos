@@ -138,6 +138,40 @@ const migrations = [
       CREATE INDEX IF NOT EXISTS idx_report_tasks_expires ON report_tasks(expires_at);
     `,
   },
+  {
+    // Gestión de credenciales institucionales: permite a ADMIN_TI/RRHH_ADMIN/SECRETARY
+    // registrar el email de un funcionario y asignarle una contraseña por defecto
+    // (derivada de su RUT) con obligación de cambio en el primer login.
+    id: 'credenciales_v1',
+    sql: `
+      ALTER TABLE usuarios
+        ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ;
+
+      CREATE TABLE IF NOT EXISTS auditoria_credenciales (
+        id                     SERIAL PRIMARY KEY,
+        target_funcionario_id  INTEGER NOT NULL REFERENCES funcionarios(id) ON DELETE CASCADE,
+        target_usuario_id      INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+        accion                 VARCHAR(30) NOT NULL CHECK (accion IN ('UPDATE_EMAIL', 'RESET_DEFAULT_PASSWORD')),
+        actualizado_por        INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+        detalle                JSONB,
+        created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_auditoria_credenciales_funcionario
+        ON auditoria_credenciales(target_funcionario_id, created_at DESC);
+
+      INSERT INTO permissions (codigo, descripcion) VALUES
+        ('funcionarios.gestionar_credenciales', 'Registrar/actualizar email institucional y asignar contraseña por defecto de un funcionario')
+      ON CONFLICT (codigo) DO NOTHING;
+
+      INSERT INTO role_permissions (role_id, permission_id)
+      SELECT r.id, p.id FROM roles r JOIN permissions p ON
+        p.codigo = 'funcionarios.gestionar_credenciales'
+        AND r.codigo IN ('ADMIN_TI', 'RRHH_ADMIN', 'SECRETARY')
+      ON CONFLICT DO NOTHING;
+    `,
+  },
 ];
 
 async function runMigrations() {

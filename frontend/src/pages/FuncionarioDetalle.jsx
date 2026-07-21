@@ -6,10 +6,10 @@ import { es } from 'date-fns/locale';
 import {
   ArrowLeft, User, Calendar, Briefcase, Plus, Clock, BarChart3,
   Edit2, Save, X, Building2, ArrowLeftRight, FileDown, Printer, Camera, Trash2,
-  KeyRound, Mail, ShieldAlert, RefreshCw, CheckCircle2, AlertTriangle,
+  KeyRound, Mail, ShieldAlert, RefreshCw, CheckCircle2, AlertTriangle, XCircle, Copy,
   ArrowRight, History, CalendarRange, Search,
 } from 'lucide-react';
-import { funcionariosApi, historialApi, solicitudesApi, usuariosApi, suplenciasApi } from '../api/client';
+import { funcionariosApi, historialApi, solicitudesApi, suplenciasApi } from '../api/client';
 import { generarReporteFuncionario, imprimirReporteFuncionario } from '../utils/reportePDF';
 import { useAuth } from '../context/AuthContext';
 import SaldosLista from '../components/SaldosLista';
@@ -49,11 +49,26 @@ const CONTRATO_COLORS = {
 
 const TABS_VALIDOS = ['saldos', 'historial', 'solicitudes', 'suplencias'];
 
+const limpiarRut = (rut) => (rut || '').replace(/[^0-9kK]/g, '').toUpperCase();
+
+// Estado de cuenta institucional: rojo (sin correo) / amarillo (contraseña por
+// defecto sin cambiar) / verde (contraseña personalizada ya definida).
+const estadoCuentaBadge = (f) => {
+  if (!f.usuario_email) {
+    return { texto: 'Sin correo registrado', clase: 'bg-red-100 text-red-700 border-red-200', Icon: XCircle };
+  }
+  if (f.must_change_password) {
+    return { texto: 'Pendiente primer login', clase: 'bg-yellow-100 text-yellow-700 border-yellow-200', Icon: AlertTriangle };
+  }
+  return { texto: 'Cuenta activa', clase: 'bg-emerald-100 text-emerald-700 border-emerald-200', Icon: CheckCircle2 };
+};
+
 export default function FuncionarioDetalle() {
   const { id } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const { esAdmin, esSupervisor, esFuncionario, usuario } = useAuth();
+  const { esAdmin, esSupervisor, esFuncionario, usuario, tienePermiso } = useAuth();
+  const puedeGestionarCredenciales = tienePermiso('funcionarios.gestionar_credenciales');
   const esPropioFuncionario = esFuncionario && String(usuario?.funcionario_id) === String(id);
   const [funcionario, setFuncionario] = useState(null);
   const [historial, setHistorial] = useState([]);
@@ -99,9 +114,9 @@ export default function FuncionarioDetalle() {
   const [subiendoFoto, setSubiendoFoto] = useState(false);
   const fotoInputRef = useRef(null);
 
-  // Admin: gestión de cuenta
-  const [accionCuenta, setAccionCuenta] = useState(null); // 'password' | 'email' | 'eliminar'
-  const [cuentaForm, setCuentaForm] = useState({ password_admin: '', password_nueva: '', email: '' });
+  // Gestión de cuenta / credenciales institucionales
+  const [accionCuenta, setAccionCuenta] = useState(null); // 'email' | 'reset-password' | 'eliminar'
+  const [cuentaForm, setCuentaForm] = useState({ password_admin: '', email: '' });
   const [procesandoCuenta, setProcesandoCuenta] = useState(false);
 
   const cargarFuncionario = () => {
@@ -275,24 +290,24 @@ export default function FuncionarioDetalle() {
   };
 
   const abrirAccion = (accion) => {
-    setCuentaForm({ password_admin: '', password_nueva: '', email: '' });
+    setCuentaForm({ password_admin: '', email: funcionario?.usuario_email || '' });
     setAccionCuenta(accion);
   };
 
   const ejecutarAccionCuenta = async () => {
-    if (!cuentaForm.password_admin) return toast.error('Ingresa tu contraseña de administrador');
     setProcesandoCuenta(true);
     try {
-      if (accionCuenta === 'password') {
-        if (cuentaForm.password_nueva.length < 6) { setProcesandoCuenta(false); return toast.error('Mínimo 6 caracteres'); }
-        await usuariosApi.cambiarPassword(funcionario.usuario_id, cuentaForm.password_nueva, cuentaForm.password_admin);
-        toast.success('Contraseña actualizada');
-      } else if (accionCuenta === 'email') {
+      if (accionCuenta === 'email') {
         if (!cuentaForm.email.includes('@')) { setProcesandoCuenta(false); return toast.error('Email inválido'); }
-        await usuariosApi.cambiarEmail(funcionario.usuario_id, cuentaForm.email, cuentaForm.password_admin);
-        toast.success('Email actualizado');
+        const { data } = await funcionariosApi.actualizarEmailCuenta(id, cuentaForm.email);
+        toast.success(data.cuenta_creada ? 'Cuenta creada con contraseña por defecto' : 'Email actualizado');
+        cargarFuncionario();
+      } else if (accionCuenta === 'reset-password') {
+        await funcionariosApi.resetearPasswordDefault(id);
+        toast.success('Contraseña restablecida al valor por defecto');
         cargarFuncionario();
       } else if (accionCuenta === 'eliminar') {
+        if (!cuentaForm.password_admin) { setProcesandoCuenta(false); return toast.error('Ingresa tu contraseña de administrador'); }
         await funcionariosApi.eliminar(id, cuentaForm.password_admin);
         toast.success('Funcionario eliminado');
         navigate('/funcionarios');
@@ -303,6 +318,20 @@ export default function FuncionarioDetalle() {
       toast.error(err?.response?.data?.error || 'Error al procesar la acción');
     } finally {
       setProcesandoCuenta(false);
+    }
+  };
+
+  // Sin infraestructura de envío de correo en el proyecto: en vez de un switch
+  // de "enviar bienvenida" que no haría nada real, se copian las credenciales
+  // al portapapeles para que el staff se las entregue por el canal que use
+  // habitualmente (WhatsApp, papel, llamada).
+  const copiarCredenciales = async () => {
+    const texto = `Correo: ${funcionario.usuario_email}\nContraseña temporal: ${limpiarRut(funcionario.rut)}\nDebe cambiarla en su primer inicio de sesión.`;
+    try {
+      await navigator.clipboard.writeText(texto);
+      toast.success('Credenciales copiadas al portapapeles');
+    } catch {
+      toast.error('No se pudo copiar. Revisa los permisos del navegador.');
     }
   };
 
@@ -484,8 +513,8 @@ export default function FuncionarioDetalle() {
         </div>
       </motion.div>
 
-      {/* Admin: Gestión de cuenta */}
-      {esAdmin && (funcionario.usuario_id || funcionario.activo === false) && (
+      {/* Gestión de cuenta / credenciales institucionales */}
+      {(puedeGestionarCredenciales || (esAdmin && funcionario.activo === false)) && (
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -496,26 +525,41 @@ export default function FuncionarioDetalle() {
             <h3 className="text-sm font-semibold text-dark-700">Gestión de cuenta</h3>
           </div>
 
-          {funcionario.usuario_id && (
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2 text-sm text-dark-600 flex-1 min-w-0">
-                <Mail size={14} className="text-dark-400 flex-shrink-0" />
-                <span className="truncate">{funcionario.usuario_email || '—'}</span>
+          {puedeGestionarCredenciales && (() => {
+            const badge = estadoCuentaBadge(funcionario);
+            return (
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2 text-sm text-dark-600 flex-1 min-w-0">
+                  <Mail size={14} className="text-dark-400 flex-shrink-0" />
+                  <span className="truncate">{funcionario.usuario_email || 'Sin correo registrado'}</span>
+                  <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border flex-shrink-0 ${badge.clase}`}>
+                    <badge.Icon size={11} />
+                    {badge.texto}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-2 flex-shrink-0">
+                  <button onClick={() => abrirAccion('email')} className="btn-secondary text-xs py-1.5 px-3">
+                    <Mail size={13} />
+                    {funcionario.usuario_email ? 'Cambiar email' : 'Registrar email'}
+                  </button>
+                  {funcionario.usuario_email && (
+                    <>
+                      <button onClick={() => abrirAccion('reset-password')} className="btn-secondary text-xs py-1.5 px-3">
+                        <KeyRound size={13} />
+                        Asignar / Resetear a Contraseña por Defecto
+                      </button>
+                      <button onClick={copiarCredenciales} className="btn-secondary text-xs py-1.5 px-3">
+                        <Copy size={13} />
+                        Copiar credenciales
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
-              <div className="flex gap-2 flex-shrink-0">
-                <button onClick={() => abrirAccion('email')} className="btn-secondary text-xs py-1.5 px-3">
-                  <Mail size={13} />
-                  Cambiar email
-                </button>
-                <button onClick={() => abrirAccion('password')} className="btn-secondary text-xs py-1.5 px-3">
-                  <KeyRound size={13} />
-                  Cambiar contraseña
-                </button>
-              </div>
-            </div>
-          )}
+            );
+          })()}
 
-          {funcionario.activo === false && (
+          {esAdmin && funcionario.activo === false && (
             <div className="pt-1 border-t border-dark-100">
               <button
                 onClick={() => abrirAccion('eliminar')}
@@ -531,28 +575,26 @@ export default function FuncionarioDetalle() {
           {accionCuenta && (
             <div className="mt-3 p-4 bg-dark-50 rounded-xl border border-dark-200 space-y-3">
               <p className="text-sm font-medium text-dark-800">
-                {accionCuenta === 'password' && 'Nueva contraseña para el funcionario'}
-                {accionCuenta === 'email' && 'Nuevo email para el funcionario'}
+                {accionCuenta === 'email' && (funcionario.usuario_email ? 'Nuevo email para el funcionario' : 'Registrar correo y crear cuenta')}
+                {accionCuenta === 'reset-password' && '¿Asignar la contraseña por defecto?'}
                 {accionCuenta === 'eliminar' && '¿Eliminar este funcionario permanentemente?'}
               </p>
 
-              {accionCuenta === 'password' && (
-                <input
-                  type="password"
-                  placeholder="Nueva contraseña (mín. 6 caracteres)"
-                  value={cuentaForm.password_nueva}
-                  onChange={e => setCuentaForm(p => ({ ...p, password_nueva: e.target.value }))}
-                  className="input-field"
-                />
-              )}
               {accionCuenta === 'email' && (
                 <input
                   type="email"
-                  placeholder="Nuevo email"
+                  placeholder="Correo institucional o personal"
                   value={cuentaForm.email}
                   onChange={e => setCuentaForm(p => ({ ...p, email: e.target.value }))}
                   className="input-field"
+                  autoFocus
                 />
+              )}
+              {accionCuenta === 'reset-password' && (
+                <p className="text-xs text-dark-500">
+                  La nueva contraseña será el RUT sin puntos ni guión (<span className="font-mono font-medium text-dark-700">{limpiarRut(funcionario.rut)}</span>).
+                  Deberá cambiarla al iniciar sesión.
+                </p>
               )}
               {accionCuenta === 'eliminar' && (
                 <p className="text-xs text-red-600">
@@ -560,13 +602,15 @@ export default function FuncionarioDetalle() {
                 </p>
               )}
 
-              <input
-                type="password"
-                placeholder="Tu contraseña de administrador"
-                value={cuentaForm.password_admin}
-                onChange={e => setCuentaForm(p => ({ ...p, password_admin: e.target.value }))}
-                className="input-field"
-              />
+              {accionCuenta === 'eliminar' && (
+                <input
+                  type="password"
+                  placeholder="Tu contraseña de administrador"
+                  value={cuentaForm.password_admin}
+                  onChange={e => setCuentaForm(p => ({ ...p, password_admin: e.target.value }))}
+                  className="input-field"
+                />
+              )}
 
               <div className="flex gap-2">
                 <button onClick={() => setAccionCuenta(null)} className="btn-secondary flex-1 justify-center text-sm py-2">

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import CambiarPasswordModal from './CambiarPasswordModal';
+import { NOMBRE_ROL, ORDEN_ROL } from '../config/roles';
 
 // Roles permitidos por ítem — deben reflejar lo que el backend realmente exige
 // en cada ruta (ver backend/src/middleware/rbac.js y las rutas correspondientes).
@@ -33,15 +34,7 @@ const NAV_SUPERVISOR = [
 
 // Nombres legibles para los roles RBAC — se muestran en vez del rol legacy
 // crudo (que no cambia aunque se asignen roles nuevos, ver AuthContext).
-const NOMBRE_ROL = {
-  ADMIN_TI: 'Administrador de TI',
-  RRHH_ADMIN: 'Encargado de RRHH',
-  SECRETARY: 'Secretaría',
-  SUPERVISOR: 'Supervisor',
-  EMPLOYEE: 'Funcionario',
-  AUDITOR: 'Auditor',
-};
-const ORDEN_ROL = ['ADMIN_TI', 'RRHH_ADMIN', 'SECRETARY', 'SUPERVISOR', 'AUDITOR', 'EMPLOYEE'];
+// Catálogo compartido en ../config/roles (también usado en FuncionarioDetalle).
 
 // Filtra el menú según los roles RBAC del usuario y quita headers que se
 // queden sin ningún ítem visible debajo (evita títulos de sección huérfanos).

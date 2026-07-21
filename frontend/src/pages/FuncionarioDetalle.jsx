@@ -12,6 +12,7 @@ import {
 import { funcionariosApi, historialApi, solicitudesApi, suplenciasApi } from '../api/client';
 import { generarReporteFuncionario, imprimirReporteFuncionario } from '../utils/reportePDF';
 import { useAuth } from '../context/AuthContext';
+import { NOMBRE_ROL, COLOR_ROL, ORDEN_ROL } from '../config/roles';
 import SaldosLista from '../components/SaldosLista';
 import TimelineMovimientos from '../components/TimelineMovimientos';
 import EstadoBadge from '../components/EstadoBadge';
@@ -494,6 +495,23 @@ export default function FuncionarioDetalle() {
                   Reemplaza a: {funcionario.reemplaza_nombres} {funcionario.reemplaza_apellidos}
                 </span>
               )}
+            </div>
+            {/* Rol(es) RBAC del funcionario en el sistema */}
+            <div className="flex flex-wrap items-center gap-1.5 mt-2">
+              {(funcionario.roles_rbac?.length > 0)
+                ? ORDEN_ROL
+                    .filter((codigo) => funcionario.roles_rbac.includes(codigo))
+                    .map((codigo) => (
+                      <span
+                        key={codigo}
+                        className={`text-xs font-medium px-2 py-0.5 rounded-full border ${COLOR_ROL[codigo] || 'bg-dark-100 text-dark-600 border-dark-200'}`}
+                      >
+                        {NOMBRE_ROL[codigo] || codigo}
+                      </span>
+                    ))
+                : funcionario.usuario_id && (
+                    <span className="text-xs text-dark-400">Sin rol asignado en el sistema</span>
+                  )}
             </div>
           </div>
           <div className="flex flex-col gap-2 flex-shrink-0">

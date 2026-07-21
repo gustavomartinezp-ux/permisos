@@ -125,7 +125,13 @@ router.get('/:id', async (req, res) => {
               f.grupo_contractual,
               f.convenio_honorarios,
               f.prestacion,
-              f.fecha_termino_contrato
+              f.fecha_termino_contrato,
+              COALESCE(
+                (SELECT JSON_AGG(r.codigo ORDER BY r.codigo)
+                 FROM user_roles ur JOIN roles r ON r.id = ur.role_id
+                 WHERE ur.usuario_id = u.id),
+                '[]'
+              ) AS roles_rbac
        FROM funcionarios f
        LEFT JOIN servicios s ON f.servicio_id = s.id
        LEFT JOIN dispositivos d ON f.dispositivo_id = d.id

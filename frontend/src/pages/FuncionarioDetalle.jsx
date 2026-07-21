@@ -658,43 +658,46 @@ export default function FuncionarioDetalle() {
         </motion.div>
       )}
 
-      {/* Opt-out del muro social de cumpleaños */}
-      {puedeVerToggleCumpleanos && (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="card p-5"
-        >
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 min-w-0">
-              <PartyPopper size={16} className="text-amber-500 flex-shrink-0" />
-              <div className="min-w-0">
-                <h3 className="text-sm font-semibold text-dark-700">Muro social de cumpleaños</h3>
-                <p className="text-xs text-dark-500">
-                  {funcionario.mostrar_cumpleanos
-                    ? 'Su cumpleaños se publica y sus compañeros pueden felicitarlo.'
-                    : 'Su cumpleaños no se publica en el muro social.'}
-                </p>
-              </div>
+      {/* Estado del muro social de cumpleaños — visible para cualquiera que ya
+          puede ver esta ficha; el switch solo es interactivo para quien tiene
+          permiso de edición (RRHH/Admin/Secretaría). El funcionario ve su
+          estado siempre, aunque no pueda cambiarlo. */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="card p-5"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <PartyPopper size={16} className="text-amber-500 flex-shrink-0" />
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-dark-700">Muro social de cumpleaños</h3>
+              <p className="text-xs text-dark-500">
+                {funcionario.mostrar_cumpleanos
+                  ? 'Su cumpleaños se publica y sus compañeros pueden felicitarlo.'
+                  : 'Su cumpleaños no se publica en el muro social.'}
+                {!puedeVerToggleCumpleanos && ' Solo RRHH/Administración puede cambiar esto.'}
+              </p>
             </div>
-            <button
-              onClick={toggleCumpleanos}
-              disabled={guardandoCumple}
-              role="switch"
-              aria-checked={funcionario.mostrar_cumpleanos}
-              className={`relative flex-shrink-0 w-11 h-6 rounded-full transition-colors disabled:opacity-60 ${
-                funcionario.mostrar_cumpleanos ? 'bg-brand-600' : 'bg-dark-300'
-              }`}
-            >
-              <motion.span
-                className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow"
-                animate={{ x: funcionario.mostrar_cumpleanos ? 20 : 0 }}
-                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-              />
-            </button>
           </div>
-        </motion.div>
-      )}
+          <button
+            onClick={puedeVerToggleCumpleanos ? toggleCumpleanos : undefined}
+            disabled={guardandoCumple || !puedeVerToggleCumpleanos}
+            role="switch"
+            aria-checked={funcionario.mostrar_cumpleanos}
+            title={puedeVerToggleCumpleanos ? undefined : 'Solo RRHH/Administración puede cambiar esto'}
+            className={`relative flex-shrink-0 w-11 h-6 rounded-full transition-colors ${
+              funcionario.mostrar_cumpleanos ? 'bg-brand-600' : 'bg-dark-300'
+            } ${puedeVerToggleCumpleanos ? 'disabled:opacity-60' : 'opacity-70 cursor-not-allowed'}`}
+          >
+            <motion.span
+              className="absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow"
+              animate={{ x: funcionario.mostrar_cumpleanos ? 20 : 0 }}
+              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+            />
+          </button>
+        </div>
+      </motion.div>
 
       {/* Tabs */}
       {(() => {

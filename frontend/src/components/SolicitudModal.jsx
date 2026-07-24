@@ -37,6 +37,17 @@ function calcularDiasHabiles(inicio, fin) {
   return dias;
 }
 
+// Días corridos (calendario) entre dos fechas, inclusive — para el dispositivo
+// SAR Los Cerros, donde el concepto de "día hábil" no aplica (turnos 24/7),
+// así que fines de semana y feriados cuentan igual que cualquier otro día.
+function calcularDiasCorridos(inicio, fin) {
+  if (!inicio || !fin) return 0;
+  const start = new Date(inicio + 'T12:00:00');
+  const end   = new Date(fin   + 'T12:00:00');
+  if (end < start) return 0;
+  return Math.round((end - start) / 86400000) + 1;
+}
+
 // Dispositivo (establecimiento) con régimen de turnos 24/7: único exceptuado
 // de la regla de "solo día hábil" para Permiso Administrativo y Feriado
 // Legal. Es `funcionario.dispositivo` (nombre del establecimiento), no
@@ -141,12 +152,19 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
     ? calcularFechaFinEspecialLocal(form.fecha_inicio, tipoEspecialSel.dias_fijos, tipoEspecialSel.tipo_dias)
     : '';
 
+  // Regla general: Permiso Administrativo y Feriado Legal solo en días
+  // hábiles. Excepción: dispositivo SAR Los Cerros (turnos 24/7) puede
+  // elegir cualquier día — y por lo mismo, sus días se cuentan corridos
+  // (calendario), no hábiles, porque el concepto no aplica a su régimen.
+  const esSectorTurno = DISPOSITIVO_EXCEPCION_DIA_HABIL.test(funcionario?.dispositivo || '');
   const permiteMedioDia = !esEspecial && saldoSel?.permite_medio_dia === true;
   const diasSolicitados = esEspecial
     ? (tipoEspecialSel.dias_fijos || 0)
     : medioDia
       ? 0.5
-      : calcularDiasHabiles(form.fecha_inicio, form.fecha_fin);
+      : (esSectorTurno && tipoRequiereDiaHabil(saldoSel))
+        ? calcularDiasCorridos(form.fecha_inicio, form.fecha_fin)
+        : calcularDiasHabiles(form.fecha_inicio, form.fecha_fin);
 
   // Saldo para tipos normales
   const arrastreDisp = saldoSel?.es_feriado_legal
@@ -171,9 +189,6 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
   const saldoInsuficiente = !esEspecial && !!form.tipo_permiso_id
     && (diasSolicitados > totalDisp || excedeParcializacion);
 
-  // Regla general: Permiso Administrativo y Feriado Legal solo en días
-  // hábiles. Excepción: sector SAR (turnos 24/7) puede elegir cualquier día.
-  const esSectorTurno = DISPOSITIVO_EXCEPCION_DIA_HABIL.test(funcionario?.dispositivo || '');
   const requiereDiaHabil = !esEspecial && tipoRequiereDiaHabil(saldoSel) && !esSectorTurno;
   const fechaFinParaValidar = medioDia ? form.fecha_inicio : form.fecha_fin;
   const diasNoHabilesSeleccionados = requiereDiaHabil
@@ -723,7 +738,7 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
                 }`}
               >
                 <p className={`font-medium ${saldoInsuficiente ? 'text-red-700' : 'text-brand-700'}`}>
-                  {diasSolicitados} día(s) hábil(es)
+                  {diasSolicitados} día(s){esSectorTurno && tipoRequiereDiaHabil(saldoSel) ? '' : ' hábil(es)'}
                   {saldoSel && ` de ${totalDisp} disponibles`}
                 </p>
 

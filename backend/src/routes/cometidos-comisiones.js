@@ -2,7 +2,7 @@
 
 const express = require('express');
 const { pool } = require('../db');
-const { verificarToken, adminOSupervisor } = require('../middleware/auth');
+const { verificarToken } = require('../middleware/auth');
 const { cargarPermisos, requierePermiso, noAutoAprobacion, esSoloAutoservicio, tieneVisibilidadGlobal } = require('../middleware/rbac');
 const { diasCorridos, validarLimiteComision } = require('../utils/cometidosComisiones');
 
@@ -159,7 +159,7 @@ router.post('/', async (req, res) => {
 });
 
 // ─── Aprobar jefatura (Supervisor de sector/área) ──────────────────────────────
-router.patch('/:id/aprobar-jefatura', adminOSupervisor, async (req, res) => {
+router.patch('/:id/aprobar-jefatura', requierePermiso('solicitudes.pre_aprobar', 'solicitudes.aprobar'), async (req, res) => {
   if (req.usuario.rol === 'admin') {
     return res.status(400).json({ error: 'El administrador debe usar la aprobación de dirección, no la de jefatura' });
   }
@@ -177,12 +177,14 @@ router.patch('/:id/aprobar-jefatura', adminOSupervisor, async (req, res) => {
       return res.status(403).json({ error: 'No puede aprobar su propia solicitud' });
     }
 
-    const scope = req.usuario.scopeEfectivo || { sector: req.usuario.sector, area: req.usuario.area };
-    if (scope.sector && sol.sector !== scope.sector) {
-      return res.status(403).json({ error: 'No puede aprobar solicitudes de otro sector' });
-    }
-    if (!scope.sector && scope.area && sol.area !== scope.area) {
-      return res.status(403).json({ error: 'No puede aprobar solicitudes de otra área' });
+    if (!tieneVisibilidadGlobal(req)) {
+      const scope = req.usuario.scopeEfectivo || { sector: req.usuario.sector, area: req.usuario.area };
+      if (scope.sector && sol.sector !== scope.sector) {
+        return res.status(403).json({ error: 'No puede aprobar solicitudes de otro sector' });
+      }
+      if (!scope.sector && scope.area && sol.area !== scope.area) {
+        return res.status(403).json({ error: 'No puede aprobar solicitudes de otra área' });
+      }
     }
 
     await pool.query(
@@ -251,7 +253,8 @@ router.patch('/:id/aprobar-direccion', requierePermiso('solicitudes.aprobar'), a
 
 // ─── Rechazar (en cualquier etapa pendiente) ───────────────────────────────────
 router.patch('/:id/rechazar', async (req, res) => {
-  const puedeJefatura = req.usuario.rol === 'admin' || req.usuario.rol === 'supervisor';
+  const puedeJefatura = req.usuario.rol === 'admin' || req.usuario.rol === 'supervisor'
+    || (req.usuario.permisos || []).includes('solicitudes.pre_aprobar');
   const puedeDireccion = req.usuario.rol === 'admin' || (req.usuario.permisos || []).includes('solicitudes.aprobar');
   if (!puedeJefatura && !puedeDireccion) {
     return res.status(403).json({ error: 'No tienes permiso para rechazar esta solicitud' });

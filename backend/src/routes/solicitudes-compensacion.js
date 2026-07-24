@@ -1,12 +1,22 @@
 'use strict';
 const express = require('express');
 const { pool } = require('../db');
-const { verificarToken, adminOSupervisor } = require('../middleware/auth');
-const { cargarPermisos, tieneVisibilidadGlobal } = require('../middleware/rbac');
+const { verificarToken } = require('../middleware/auth');
+const { cargarPermisos, requierePermiso, esSoloAutoservicio, tieneVisibilidadGlobal } = require('../middleware/rbac');
 const { calcularSaldo } = require('./horas-compensatorias');
 
 const router = express.Router();
 router.use(verificarToken, cargarPermisos);
+
+// Admin/supervisor (rol legacy) o cualquier cuenta con el permiso RBAC
+// saldos.ajustar (RRHH_ADMIN/SECRETARY) — antes esto se limitaba al rol
+// legacy exacto y bloqueaba con 403 a cuentas RBAC sin ese rol, lo que además
+// dispara el logout forzado del interceptor global de axios ante cualquier 403.
+const puedeGestionarCompensacion = (req, res, next) => {
+  if (['admin', 'supervisor'].includes(req.usuario.rol)) return next();
+  if ((req.usuario.permisos || []).includes('saldos.ajustar')) return next();
+  return res.status(403).json({ error: 'No tienes permiso para gestionar solicitudes de horas compensatorias' });
+};
 
 // ─── FIFO: registra qué horas específicas se consumieron al aprobar ───────────
 async function registrarConsumoFIFO(client, solicitudId, funcionarioId, horasSolicitadas) {
@@ -44,7 +54,7 @@ router.get('/', async (req, res) => {
     let where = '1=1';
     const params = [];
 
-    if (req.usuario.rol === 'funcionario') {
+    if (esSoloAutoservicio(req)) {
       where += ` AND sc.funcionario_id = $${params.length + 1}`;
       params.push(req.usuario.funcionario_id);
     } else if (req.usuario.rol === 'supervisor' && !tieneVisibilidadGlobal(req)) {
@@ -139,7 +149,7 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error: 'No se pueden solicitar más de 8 horas por jornada' });
   }
 
-  if (req.usuario.rol === 'funcionario' && req.usuario.funcionario_id != funcionario_id) {
+  if (esSoloAutoservicio(req) && req.usuario.funcionario_id != funcionario_id) {
     return res.status(403).json({ error: 'Solo puedes solicitar para ti mismo' });
   }
 
@@ -171,7 +181,7 @@ router.post('/', async (req, res) => {
 });
 
 // ─── PATCH /:id/aprobar ───────────────────────────────────────────────────────
-router.patch('/:id/aprobar', adminOSupervisor, async (req, res) => {
+router.patch('/:id/aprobar', puedeGestionarCompensacion, async (req, res) => {
   const { observaciones } = req.body;
   const client = await pool.connect();
 
@@ -242,7 +252,7 @@ router.patch('/:id/aprobar', adminOSupervisor, async (req, res) => {
 });
 
 // ─── PATCH /:id/rechazar ──────────────────────────────────────────────────────
-router.patch('/:id/rechazar', adminOSupervisor, async (req, res) => {
+router.patch('/:id/rechazar', puedeGestionarCompensacion, async (req, res) => {
   const { observaciones } = req.body;
   try {
     // Verificar existencia y scope antes de rechazar
@@ -296,7 +306,7 @@ router.patch('/:id/cancelar', async (req, res) => {
     if (sol.rows.length === 0) {
       return res.status(404).json({ error: 'Solicitud no encontrada o ya procesada' });
     }
-    if (req.usuario.rol === 'funcionario' && req.usuario.funcionario_id != sol.rows[0].funcionario_id) {
+    if (esSoloAutoservicio(req) && req.usuario.funcionario_id != sol.rows[0].funcionario_id) {
       return res.status(403).json({ error: 'Acceso denegado' });
     }
     await pool.query(

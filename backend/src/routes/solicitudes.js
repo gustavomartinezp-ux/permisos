@@ -1,7 +1,7 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { pool } = require('../db');
-const { verificarToken, soloAdmin, adminOSupervisor } = require('../middleware/auth');
+const { verificarToken } = require('../middleware/auth');
 const { cargarPermisos, requierePermiso, noAutoAprobacion, esSoloAutoservicio, tieneVisibilidadGlobal } = require('../middleware/rbac');
 const {
   calcularDiasHabiles,
@@ -433,7 +433,7 @@ router.post('/', [
 });
 
 // PRE-APROBAR solicitud (Supervisor de sector → estado pre_aprobado)
-router.patch('/:id/pre-aprobar', adminOSupervisor, async (req, res) => {
+router.patch('/:id/pre-aprobar', requierePermiso('solicitudes.pre_aprobar'), async (req, res) => {
   if (req.usuario.rol === 'admin') {
     return res.status(400).json({ error: 'El administrador debe usar la aprobación final, no la pre-aprobación' });
   }
@@ -460,13 +460,16 @@ router.patch('/:id/pre-aprobar', adminOSupervisor, async (req, res) => {
     }
 
     // Scope efectivo: si el usuario está subrogando a un supervisor titular vigente,
-    // se usa el sector/área del titular en vez del propio.
-    const scope = req.usuario.scopeEfectivo || { sector: req.usuario.sector, area: req.usuario.area };
-    if (scope.sector && solCheck.sector !== scope.sector) {
-      return res.status(403).json({ error: 'No puede pre-aprobar solicitudes de otro sector' });
-    }
-    if (!scope.sector && scope.area && solCheck.area !== scope.area) {
-      return res.status(403).json({ error: 'No puede pre-aprobar solicitudes de otra área' });
+    // se usa el sector/área del titular en vez del propio. Cuentas con visibilidad
+    // global (admin, ADMIN_TI/RRHH_ADMIN/AUDITOR vía RBAC) no se acotan a su sector.
+    if (!tieneVisibilidadGlobal(req)) {
+      const scope = req.usuario.scopeEfectivo || { sector: req.usuario.sector, area: req.usuario.area };
+      if (scope.sector && solCheck.sector !== scope.sector) {
+        return res.status(403).json({ error: 'No puede pre-aprobar solicitudes de otro sector' });
+      }
+      if (!scope.sector && scope.area && solCheck.area !== scope.area) {
+        return res.status(403).json({ error: 'No puede pre-aprobar solicitudes de otra área' });
+      }
     }
 
     await pool.query(
@@ -637,7 +640,7 @@ router.patch('/:id/aprobar', requierePermiso('solicitudes.aprobar'), async (req,
 });
 
 // RECHAZAR solicitud — libera los días pendientes
-router.patch('/:id/rechazar', adminOSupervisor, async (req, res) => {
+router.patch('/:id/rechazar', requierePermiso('solicitudes.pre_aprobar', 'solicitudes.aprobar'), async (req, res) => {
   const { id } = req.params;
   const { observaciones } = req.body;
   const client = await pool.connect();
@@ -646,7 +649,7 @@ router.patch('/:id/rechazar', adminOSupervisor, async (req, res) => {
     await client.query('BEGIN');
 
     const solicitud = await client.query(
-      `SELECT sol.*, tp.es_feriado_legal, tp.es_especial, tp.nombre AS tipo_nombre, f.sector
+      `SELECT sol.*, tp.es_feriado_legal, tp.es_especial, tp.nombre AS tipo_nombre, f.sector, f.area
        FROM solicitudes sol
        JOIN tipos_permisos tp ON sol.tipo_permiso_id = tp.id
        JOIN funcionarios f ON sol.funcionario_id = f.id
@@ -661,16 +664,24 @@ router.patch('/:id/rechazar', adminOSupervisor, async (req, res) => {
 
     const sol = solicitud.rows[0];
 
-    // Supervisor no puede rechazar su propia solicitud
-    if (req.usuario.rol === 'supervisor' && req.usuario.funcionario_id && sol.funcionario_id == req.usuario.funcionario_id) {
+    // Anticonflicto de interés: nadie puede rechazar su propia solicitud, sin importar el rol
+    // (mismo criterio que /aprobar).
+    if (noAutoAprobacion(sol.funcionario_id, req)) {
       await client.query('ROLLBACK');
-      return res.status(403).json({ error: 'No puede rechazar su propia solicitud. Solo el Administrador puede hacerlo.' });
+      return res.status(403).json({ error: 'No puede rechazar su propia solicitud' });
     }
 
-    // Supervisor solo puede rechazar de su sector
-    if (req.usuario.rol === 'supervisor' && req.usuario.sector && sol.sector !== req.usuario.sector && !tieneVisibilidadGlobal(req)) {
-      await client.query('ROLLBACK');
-      return res.status(403).json({ error: 'No puede rechazar solicitudes de otro sector' });
+    // Fuera de visibilidad global, solo puede rechazar solicitudes de su propio sector/área.
+    if (!tieneVisibilidadGlobal(req)) {
+      const scope = req.usuario.scopeEfectivo || { sector: req.usuario.sector, area: req.usuario.area };
+      if (scope.sector && sol.sector !== scope.sector) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({ error: 'No puede rechazar solicitudes de otro sector' });
+      }
+      if (!scope.sector && scope.area && sol.area !== scope.area) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({ error: 'No puede rechazar solicitudes de otra área' });
+      }
     }
 
     // ── Rechazar permiso especial (sin movimiento de saldo) ───────────────

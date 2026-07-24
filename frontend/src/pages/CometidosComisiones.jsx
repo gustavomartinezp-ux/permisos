@@ -262,6 +262,7 @@ function NuevaSolicitudModal({ funcionarios, funcionarioPropio, onClose, onSucce
 export default function CometidosComisiones() {
   const { esAdmin, esSupervisor, esSoloAutoservicio, usuario, tienePermiso } = useAuth();
   const puedeAprobarDireccion = tienePermiso('solicitudes.aprobar');
+  const puedeAprobarJefatura  = esAdmin || esSupervisor || tienePermiso('solicitudes.pre_aprobar');
   const [solicitudes, setSolicitudes] = useState([]);
   const [funcionarios, setFuncionarios] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -351,7 +352,7 @@ export default function CometidosComisiones() {
                   {s.requiere_viatico && <p className="text-xs text-blue-600">Viático {s.tipo_viatico}{s.monto_viatico ? ` · $${s.monto_viatico}` : ''}</p>}
                 </div>
                 <div className="flex gap-2 flex-shrink-0">
-                  {s.estado === 'pendiente' && (esAdmin || esSupervisor) && (
+                  {s.estado === 'pendiente' && puedeAprobarJefatura && (
                     <button onClick={() => accion(() => cometidosComisionesApi.aprobarJefatura(s.id), 'Aprobado por jefatura')} className="btn-secondary text-xs py-1.5 px-3">
                       Aprobar jefatura
                     </button>
@@ -361,7 +362,7 @@ export default function CometidosComisiones() {
                       Aprobar dirección
                     </button>
                   )}
-                  {(s.estado === 'pendiente' || s.estado === 'aprobado_jefatura') && (esAdmin || esSupervisor || puedeAprobarDireccion) && (
+                  {(s.estado === 'pendiente' || s.estado === 'aprobado_jefatura') && (puedeAprobarJefatura || puedeAprobarDireccion) && (
                     <button onClick={() => setRechazando(s)} className="btn-secondary text-xs py-1.5 px-3 text-red-600 border-red-200 hover:bg-red-50">
                       Rechazar
                     </button>

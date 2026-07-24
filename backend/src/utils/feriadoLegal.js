@@ -30,6 +30,54 @@ function esDiaHabil(fecha) {
   return !FERIADOS_CHILE.has(toISO(fecha));
 }
 
+// Dispositivo (establecimiento) que opera bajo régimen de turnos 24/7 (SAR Los
+// Cerros) — único exceptuado de la regla general de "solo día hábil" para
+// Permiso Administrativo y Feriado Legal, ya que su dotación cubre fines de
+// semana y feriados por diseño. Es el campo `dispositivos.nombre` (vía
+// `funcionarios.dispositivo_id`), NO `funcionarios.sector` — ese campo
+// modela el equipo/color del funcionario y en producción está vacío para
+// todos los funcionarios (incluidos los de SAR), por lo que nunca coincidía.
+const DISPOSITIVO_EXCEPCION_DIA_HABIL = /\bSAR\b/i;
+
+function esDispositivoExcepcion(funcionario) {
+  return DISPOSITIVO_EXCEPCION_DIA_HABIL.test(funcionario?.dispositivo || '');
+}
+
+// Permiso Administrativo (por código) y Feriado Legal (por flag) son los
+// únicos tipos sujetos a la regla de día hábil; los especiales (matrimonio,
+// fallecimiento, etc.) tienen su propio cálculo de fecha_fin y no aplican acá.
+function tipoRequiereDiaHabil(tipoPermiso) {
+  return tipoPermiso?.codigo === 'ADMIN' || tipoPermiso?.es_feriado_legal === true;
+}
+
+// Valida que una solicitud de Permiso Administrativo o Feriado Legal caiga
+// íntegramente en días hábiles, salvo que el funcionario pertenezca al
+// dispositivo SAR Los Cerros (turnos 24/7), donde cualquier día del año es
+// válido.
+function validarSolicitudPermiso(funcionario, tipoPermiso, fechaInicio, fechaFin) {
+  if (!tipoRequiereDiaHabil(tipoPermiso)) return { valido: true };
+  if (esDispositivoExcepcion(funcionario)) return { valido: true };
+
+  const diasNoHabiles = [];
+  const cur = new Date(`${toISO(fechaInicio)}T12:00:00`);
+  const end = new Date(`${toISO(fechaFin)}T12:00:00`);
+  while (cur <= end) {
+    if (!esDiaHabil(cur)) diasNoHabiles.push(toISO(cur));
+    cur.setDate(cur.getDate() + 1);
+  }
+
+  if (diasNoHabiles.length > 0) {
+    return {
+      valido: false,
+      error: `${tipoPermiso.nombre} solo puede solicitarse en días hábiles (lunes a viernes, sin feriados). ` +
+        `Las siguientes fechas seleccionadas no son hábiles: ${diasNoHabiles.join(', ')}. ` +
+        `Excepción: el dispositivo SAR Los Cerros (turnos 24/7) sí puede solicitar en fines de semana y feriados.`,
+      dias_no_habiles: diasNoHabiles,
+    };
+  }
+  return { valido: true };
+}
+
 function siguienteDiaHabil(fecha) {
   const d = new Date(fecha);
   d.setDate(d.getDate() + 1);
@@ -186,6 +234,8 @@ function calcularFechaFinEspecial(fechaInicio, diasFijos, tipoDias) {
 
 module.exports = {
   FERIADOS_CHILE,
+  DISPOSITIVO_EXCEPCION_DIA_HABIL,
+  esDispositivoExcepcion,
   esDiaHabil,
   siguienteDiaHabil,
   calcularDiasHabiles,
@@ -194,5 +244,7 @@ module.exports = {
   calcularFechaFinEspecial,
   validarBloqueObligatorio10Dias,
   verificarSolapamiento,
+  tipoRequiereDiaHabil,
+  validarSolicitudPermiso,
   REGLAS_ESPECIALES,
 };

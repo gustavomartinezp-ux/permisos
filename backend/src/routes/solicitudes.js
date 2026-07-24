@@ -11,6 +11,7 @@ const {
   verificarSolapamiento,
   fechaEnesimoDiaHabil,
   siguienteDiaHabil,
+  validarSolicitudPermiso,
 } = require('../utils/feriadoLegal');
 
 const router = express.Router();
@@ -134,13 +135,17 @@ router.post('/', [
     await client.query('BEGIN');
 
     // Verificar que el funcionario esté activo
-    const funcActivo = await client.query(
-      `SELECT activo FROM funcionarios WHERE id = $1`, [funcionario_id]
+    const funcResult = await client.query(
+      `SELECT f.activo, f.sector, d.nombre AS dispositivo
+       FROM funcionarios f
+       LEFT JOIN dispositivos d ON f.dispositivo_id = d.id
+       WHERE f.id = $1`, [funcionario_id]
     );
-    if (!funcActivo.rows[0]?.activo) {
+    if (!funcResult.rows[0]?.activo) {
       await client.query('ROLLBACK');
       return res.status(403).json({ error: 'El funcionario está inactivo y no puede solicitar permisos' });
     }
+    const funcionario = funcResult.rows[0];
 
     const anio = new Date(fecha_inicio).getFullYear();
 
@@ -153,6 +158,17 @@ router.post('/', [
     const esFeriadoLegal  = tipo?.es_feriado_legal  === true;
     const esEspecial      = tipo?.es_especial       === true;
     const jornadaForzada  = tipo?.jornada_forzada   || null;
+
+    // Regla general: Permiso Administrativo y Feriado Legal solo en días
+    // hábiles, salvo sector SAR (turnos 24/7) — ver validarSolicitudPermiso.
+    const validacionDiaHabil = validarSolicitudPermiso(funcionario, tipo, fecha_inicio, fecha_fin);
+    if (!validacionDiaHabil.valido) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: validacionDiaHabil.error,
+        dias_no_habiles: validacionDiaHabil.dias_no_habiles,
+      });
+    }
 
     // Tipos con jornada forzada (ej: ESTAMENTO) solo permiten media jornada
     if (jornadaForzada && dias_solicitados !== 0.5) {

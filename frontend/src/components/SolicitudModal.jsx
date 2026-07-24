@@ -37,6 +37,30 @@ function calcularDiasHabiles(inicio, fin) {
   return dias;
 }
 
+// Dispositivo (establecimiento) con régimen de turnos 24/7: único exceptuado
+// de la regla de "solo día hábil" para Permiso Administrativo y Feriado
+// Legal. Es `funcionario.dispositivo` (nombre del establecimiento), no
+// `funcionario.sector` — ese campo está vacío para todos los funcionarios.
+const DISPOSITIVO_EXCEPCION_DIA_HABIL = /\bSAR\b/i;
+
+function tipoRequiereDiaHabil(saldo) {
+  return saldo?.codigo === 'ADMIN' || saldo?.es_feriado_legal === true;
+}
+
+// Espejo de validarSolicitudPermiso del backend, para feedback instantáneo
+// antes de enviar la solicitud.
+function obtenerDiasNoHabiles(inicio, fin) {
+  if (!inicio || !fin) return [];
+  const dias = [];
+  const cur = new Date(inicio + 'T12:00:00');
+  const end = new Date(fin + 'T12:00:00');
+  while (cur <= end) {
+    if (!esDiaHabil(cur)) dias.push(toISO(cur));
+    cur.setDate(cur.getDate() + 1);
+  }
+  return dias;
+}
+
 function calcularDistribucion(diasSolicitados, arrastreDisp, actualDisp) {
   const fromArrastre = Math.min(diasSolicitados, arrastreDisp);
   const fromActual   = diasSolicitados - fromArrastre;
@@ -147,6 +171,16 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
   const saldoInsuficiente = !esEspecial && !!form.tipo_permiso_id
     && (diasSolicitados > totalDisp || excedeParcializacion);
 
+  // Regla general: Permiso Administrativo y Feriado Legal solo en días
+  // hábiles. Excepción: sector SAR (turnos 24/7) puede elegir cualquier día.
+  const esSectorTurno = DISPOSITIVO_EXCEPCION_DIA_HABIL.test(funcionario?.dispositivo || '');
+  const requiereDiaHabil = !esEspecial && tipoRequiereDiaHabil(saldoSel) && !esSectorTurno;
+  const fechaFinParaValidar = medioDia ? form.fecha_inicio : form.fecha_fin;
+  const diasNoHabilesSeleccionados = requiereDiaHabil
+    ? obtenerDiasNoHabiles(form.fecha_inicio, fechaFinParaValidar)
+    : [];
+  const tieneDiasNoHabiles = diasNoHabilesSeleccionados.length > 0;
+
   const getHorario = (fecha, jornada) => {
     if (!fecha || !jornada) return '';
     const dow = new Date(fecha + 'T12:00:00').getDay();
@@ -207,6 +241,11 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
     if (!medioDia && diasSolicitados <= 0) return setError('Las fechas no son válidas');
     if (medioDia && !jornadaMedioDia)       return setError('Selecciona la jornada AM o PM');
     if (saldoInsuficiente)                  return setError(`Saldo insuficiente. Disponibles: ${totalDisp} días`);
+    if (tieneDiasNoHabiles) {
+      return setError(
+        `${saldoSel.tipo_nombre} solo puede solicitarse en días hábiles. Fechas no hábiles seleccionadas: ${diasNoHabilesSeleccionados.join(', ')}.`
+      );
+    }
 
     const fechaFin = medioDia ? form.fecha_inicio : form.fecha_fin;
     setCargando(true);
@@ -655,6 +694,26 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
               </motion.div>
             )}
 
+            {/* Aviso día hábil / excepción SAR */}
+            {requiereDiaHabil && form.fecha_inicio && (fechaFinParaValidar) && (
+              tieneDiasNoHabiles ? (
+                <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs">
+                  <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+                  <span>
+                    {saldoSel?.tipo_nombre} solo puede solicitarse en días hábiles (lunes a viernes, sin feriados).
+                    No son hábiles: {diasNoHabilesSeleccionados.join(', ')}.
+                  </span>
+                </div>
+              )
+              : null
+            )}
+            {esSectorTurno && !esEspecial && tipoRequiereDiaHabil(saldoSel) && (
+              <div className="flex items-start gap-2 p-2.5 bg-cyan-50 border border-cyan-200 rounded-lg text-cyan-700 text-xs">
+                <Info size={14} className="flex-shrink-0 mt-0.5" />
+                <span>SAR Los Cerros (turnos 24/7): puede solicitar este permiso en fines de semana y feriados.</span>
+              </div>
+            )}
+
             {/* Resumen días para tipos normales */}
             {!esEspecial && form.fecha_inicio && form.fecha_fin && diasSolicitados > 0 && (
               <motion.div
@@ -774,7 +833,7 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
                 type="submit"
                 disabled={
                   cargando ||
-                  (!esEspecial && (saldoInsuficiente || diasSolicitados <= 0)) ||
+                  (!esEspecial && (saldoInsuficiente || diasSolicitados <= 0 || tieneDiasNoHabiles)) ||
                   (esEspecial && !form.fecha_inicio)
                 }
                 className="btn-primary flex-1 justify-center"

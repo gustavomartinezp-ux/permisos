@@ -2,7 +2,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { construirFormatoAdministrativo, construirFormatoFeriado, construirFormatoCapacitacion } from './formatosDAS';
+import { construirFormatoAdministrativo, construirFormatoFeriado, construirFormatoCapacitacion, construirFormatoTraspaso } from './formatosDAS';
 
 const COLOR_PRIMARIO  = [30, 64, 175];   // brand blue
 const COLOR_GRIS      = [100, 116, 139];
@@ -861,4 +861,12 @@ export function imprimirFormularioOficial(solicitud, funcionario, saldoInfo = {}
   const doc = construirFormularioOficial(solicitud, funcionario, saldoInfo);
   doc.autoPrint();
   window.open(doc.output('bloburl'), '_blank');
+}
+
+// Formato de traspaso (postergación y acumulación) de una solicitud de feriado legal
+export function descargarFormatoTraspaso(solicitud, funcionario, saldoInfo = {}) {
+  const folio = `TRA-${codigoDoc(solicitud).slice(4)}`;
+  const doc = construirFormatoTraspaso(solicitud, funcionario, saldoInfo, folio);
+  const ap  = (funcionario.apellidos || 'funcionario').toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+  doc.save(`${folio}_${ap}.pdf`);
 }

@@ -3,10 +3,10 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { FileText, CheckCircle2, XCircle, Search, ShieldCheck, RotateCcw, Download, Printer } from 'lucide-react';
+import { FileText, CheckCircle2, XCircle, Search, ShieldCheck, RotateCcw, Download, Printer, ArrowLeftRight } from 'lucide-react';
 import { solicitudesApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { descargarFormularioOficial, imprimirFormularioOficial } from '../utils/reportePDF';
+import { descargarFormularioOficial, imprimirFormularioOficial, descargarFormatoTraspaso } from '../utils/reportePDF';
 import EstadoBadge from '../components/EstadoBadge';
 import RechazoModal from '../components/RechazoModal';
 import toast from 'react-hot-toast';
@@ -320,6 +320,16 @@ export default function Solicitudes() {
                   >
                     <Printer size={15} />
                   </button>
+                  {/* Feriado legal: formato de traspaso (postergación por buen servicio y acumulación) */}
+                  {sol.es_feriado_legal && (
+                    <button
+                      onClick={() => descargarFormatoTraspaso(sol, funcionarioDeSolicitud(sol), saldoInfoDeSolicitud(sol))}
+                      className="p-2 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors"
+                      title="Descargar formato de traspaso de feriado legal"
+                    >
+                      <ArrowLeftRight size={15} />
+                    </button>
+                  )}
                 </div>
 
                 {/* Acciones */}

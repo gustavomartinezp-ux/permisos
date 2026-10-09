@@ -146,6 +146,9 @@ function dibujarFormato(plantilla, valores, folio) {
     doc.setLineWidth(grosor);
     doc.line(x1, y, x2, y);
   }
+  doc.setLineWidth(1);
+  for (const [x, y, w, h] of plantilla.rectangulos || []) doc.rect(x, y, w, h);
+  for (const [x1, y1, x2, y2] of plantilla.divisores || []) doc.line(x1, y1, x2, y2);
 
   // Observación y pie
   doc.setFontSize(8);
@@ -302,19 +305,93 @@ export function construirFormatoAdministrativo(solicitud, funcionario, saldoInfo
   }, folio);
 }
 
-export function construirFormatoFeriado(solicitud, funcionario, saldoInfo = {}, folio) {
-  const v = valoresBase(solicitud, funcionario, saldoInfo);
+// Período al que se imputan los días de feriado: el arrastre corresponde al año anterior
+function periodoFeriado(solicitud, saldoInfo) {
   const anio = anioDe(solicitud.fecha_inicio);
   const usaArrastre = Number(solicitud.dias_arrastre) > 0 || saldoInfo.usa_arrastre === true;
   const usaActual = Number(solicitud.dias_periodo_actual ?? solicitud.dias_solicitados) > 0;
-  // Período al que se imputan los días: el arrastre corresponde al año anterior
-  const periodoBase = usaArrastre ? anio - 1 : anio;
+  return {
+    anio, usaArrastre, usaActual,
+    anioCalendario: usaArrastre && !usaActual ? anio - 1 : anio,
+  };
+}
+
+export function construirFormatoFeriado(solicitud, funcionario, saldoInfo = {}, folio) {
+  const v = valoresBase(solicitud, funcionario, saldoInfo);
+  const { anio, usaArrastre, usaActual, anioCalendario } = periodoFeriado(solicitud, saldoInfo);
   return dibujarFormato(FERIADO, {
     ...v,
-    anioCalendario: String(usaArrastre && !usaActual ? anio - 1 : anio),
+    anioCalendario: String(anioCalendario),
     acumulado: usaArrastre ? 'X' : '',
-    periodo: String(periodoBase),
+    periodo: String(usaArrastre ? anio - 1 : anio),
     periodo2: usaArrastre && usaActual ? String(anio).slice(2) : '',
+  }, folio);
+}
+
+// ─── Traspaso (postergación y acumulación) de feriado legal ─────────────────
+// Se usa cuando la jefatura no acepta el feriado propuesto por buen servicio y
+// el funcionario pide acumular esos días para usarlos junto al período
+// siguiente. En la plantilla Word las líneas de firma quedaban desplazadas
+// sobre el recuadro; aquí cada línea va inmediatamente sobre su rótulo.
+function plantillaTraspaso(anioAcumulado) {
+  return {
+    titulo: 'SOLICITUD INTERNA DE TRASPASO FERIADO LEGAL',
+    marco: [21.7, 35.5, 590.2, 884.5], encabezadoY: 15, tituloY: 127,
+    observacionY: 830, pieY: 862,
+    rotulos: [
+      [63, 181, 'NOMBRE COMPLETO:'],
+      [63, 207, 'R.U.T:'], [349, 211, 'JORNADA:'], [488, 211, 'HRS.'],
+      [63, 247, 'CARGO:'],
+      [64, 278, 'TIPO CONTRATO: INDEFINIDO'], [296, 278, 'PLAZO FIJO'], [424, 278, 'REEMPLAZO'],
+      [64, 310, 'CESFAM:'],
+      [63, 342, 'VENGO A SOLICITAR :'], [228, 342, 'DÍAS ( S) DE FERIADO LEGAL, DESDE EL DÍA'],
+      [63, 371, 'HASTA EL DÍA :'], [258, 371, 'CORRESPONDIENTE AL AÑO CALENDARIO'],
+      // Recuadro superior: decisión de la jefatura
+      [73, 440, 'NO ACEPTO FERIADO LEGAL PROPUESTO'],
+      [73, 452, 'POR FUNCIONARIO, POR TANTO POSTERGO'],
+      [73, 464, 'POR RAZONES DE BUEN SERVICIO.'],
+      [383, 506, 'VºB JEFE DIRECTO'],
+      // Recuadro inferior: solicitud de acumulación
+      [76, 533, 'ATENDIENDO POSTERGACIÓN DEL FERIADO', { size: 9.1 }],
+      [76, 544, 'PROPUESTO, SOLICITO ACUMULACIÓN DE', { size: 9.1 }],
+      [76, 555, 'DÍAS DE MI FERIADO LEGAL', { size: 9.1 }],
+      [76, 566, 'CORRESPONDIENTES AL AÑO', { size: 9.1 }], [264, 566, 'PARA', { size: 9.1 }],
+      [76, 577, 'HACER USO CONJUNTO CON EL FERIADO', { size: 9.1 }],
+      [76, 588, 'LEGAL COMPRENDIDO EN EL PERIODO DEL', { size: 9.1 }],
+      [76, 604, `AÑO ${anioAcumulado + 1}.`, { size: 9.1 }],
+      [383, 619, 'FIRMA SOLICITANTE'],
+      // Firmas
+      [93, 694, 'FIRMA SOLICITANTE'],
+      [445, 694, 'JEFE OFICINA O'], [459, 706, 'DIRECTOR'],
+      [254, 763, 'ENCARGADO UNIDAD'],
+      [64, 798, 'TALCAHUANO:'],
+    ],
+    campos: {
+      nombre: [174.3, 565.7, 192], rut: [92.5, 301.4, 218.5], jornada: [400.9, 484.8, 221.8], cargo: [103.5, 563.7, 258],
+      indefinido: [223.9, 293.1, 289.2], plazo: [364.3, 421.1, 289.2], reemplazo: [489.7, 565.8, 289.2],
+      cesfam: [109.5, 565, 321.4],
+      dias: [174.9, 225.4, 353.6], desde: [463.1, 566.7, 353.6],
+      hasta: [141.3, 256, 382], anioCalendario: [474.7, 564.1, 382],
+      anioAcumulado: [216.8, 261.6, 575.8],
+      ciudad: [139.2, 315.6, 809.6],
+    },
+    marcas: ['indefinido', 'plazo', 'reemplazo', 'dias', 'jornada', 'anioAcumulado'],
+    rectangulos: [[62.2, 410, 503.4, 112.7], [62.2, 522.7, 503.4, 112.8]],
+    lineas: [
+      [340, 538, 500, 1], [340, 538, 613, 1],   // firmas dentro del recuadro
+      [62.8, 229.6, 686, 1], [397.8, 564.5, 686, 1], [229.6, 396.3, 755, 1],
+    ],
+    divisores: [[312.2, 410, 312.2, 635.5]],
+  };
+}
+
+export function construirFormatoTraspaso(solicitud, funcionario, saldoInfo = {}, folio) {
+  const v = valoresBase(solicitud, funcionario, saldoInfo);
+  const { anioCalendario } = periodoFeriado(solicitud, saldoInfo);
+  return dibujarFormato(plantillaTraspaso(anioCalendario), {
+    ...v,
+    anioCalendario: String(anioCalendario),
+    anioAcumulado: String(anioCalendario),
   }, folio);
 }
 

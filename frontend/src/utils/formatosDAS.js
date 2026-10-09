@@ -157,13 +157,6 @@ function dibujarFormato(plantilla, valores, folio) {
   for (const [clave, linea] of Object.entries(plantilla.campos)) {
     escribirEnLinea(doc, valores[clave], linea, { centrar: (plantilla.marcas || []).includes(clave) });
   }
-  for (const [x, y, clave] of plantilla.valoresLibres || []) {
-    if (!valores[clave]) continue;
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    doc.setTextColor(...TINTA);
-    doc.text(String(valores[clave]), x, y + 9.5);
-  }
   return doc;
 }
 
@@ -284,11 +277,10 @@ const CAPACITACION = (() => {
       dias: [120, 177, 320.5],
       desde: [209, 273, 345.5], hasta: [315, 409, 345.5],
       actividad: [289, 563, 389.5], actividad2: [64, 563, 409.5],
-      solicitados: [192, 250, 503], saldo: [189, 249, 521.5],
+      total: [189, 249, 484], solicitados: [192, 250, 503], saldo: [189, 249, 521.5],
       ciudad: [141, 318, 756.5],
     },
-    marcas: ['indefinido', 'plazo', 'reemplazo', 'dias', 'jornada', 'solicitados', 'saldo'],
-    valoresLibres: [[178, 473, 'total']],
+    marcas: ['indefinido', 'plazo', 'reemplazo', 'dias', 'jornada', 'total', 'solicitados', 'saldo'],
     // La actividad continúa en una segunda línea solo si no cabe en la primera
     opcionales: ['actividad2'],
     lineas: f.lineas,
@@ -337,7 +329,6 @@ export function construirFormatoCapacitacion(solicitud, funcionario, saldoInfo =
   const [linea1 = '', ...resto] = actividad ? doc.splitTextToSize(actividad, 270) : [];
   return dibujarFormato(CAPACITACION, {
     ...v,
-    total: v.total ? v.total.padStart(2, '0') : '',
     actividad: linea1,
     actividad2: resto.join(' '),
   }, folio);

@@ -282,11 +282,10 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
         reemplazante:      form.reemplazante,
         jornada_medio_dia: medioDia ? jornadaMedioDia : undefined,
       });
-      // "Nº TOTAL DÍAS" del formato = días del período (más el feriado
-      // acumulado, si lo hay); "SALDO PENDIENTE" = lo que queda tras esta solicitud.
+      // Formato oficial: "Nº TOTAL DÍAS" = saldo disponible antes de pedir,
+      // "SALDO PENDIENTE" = lo que le queda (ej. 1,5 − 0,5 = 1).
       const saldoInfo = {
-        total_dias:     Number(saldoSel?.dias_asignados || 0)
-                        + (saldoSel?.es_feriado_legal ? Number(saldoSel?.saldo_arrastre || 0) : 0),
+        total_dias:     totalDisp,
         saldo_pendiente: Math.max(totalDisp - diasSolicitados, 0),
         tiene_arrastre:  (saldoSel?.saldo_arrastre || 0) > 0,
       };
@@ -301,9 +300,12 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
           tipo_nombre: saldoSel?.tipo_nombre,
           jornada_medio_dia: medioDia ? jornadaMedioDia : null,
           _saldoInfo: saldoInfo,
+          // Cada tramo descuenta del saldo que dejó el anterior
           tramos: [
-            { ...data.solicitud_arrastre, _etiqueta: `${data.distribucion.fromArrastre} día(s) de arrastre (período anterior)` },
-            { ...data.solicitud_actual,   _etiqueta: `${data.distribucion.fromActual} día(s) del período actual` },
+            { ...data.solicitud_arrastre, _etiqueta: `${data.distribucion.fromArrastre} día(s) de arrastre (período anterior)`,
+              _saldoInfo: { total_dias: totalDisp, saldo_pendiente: totalDisp - data.distribucion.fromArrastre } },
+            { ...data.solicitud_actual,   _etiqueta: `${data.distribucion.fromActual} día(s) del período actual`,
+              _saldoInfo: { total_dias: totalDisp - data.distribucion.fromArrastre, saldo_pendiente: Math.max(totalDisp - diasSolicitados, 0) } },
           ],
         });
       } else {
@@ -365,13 +367,13 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
                       </p>
                       <div className="flex gap-2">
                         <button
-                          onClick={() => descargarFormularioOficial(tramo, funcionario, solicitudCreada._saldoInfo)}
+                          onClick={() => descargarFormularioOficial(tramo, funcionario, tramo._saldoInfo)}
                           className="btn-secondary text-xs py-1.5 px-3 flex-1 justify-center gap-1.5"
                         >
                           <Download size={14} /> PDF
                         </button>
                         <button
-                          onClick={() => imprimirFormularioOficial(tramo, funcionario, solicitudCreada._saldoInfo)}
+                          onClick={() => imprimirFormularioOficial(tramo, funcionario, tramo._saldoInfo)}
                           className="btn-secondary text-xs py-1.5 px-3 flex-1 justify-center gap-1.5"
                         >
                           <Printer size={14} /> Imprimir

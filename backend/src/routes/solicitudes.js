@@ -81,12 +81,11 @@ router.get('/', async (req, res) => {
          f.nombres, f.apellidos, f.rut, f.cargo, f.sector, f.area AS funcionario_area,
          f.tipo_contrato, f.horas_contrato, d.nombre AS dispositivo,
          s.nombre AS servicio,
-         -- Datos del formato oficial: días del período ("Nº TOTAL DÍAS") y
-         -- saldo que quedó tras esta solicitud según su movimiento de reserva
+         -- Datos del formato oficial, según el movimiento de reserva de esta
+         -- solicitud: saldo disponible antes ("Nº TOTAL DÍAS") y después
          -- ("SALDO PENDIENTE"), para reimprimirlo idéntico días después.
-         sf.dias_asignados AS asignados_formulario,
-         sf.saldo_arrastre AS arrastre_formulario,
-         mov.saldo_nuevo   AS saldo_pendiente_formulario,
+         mov.saldo_anterior AS saldo_total_formulario,
+         mov.saldo_nuevo    AS saldo_pendiente_formulario,
          tp.nombre AS tipo_nombre, tp.codigo AS tipo_codigo, tp.color,
          tp.es_feriado_legal, tp.es_especial, tp.tipo_especial,
          aprobador.nombres AS aprobador_nombres,
@@ -97,10 +96,6 @@ router.get('/', async (req, res) => {
        JOIN funcionarios f ON sol.funcionario_id = f.id
        LEFT JOIN servicios s ON f.servicio_id = s.id
        LEFT JOIN dispositivos d ON f.dispositivo_id = d.id
-       LEFT JOIN saldos_funcionarios sf
-         ON sf.funcionario_id = sol.funcionario_id
-        AND sf.tipo_permiso_id = sol.tipo_permiso_id
-        AND sf.anio = EXTRACT(YEAR FROM sol.fecha_inicio)
        LEFT JOIN LATERAL (
          SELECT hm.saldo_anterior, hm.saldo_nuevo
          FROM historial_movimientos hm

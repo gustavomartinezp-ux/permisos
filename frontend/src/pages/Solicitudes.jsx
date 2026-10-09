@@ -28,16 +28,13 @@ const funcionarioDeSolicitud = (sol) => ({
   dispositivo: sol.dispositivo || sol.cesfam || '',
 });
 
-// Saldos que alimentan "Nº TOTAL DÍAS" / "SALDO PENDIENTE" del formato oficial
+// Formato oficial: "Nº TOTAL DÍAS" = saldo que tenía antes de la solicitud,
+// "SALDO PENDIENTE" = lo que le queda después (ej. 1,5 − 0,5 = 1)
 const saldoInfoDeSolicitud = (sol) => {
-  if (sol.asignados_formulario == null) return {};
-  const total = Number(sol.asignados_formulario)
-    + (sol.es_feriado_legal ? Number(sol.arrastre_formulario || 0) : 0);
+  if (sol.saldo_pendiente_formulario == null) return {};
   return {
-    total_dias: total,
-    saldo_pendiente: sol.saldo_pendiente_formulario != null
-      ? Math.max(Number(sol.saldo_pendiente_formulario), 0)
-      : undefined,
+    total_dias: Number(sol.saldo_total_formulario),
+    saldo_pendiente: Math.max(Number(sol.saldo_pendiente_formulario), 0),
   };
 };
 

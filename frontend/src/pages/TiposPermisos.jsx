@@ -275,7 +275,9 @@ function TipoModal({ tipo, onClose, onSuccess }) {
 }
 
 export default function TiposPermisos() {
-  const { esAdmin } = useAuth();
+  const { tienePermiso } = useAuth();
+  // Mismos permisos que exige el backend para crear/editar tipos
+  const esAdmin = tienePermiso('configuracion.gestionar', 'saldos.ajustar');
   const [tipos, setTipos] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [modalData, setModalData] = useState(null);

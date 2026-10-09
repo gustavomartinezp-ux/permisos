@@ -543,7 +543,7 @@ export default function Funcionarios({ grupo }) {
               grupo={grupo}
               puedeEditar={puedeEditar}
               puedeEliminar={puedeEliminar}
-              onSolicitar={esSupervisor && grupo !== 'honorarios' ? setModalSolicitud : null}
+              onSolicitar={(esSupervisor || tienePermiso('solicitudes.crear_terceros')) && grupo !== 'honorarios' ? setModalSolicitud : null}
               onPasivar={setConfirmPasivar}
               onActivar={handleActivar}
               onEliminar={abrirEliminar}

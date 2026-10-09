@@ -267,7 +267,8 @@ const AREAS_SUPERVISOR = [
 const ROL_LABELS = { admin: 'Administrador', supervisor: 'Supervisor', funcionario: 'Funcionario' };
 
 export default function Configuracion() {
-  const { esAdmin } = useAuth();
+  const { tienePermiso } = useAuth();
+  const esAdmin = tienePermiso('configuracion.gestionar');
   const [tab, setTab] = useState('tipos');
   const [calculandoArrastre, setCalculandoArrastre] = useState(false);
   const [anioArrastre, setAnioArrastre] = useState(new Date().getFullYear() - 1);

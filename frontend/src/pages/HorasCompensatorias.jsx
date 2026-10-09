@@ -380,7 +380,11 @@ function SolicitarCompModal({ funcionario, saldo, registros = [], onClose, onSuc
 
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function HorasCompensatorias() {
-  const { esAdmin, esFuncionario, esSupervisorPuro, usuario } = useAuth();
+  const { esSoloAutoservicio, esSupervisorPuro, usuario, tienePermiso } = useAuth();
+  // Por permiso RBAC (igual que el backend): RRHH_ADMIN/SECRETARY con rol legacy
+  // 'funcionario' gestionan y ven todo; solo el funcionario raso ve lo propio.
+  const esAdmin       = tienePermiso('saldos.ajustar');
+  const esFuncionario = esSoloAutoservicio;
 
   const [data, setData]               = useState(null);
   const [solicitudes, setSolicitudes] = useState([]);

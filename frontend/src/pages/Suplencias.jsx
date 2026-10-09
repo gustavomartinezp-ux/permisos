@@ -602,7 +602,10 @@ function FilaSuplencia({ s, esAdmin, onProrrogar, onFinalizar }) {
 
 // ─── Página principal ─────────────────────────────────────────────────────────
 export default function Suplencias() {
-  const { esAdmin, esSupervisor } = useAuth();
+  const { esSupervisor: esSupervisorLegacy, tienePermiso } = useAuth();
+  // Por permiso RBAC, igual que el backend (crear/prorrogar/finalizar = funcionarios.editar)
+  const esAdmin      = tienePermiso('funcionarios.editar');
+  const esSupervisor = esSupervisorLegacy || esAdmin;
   const [suplencias, setSuplencias]               = useState([]);
   const [alertas, setAlertas]                     = useState([]);
   const [alertasContractuales, setAlertasContr]   = useState([]);

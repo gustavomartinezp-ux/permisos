@@ -20,3 +20,8 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 .vercel
+
+# Datos del personal y salidas locales (no versionar)
+Revision_saldos_2026.xlsx
+graphify-out/
+Cuentas_funcionarios_cesfam.xlsx

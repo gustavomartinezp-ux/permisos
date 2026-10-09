@@ -32,9 +32,12 @@ const funcionarioDeSolicitud = (sol) => ({
 // "SALDO PENDIENTE" = lo que le queda después (ej. 1,5 − 0,5 = 1)
 const saldoInfoDeSolicitud = (sol) => {
   if (sol.saldo_pendiente_formulario == null) return {};
+  const pendiente = Number(sol.saldo_pendiente_formulario);
   return {
-    total_dias: Number(sol.saldo_total_formulario),
-    saldo_pendiente: Math.max(Number(sol.saldo_pendiente_formulario), 0),
+    total_dias: sol.saldo_total_formulario != null
+      ? Number(sol.saldo_total_formulario)
+      : pendiente + Number(sol.dias_solicitados || 0),
+    saldo_pendiente: Math.max(pendiente, 0),
   };
 };
 

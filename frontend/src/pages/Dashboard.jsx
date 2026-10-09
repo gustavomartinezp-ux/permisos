@@ -115,7 +115,12 @@ function FueraHoyPanel({ fueraHoy }) {
 }
 
 export default function Dashboard() {
-  const { esAdmin, esSupervisor } = useAuth();
+  const { esSupervisor: esSupervisorLegacy, tienePermiso } = useAuth();
+  // Por permiso RBAC, igual que el backend (/dashboard/stats ya entrega la
+  // bandeja de aprobación final a cualquier cuenta con visibilidad no-supervisor):
+  // una cuenta RRHH_ADMIN con rol legacy 'funcionario' debe ver su bandeja y botones.
+  const esAdmin      = tienePermiso('solicitudes.aprobar');
+  const esSupervisor = esSupervisorLegacy || esAdmin || tienePermiso('solicitudes.pre_aprobar');
   const [data, setData] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [rechazandoId, setRechazandoId] = useState(null);

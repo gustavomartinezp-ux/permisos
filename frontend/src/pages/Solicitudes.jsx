@@ -53,7 +53,15 @@ const ESTADOS = [
 ];
 
 export default function Solicitudes() {
-  const { esAdmin, esSupervisor, usuario } = useAuth();
+  const { esSupervisor: esSupervisorLegacy, usuario, tienePermiso } = useAuth();
+  // Las acciones se habilitan por permiso RBAC (no por rol legacy): una cuenta
+  // RRHH_ADMIN/SECRETARY con rol legacy 'funcionario' debe poder aprobar y
+  // reintegrar igual que un admin — el backend ya valida estos mismos permisos.
+  const puedeAprobar    = tienePermiso('solicitudes.aprobar');
+  const puedeReintegrar = tienePermiso('solicitudes.reintegrar');
+  const puedePreAprobar = tienePermiso('solicitudes.pre_aprobar');
+  const esAdmin         = puedeAprobar;
+  const esSupervisor    = esSupervisorLegacy || puedeAprobar || puedeReintegrar || puedePreAprobar;
   const [solicitudes, setSolicitudes] = useState([]);
   const [total, setTotal] = useState(0);
   const [cargando, setCargando] = useState(true);
@@ -329,7 +337,7 @@ export default function Solicitudes() {
                       </>
                     )}
                     {/* Admin: anular permiso aprobado y reintegrar días */}
-                    {esAdmin && sol.estado === 'aprobado' && (
+                    {puedeReintegrar && sol.estado === 'aprobado' && (
                       <button
                         onClick={() => setAnulandoId(sol.id)}
                         disabled={procesando === sol.id}

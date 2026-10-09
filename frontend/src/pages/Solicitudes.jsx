@@ -28,6 +28,19 @@ const funcionarioDeSolicitud = (sol) => ({
   dispositivo: sol.dispositivo || sol.cesfam || '',
 });
 
+// Saldos que alimentan "Nº TOTAL DÍAS" / "SALDO PENDIENTE" del formato oficial
+const saldoInfoDeSolicitud = (sol) => {
+  if (sol.asignados_formulario == null) return {};
+  const total = Number(sol.asignados_formulario)
+    + (sol.es_feriado_legal ? Number(sol.arrastre_formulario || 0) : 0);
+  return {
+    total_dias: total,
+    saldo_pendiente: sol.saldo_pendiente_formulario != null
+      ? Math.max(Number(sol.saldo_pendiente_formulario), 0)
+      : undefined,
+  };
+};
+
 const getHorarioJornada = (fechaISO, jornada) => {
   if (!jornada || !fechaISO) return null;
   const dow = new Date(fechaISO + 'T12:00:00').getDay();
@@ -294,14 +307,14 @@ export default function Solicitudes() {
                 {/* PDF / Imprimir */}
                 <div className="flex items-center gap-1">
                   <button
-                    onClick={() => descargarFormularioOficial(sol, funcionarioDeSolicitud(sol))}
+                    onClick={() => descargarFormularioOficial(sol, funcionarioDeSolicitud(sol), saldoInfoDeSolicitud(sol))}
                     className="p-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
                     title="Descargar PDF oficial"
                   >
                     <Download size={15} />
                   </button>
                   <button
-                    onClick={() => imprimirFormularioOficial(sol, funcionarioDeSolicitud(sol))}
+                    onClick={() => imprimirFormularioOficial(sol, funcionarioDeSolicitud(sol), saldoInfoDeSolicitud(sol))}
                     className="p-2 rounded-lg bg-slate-50 text-slate-600 hover:bg-slate-100 transition-colors"
                     title="Imprimir formato oficial"
                   >

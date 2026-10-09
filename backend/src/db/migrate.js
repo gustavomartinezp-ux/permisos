@@ -347,6 +347,12 @@ const migrations = [
         ON cometidos_comisiones(tipo, funcionario_id, fecha_inicio);
     `,
   },
+  {
+    // Campo "EN MI AUSENCIA REALIZARÁ MIS FUNCIONES EL/LA SR./SRA." de los
+    // formatos oficiales DAS (feriado legal, administrativo, capacitación).
+    id: 'solicitudes_reemplazante_v1',
+    sql: `ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS reemplazante VARCHAR(150);`,
+  },
 ];
 
 async function runMigrations() {

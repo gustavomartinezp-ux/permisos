@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Calendar, FileText, AlertCircle, ArrowLeftRight, Info, Download, Printer, CheckCircle2, ShieldAlert, Wallet, Scale } from 'lucide-react';
+import { X, Calendar, FileText, AlertCircle, ArrowLeftRight, Info, Download, Printer, CheckCircle2, ShieldAlert, Wallet, Scale, UserCheck } from 'lucide-react';
 import { solicitudesApi, saldosApi, tiposPermisosApi } from '../api/client';
 import { descargarFormularioOficial, imprimirFormularioOficial } from '../utils/reportePDF';
 import toast from 'react-hot-toast';
@@ -111,6 +111,7 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
     fecha_inicio: '',
     fecha_fin: '',
     motivo: '',
+    reemplazante: '',
   });
   const [medioDia, setMedioDia]           = useState(false);
   const [jornadaMedioDia, setJornadaMedioDia] = useState('AM');
@@ -135,6 +136,8 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
   const saldoSel        = saldos.find(s => s.tipo_permiso_id == form.tipo_permiso_id);
   const tipoEspecialSel = tiposEspeciales.find(t => t.id == form.tipo_permiso_id);
   const esEspecial      = !!tipoEspecialSel;
+  // Capacitación: el "motivo" es el nombre de la actividad que exige el formato oficial
+  const esCapacitacion  = saldoSel?.codigo === 'CAPACIT';
 
   // Tipos con jornada forzada (ej: ESTAMENTO → PM obligatorio)
   const jornadaForzada = saldoSel?.jornada_forzada || null;
@@ -220,6 +223,9 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    if (esCapacitacion && !form.motivo.trim()) {
+      return setError('Ingresa el nombre o actividad de capacitación');
+    }
 
     if (esEspecial) {
       if (!form.fecha_inicio) return setError('Ingresa la fecha de inicio');
@@ -234,6 +240,7 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
           fecha_fin:        fechaFinEspecial,
           dias_solicitados: tipoEspecialSel.dias_fijos,
           motivo:           form.motivo,
+          reemplazante:     form.reemplazante,
         });
         toast.success('Solicitud registrada exitosamente');
         onSuccess?.();
@@ -272,10 +279,14 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
         fecha_fin:         fechaFin,
         dias_solicitados:  diasSolicitados,
         motivo:            form.motivo,
+        reemplazante:      form.reemplazante,
         jornada_medio_dia: medioDia ? jornadaMedioDia : undefined,
       });
+      // "Nº TOTAL DÍAS" del formato = días del período (más el feriado
+      // acumulado, si lo hay); "SALDO PENDIENTE" = lo que queda tras esta solicitud.
       const saldoInfo = {
-        total_dias:     totalDisp,
+        total_dias:     Number(saldoSel?.dias_asignados || 0)
+                        + (saldoSel?.es_feriado_legal ? Number(saldoSel?.saldo_arrastre || 0) : 0),
         saldo_pendiente: Math.max(totalDisp - diasSolicitados, 0),
         tiene_arrastre:  (saldoSel?.saldo_arrastre || 0) > 0,
       };
@@ -823,13 +834,32 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
             <div>
               <label className="block text-sm font-medium text-dark-700 mb-1.5">
                 <FileText size={14} className="inline mr-1" />
-                Motivo {esEspecial ? '' : '(opcional)'}
+                {esCapacitacion ? 'Nombre o actividad de capacitación' : `Motivo ${esEspecial ? '' : '(opcional)'}`}
               </label>
               <textarea
                 value={form.motivo}
                 onChange={(e) => setForm({ ...form, motivo: e.target.value })}
                 className="input-field resize-none h-20"
-                placeholder={esEspecial ? 'Descripción breve (opcional)...' : 'Describe brevemente el motivo del permiso...'}
+                required={esCapacitacion}
+                placeholder={esCapacitacion
+                  ? 'Ej: Curso RCP y uso del DEA — Servicio de Salud Talcahuano'
+                  : esEspecial ? 'Descripción breve (opcional)...' : 'Describe brevemente el motivo del permiso...'}
+              />
+            </div>
+
+            {/* Reemplazante (campo del formato oficial) */}
+            <div>
+              <label className="block text-sm font-medium text-dark-700 mb-1.5">
+                <UserCheck size={14} className="inline mr-1" />
+                En mi ausencia realizará mis funciones (opcional)
+              </label>
+              <input
+                type="text"
+                maxLength={150}
+                value={form.reemplazante}
+                onChange={(e) => setForm({ ...form, reemplazante: e.target.value })}
+                className="input-field"
+                placeholder="Nombre de quien cubre sus funciones"
               />
             </div>
 

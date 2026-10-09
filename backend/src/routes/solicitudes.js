@@ -79,7 +79,14 @@ router.get('/', async (req, res) => {
       `SELECT
          sol.*,
          f.nombres, f.apellidos, f.rut, f.cargo, f.sector, f.area AS funcionario_area,
+         f.tipo_contrato, f.horas_contrato, d.nombre AS dispositivo,
          s.nombre AS servicio,
+         -- Datos del formato oficial: días del período ("Nº TOTAL DÍAS") y
+         -- saldo que quedó tras esta solicitud según su movimiento de reserva
+         -- ("SALDO PENDIENTE"), para reimprimirlo idéntico días después.
+         sf.dias_asignados AS asignados_formulario,
+         sf.saldo_arrastre AS arrastre_formulario,
+         mov.saldo_nuevo   AS saldo_pendiente_formulario,
          tp.nombre AS tipo_nombre, tp.codigo AS tipo_codigo, tp.color,
          tp.es_feriado_legal, tp.es_especial, tp.tipo_especial,
          aprobador.nombres AS aprobador_nombres,
@@ -89,6 +96,18 @@ router.get('/', async (req, res) => {
        FROM solicitudes sol
        JOIN funcionarios f ON sol.funcionario_id = f.id
        LEFT JOIN servicios s ON f.servicio_id = s.id
+       LEFT JOIN dispositivos d ON f.dispositivo_id = d.id
+       LEFT JOIN saldos_funcionarios sf
+         ON sf.funcionario_id = sol.funcionario_id
+        AND sf.tipo_permiso_id = sol.tipo_permiso_id
+        AND sf.anio = EXTRACT(YEAR FROM sol.fecha_inicio)
+       LEFT JOIN LATERAL (
+         SELECT hm.saldo_anterior, hm.saldo_nuevo
+         FROM historial_movimientos hm
+         WHERE hm.solicitud_id = sol.id AND hm.tipo_movimiento = 'reserva'
+         ORDER BY hm.id
+         LIMIT 1
+       ) mov ON TRUE
        JOIN tipos_permisos tp ON sol.tipo_permiso_id = tp.id
        LEFT JOIN usuarios u ON sol.aprobado_por = u.id
        LEFT JOIN funcionarios aprobador ON u.funcionario_id = aprobador.id
@@ -125,6 +144,8 @@ router.post('/', [
   if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
   const { funcionario_id, tipo_permiso_id, fecha_inicio, fecha_fin, dias_solicitados, motivo, jornada_medio_dia } = req.body;
+  // Quien cubre las funciones durante la ausencia (campo del formato oficial DAS)
+  const reemplazante = String(req.body.reemplazante || '').trim().slice(0, 150) || null;
 
   if (esSoloAutoservicio(req) && req.usuario.funcionario_id != funcionario_id) {
     return res.status(403).json({ error: 'Solo puedes solicitar permisos para ti mismo' });
@@ -196,9 +217,9 @@ router.post('/', [
       const nuevaSolicitud = await client.query(
         `INSERT INTO solicitudes
            (funcionario_id, tipo_permiso_id, fecha_inicio, fecha_fin,
-            dias_solicitados, dias_arrastre, dias_periodo_actual, motivo)
-         VALUES ($1,$2,$3,$4,$5,0,0,$6) RETURNING *`,
-        [funcionario_id, tipo_permiso_id, fecha_inicio, fechaFinCalc, diasFijos, motivo]
+            dias_solicitados, dias_arrastre, dias_periodo_actual, motivo, reemplazante)
+         VALUES ($1,$2,$3,$4,$5,0,0,$6,$7) RETURNING *`,
+        [funcionario_id, tipo_permiso_id, fecha_inicio, fechaFinCalc, diasFijos, motivo, reemplazante]
       );
 
       await registrarMovimiento(client, {
@@ -317,16 +338,16 @@ router.post('/', [
         const solArrastre = await client.query(
           `INSERT INTO solicitudes
              (funcionario_id, tipo_permiso_id, fecha_inicio, fecha_fin,
-              dias_solicitados, dias_arrastre, dias_periodo_actual, motivo, jornada_medio_dia)
-           VALUES ($1, $2, $3, $4, $5, $5, 0, $6, $7) RETURNING *`,
-          [funcionario_id, tipo_permiso_id, fecha_inicio, fechaFinArrastre, fromArrastre, motivo, jornadaMedioDiaFinal]
+              dias_solicitados, dias_arrastre, dias_periodo_actual, motivo, jornada_medio_dia, reemplazante)
+           VALUES ($1, $2, $3, $4, $5, $5, 0, $6, $7, $8) RETURNING *`,
+          [funcionario_id, tipo_permiso_id, fecha_inicio, fechaFinArrastre, fromArrastre, motivo, jornadaMedioDiaFinal, reemplazante]
         );
         const solActual = await client.query(
           `INSERT INTO solicitudes
              (funcionario_id, tipo_permiso_id, fecha_inicio, fecha_fin,
-              dias_solicitados, dias_arrastre, dias_periodo_actual, motivo, jornada_medio_dia)
-           VALUES ($1, $2, $3, $4, $5, 0, $5, $6, $7) RETURNING *`,
-          [funcionario_id, tipo_permiso_id, fechaInicioActual, fecha_fin, fromActual, motivo, jornadaMedioDiaFinal]
+              dias_solicitados, dias_arrastre, dias_periodo_actual, motivo, jornada_medio_dia, reemplazante)
+           VALUES ($1, $2, $3, $4, $5, 0, $5, $6, $7, $8) RETURNING *`,
+          [funcionario_id, tipo_permiso_id, fechaInicioActual, fecha_fin, fromActual, motivo, jornadaMedioDiaFinal, reemplazante]
         );
 
         await registrarMovimiento(client, {
@@ -361,10 +382,10 @@ router.post('/', [
       const nuevaSolicitud = await client.query(
         `INSERT INTO solicitudes
            (funcionario_id, tipo_permiso_id, fecha_inicio, fecha_fin,
-            dias_solicitados, dias_arrastre, dias_periodo_actual, motivo, jornada_medio_dia)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+            dias_solicitados, dias_arrastre, dias_periodo_actual, motivo, jornada_medio_dia, reemplazante)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
         [funcionario_id, tipo_permiso_id, fecha_inicio, fecha_fin,
-         dias_solicitados, fromArrastre, fromActual, motivo, jornadaMedioDiaFinal]
+         dias_solicitados, fromArrastre, fromActual, motivo, jornadaMedioDiaFinal, reemplazante]
       );
 
       await registrarMovimiento(client, {
@@ -406,9 +427,9 @@ router.post('/', [
     const nuevaSolicitud = await client.query(
       `INSERT INTO solicitudes
          (funcionario_id, tipo_permiso_id, fecha_inicio, fecha_fin,
-          dias_solicitados, dias_arrastre, dias_periodo_actual, motivo, jornada_medio_dia)
-       VALUES ($1, $2, $3, $4, $5, 0, $5, $6, $7) RETURNING *`,
-      [funcionario_id, tipo_permiso_id, fecha_inicio, fecha_fin, dias_solicitados, motivo, jornadaMedioDiaFinal]
+          dias_solicitados, dias_arrastre, dias_periodo_actual, motivo, jornada_medio_dia, reemplazante)
+       VALUES ($1, $2, $3, $4, $5, 0, $5, $6, $7, $8) RETURNING *`,
+      [funcionario_id, tipo_permiso_id, fecha_inicio, fecha_fin, dias_solicitados, motivo, jornadaMedioDiaFinal, reemplazante]
     );
 
     await registrarMovimiento(client, {

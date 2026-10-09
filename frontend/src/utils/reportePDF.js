@@ -2,6 +2,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { construirFormatoAdministrativo, construirFormatoFeriado, construirFormatoCapacitacion } from './formatosDAS';
 
 const COLOR_PRIMARIO  = [30, 64, 175];   // brand blue
 const COLOR_GRIS      = [100, 116, 139];
@@ -598,6 +599,7 @@ function detectarTipoFormulario(solicitud) {
   if (solicitud.es_feriado_legal) return 'feriado';
   const n = (solicitud.tipo_nombre || solicitud.tipo_codigo || '').toLowerCase();
   if (n.includes('feriado')) return 'feriado';
+  if (solicitud.tipo_codigo === 'CAPACIT' || n.includes('capacit')) return 'capacitacion';
   const claves = ['fallecimiento', 'nacimiento', 'matrimonio', 'adopcion', 'adopción', 'casamiento', 'union civil', 'unión civil', 'permiso especial', 'esp_'];
   if (claves.some(k => n.includes(k))) return 'especial';
   return 'administrativo';
@@ -626,7 +628,7 @@ function detectarSubtipoEspecial(tipo_nombre, tipo_especial) {
 
 function codigoDoc(solicitud) {
   const tipo = detectarTipoFormulario(solicitud);
-  const prefix = tipo === 'feriado' ? 'FER' : tipo === 'especial' ? 'ESP' : 'PAD';
+  const prefix = { feriado: 'FER', especial: 'ESP', capacitacion: 'CAP' }[tipo] || 'PAD';
   const anio = solicitud.fecha_inicio ? String(solicitud.fecha_inicio).substring(0, 4) : new Date().getFullYear();
   return `${prefix}-${anio}-${String(solicitud.id || 0).padStart(5, '0')}`;
 }
@@ -648,20 +650,6 @@ function campoLinea(doc, label, valor, x, y, finX) {
   doc.setDrawColor(80, 80, 80);
   doc.setLineWidth(0.3);
   doc.line(valorX, y + 0.9, finX, y + 0.9);
-}
-
-// Dibuja casilla de verificación cuadrada
-function casilla(doc, x, y, marcado, size = 3.5) {
-  doc.setDrawColor(40, 40, 40);
-  doc.setLineWidth(0.4);
-  doc.rect(x, y - size + 0.6, size, size);
-  if (marcado) {
-    doc.setFillColor(40, 40, 40);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.setTextColor(0, 0, 0);
-    doc.text('X', x + 0.8, y - 0.2);
-  }
 }
 
 // Encabezado institucional TALCAHUANO común a los tres formularios
@@ -729,319 +717,9 @@ function pieInstitucional(doc, texto, ancho, alto, margen) {
   doc.text(texto, ancho / 2, alto - 7, { align: 'center' });
 }
 
-// ─── Plantilla 1: Feriado Legal ──────────────────────────────────────────────
-function construirFormularioFeriado(solicitud, funcionario, saldoInfo = {}) {
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const ancho = doc.internal.pageSize.getWidth();
-  const alto  = doc.internal.pageSize.getHeight();
-  const margen = 15;
-  const derecho = ancho - margen;
-
-  let y = encabezadoInstitucional(doc, 'SOLICITUD DE FERIADO LEGAL',
-    'DISAM TALCAHUANO, Bulnes 266, Teléfono 413835700', ancho, margen);
-
-  // Código único (esquina superior derecha)
-  const codigo = codigoDoc(solicitud);
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(100, 100, 100);
-  doc.text(codigo, derecho, 14, { align: 'right' });
-
-  const nombre = `${funcionario.nombres || ''} ${funcionario.apellidos || ''}`.trim();
-  campoLinea(doc, 'NOMBRE COMPLETO', nombre, margen, y, derecho);
-  y += 9;
-
-  // RUT + JORNADA HRS
-  const xRutFin = margen + 68;
-  campoLinea(doc, 'R.U.T.', funcionario.rut || '', margen, y, xRutFin);
-  const xJ = xRutFin + 8;
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(20, 20, 20);
-  doc.text('JORNADA:', xJ, y);
-  const xJVal = xJ + doc.getTextWidth('JORNADA:') + 2;
-  campoLinea(doc, '', funcionario.horas_contrato ? String(funcionario.horas_contrato) : '', xJVal, y, xJVal + 14);
-  doc.setFont('helvetica', 'bold');
-  doc.text('HRS.', xJVal + 16, y);
-  y += 9;
-
-  campoLinea(doc, 'CARGO', funcionario.cargo || '', margen, y, derecho);
-  y += 9;
-
-  // Tipo contrato con casillas
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(20, 20, 20);
-  doc.text('TIPO CONTRATO:', margen, y);
-  const contrato = (funcionario.tipo_contrato || '').toLowerCase();
-  const opcionesContrato = [
-    { label: 'INDEFINIDO', es: contrato.includes('indefinido') },
-    { label: 'PLAZO FIJO:', es: contrato.includes('plazo') },
-    { label: 'REEMPLAZO:', es: contrato.includes('reemplazo') },
-  ];
-  let xTc = margen + doc.getTextWidth('TIPO CONTRATO:') + 4;
-  opcionesContrato.forEach(({ label, es }) => {
-    casilla(doc, xTc, y, es);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(20, 20, 20);
-    doc.text(label, xTc + 5, y);
-    const lw = doc.getTextWidth(label);
-    campoLinea(doc, '', '', xTc + 5 + lw + 1, y, xTc + 5 + lw + 16);
-    xTc += 5 + lw + 20;
-  });
-  y += 9;
-
-  campoLinea(doc, 'CESFAM', funcionario.dispositivo || funcionario.cesfam || '', margen, y, derecho);
-  y += 12;
-
-  // Solicitud
-  const diasLabel = solicitud.dias_solicitados === 0.5 ? '0.5 (MEDIO DÍA)' : String(solicitud.dias_solicitados || '');
-  const anioSol   = solicitud.fecha_inicio ? String(solicitud.fecha_inicio).substring(0, 4) : String(new Date().getFullYear());
-  const fIni = fmt(solicitud.fecha_inicio);
-  const fFin = fmt(solicitud.fecha_fin);
-
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(20, 20, 20);
-  doc.text('VENGO A SOLICITAR:', margen, y);
-  let xV = margen + doc.getTextWidth('VENGO A SOLICITAR:') + 2;
-  campoLinea(doc, '', diasLabel, xV, y, xV + 20);
-  xV += 22;
-  doc.setFont('helvetica', 'bold');
-  doc.text('DÍA(S) DE FERIADO LEGAL, DESDE EL DÍA', xV, y);
-  xV += doc.getTextWidth('DÍA(S) DE FERIADO LEGAL, DESDE EL DÍA') + 2;
-  campoLinea(doc, '', fIni, xV, y, derecho);
-  y += 9;
-
-  doc.setFont('helvetica', 'bold'); doc.text('HASTA EL DÍA:', margen, y);
-  let xH = margen + doc.getTextWidth('HASTA EL DÍA:') + 2;
-  campoLinea(doc, '', fFin, xH, y, xH + 36);
-  xH += 38;
-  doc.setFont('helvetica', 'bold'); doc.text('CORRESPONDIENTE AL AÑO CALENDARIO:', xH, y);
-  xH += doc.getTextWidth('CORRESPONDIENTE AL AÑO CALENDARIO:') + 2;
-  campoLinea(doc, '', anioSol, xH, y, derecho);
-  y += 12;
-
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(20, 20, 20);
-  doc.text('EN MI AUSENCIA REALIZARÁ MIS FUNCIONES EL/LA SR./SRA.:', margen, y);
-  const xRem = margen + doc.getTextWidth('EN MI AUSENCIA REALIZARÁ MIS FUNCIONES EL/LA SR./SRA.:') + 2;
-  campoLinea(doc, '', '', xRem, y, derecho);
-  y += 12;
-
-  // Línea separadora
-  doc.setLineWidth(0.5); doc.setDrawColor(0);
-  doc.line(margen, y, derecho, y);
-  y += 8;
-
-  // Caja de saldos
-  const totalDias  = saldoInfo.total_dias  !== undefined ? String(saldoInfo.total_dias)  : '';
-  const saldoPend  = saldoInfo.saldo_pendiente !== undefined ? String(saldoInfo.saldo_pendiente) : '';
-  const diasSol    = String(solicitud.dias_solicitados || '');
-  const tieneArr   = saldoInfo.tiene_arrastre;
-  const boxW = (ancho - margen * 2) * 0.54;
-  const boxH = 30;
-  doc.setDrawColor(0); doc.setLineWidth(0.5);
-  doc.rect(margen, y, boxW, boxH);
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(20, 20, 20);
-  doc.text('Nº DE TOTAL DÍAS', margen + 3, y + 8);
-  campoLinea(doc, '', totalDias, margen + 3 + doc.getTextWidth('Nº DE TOTAL DÍAS') + 2, y + 8, margen + boxW - 3);
-  doc.text('Nº DÍAS SOLICITADOS', margen + 3, y + 18);
-  campoLinea(doc, '', diasSol, margen + 3 + doc.getTextWidth('Nº DÍAS SOLICITADOS') + 2, y + 18, margen + boxW - 3);
-  doc.text('SALDO PENDIENTE', margen + 3, y + 27);
-  campoLinea(doc, '', saldoPend, margen + 3 + doc.getTextWidth('SALDO PENDIENTE') + 2, y + 27, margen + boxW - 3);
-
-  // FERIADO ACUMULADO (lado derecho)
-  const xAc = margen + boxW + 8;
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5);
-  doc.text('FERIADO ACUMULADO', xAc, y + 8);
-  casilla(doc, xAc, y + 18, tieneArr === true);
-  doc.setFont('helvetica', 'normal'); doc.text('SI', xAc + 5, y + 18);
-  casilla(doc, xAc + 16, y + 18, tieneArr === false);
-  doc.text('NO', xAc + 21, y + 18);
-  y += boxH + 18;
-
-  // Firmas
-  y = seccionFirmas(doc, ancho, margen, y);
-  y += 10;
-
-  // Fecha ciudad
-  const fechaHoy = format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es });
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(20, 20, 20);
-  doc.text(`TALCAHUANO, ${fechaHoy}`, margen, y);
-  y += 12;
-
-  // Observación
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5);
-  doc.text('OBSERVACIÓN IMPORTANTE:', margen, y);
-  y += 5;
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
-  const obs = '✓  Ningún funcionario puede abandonar sus funciones, si no ha sido autorizado formalmente para hacer uso del permiso solicitado.';
-  const obsLines = doc.splitTextToSize(obs, ancho - margen * 2 - 5);
-  doc.text(obsLines, margen + 5, y);
-
-  pieInstitucional(doc, 'DISAM TALCAHUANO, Bulnes 266, Teléfono 413835700.', ancho, alto, margen);
-  return doc;
-}
-
-// ─── Plantilla 2: Permiso Administrativo ─────────────────────────────────────
-function construirFormularioAdministrativo(solicitud, funcionario, saldoInfo = {}) {
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const ancho = doc.internal.pageSize.getWidth();
-  const alto  = doc.internal.pageSize.getHeight();
-  const margen = 15;
-  const derecho = ancho - margen;
-
-  let y = encabezadoInstitucional(doc, 'SOLICITUD PERMISO ADMINISTRATIVO',
-    'BULNES # 266  TALCAHUANO  TELÉFONO 41-3835700', ancho, margen);
-
-  // Línea vertical izquierda (detalle del formato oficial)
-  doc.setDrawColor(0); doc.setLineWidth(0.8);
-  doc.line(margen, 47, margen, y - 4);
-
-  const codigo = codigoDoc(solicitud);
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(100, 100, 100);
-  doc.text(codigo, derecho, 14, { align: 'right' });
-
-  const nombre = `${funcionario.nombres || ''} ${funcionario.apellidos || ''}`.trim();
-  campoLinea(doc, 'NOMBRE COMPLETO', nombre, margen, y, derecho);
-  y += 9;
-
-  campoLinea(doc, 'RUT', funcionario.rut || '', margen, y, derecho);
-  y += 9;
-
-  campoLinea(doc, 'CARGO', funcionario.cargo || '', margen, y, derecho);
-  y += 9;
-
-  // Tipo contrato
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(20, 20, 20);
-  doc.text('TIPO CONTRATO:', margen, y);
-  const contrato = (funcionario.tipo_contrato || '').toLowerCase();
-  const opcTC = [
-    { label: 'INDEFINIDO:', es: contrato.includes('indefinido') },
-    { label: 'PLAZO FIJO:', es: contrato.includes('plazo') },
-    { label: 'REEMPLAZO:', es: contrato.includes('reemplazo') },
-  ];
-  let xTC = margen + doc.getTextWidth('TIPO CONTRATO:') + 4;
-  opcTC.forEach(({ label, es }) => {
-    casilla(doc, xTC, y, es);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(20, 20, 20);
-    doc.text(label, xTC + 5, y);
-    const lw = doc.getTextWidth(label);
-    campoLinea(doc, '', '', xTC + 5 + lw + 1, y, xTC + 5 + lw + 14);
-    xTC += 5 + lw + 18;
-  });
-  y += 9;
-
-  campoLinea(doc, 'CESFAM', funcionario.dispositivo || funcionario.cesfam || '', margen, y, derecho);
-  y += 12;
-
-  // SOLICITO: ___ DÍA(S) DE PERMISO ADMINISTRATIVO CON / SIN GOCE
-  const diasLabel = solicitud.dias_solicitados === 0.5 ? '0.5 (MEDIO DÍA)' : String(solicitud.dias_solicitados || '');
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(20, 20, 20);
-  doc.text('SOLICITO:', margen, y);
-  let xSol = margen + doc.getTextWidth('SOLICITO:') + 2;
-  campoLinea(doc, '', diasLabel, xSol, y, xSol + 20);
-  xSol += 22;
-  doc.setFont('helvetica', 'bold');
-  doc.text('DÍA(S) DE PERMISO ADMINISTRATIVO', xSol, y);
-  xSol += doc.getTextWidth('DÍA(S) DE PERMISO ADMINISTRATIVO') + 3;
-  casilla(doc, xSol, y, true);
-  doc.setFont('helvetica', 'normal'); doc.text('CON', xSol + 5, y);
-  xSol += 5 + doc.getTextWidth('CON') + 4;
-  casilla(doc, xSol, y, false);
-  doc.setFont('helvetica', 'normal'); doc.text('SIN', xSol + 5, y);
-  xSol += 5 + doc.getTextWidth('SIN') + 4;
-  doc.setFont('helvetica', 'bold'); doc.text('GOCE DE REMUNERACIONES', xSol, y);
-  y += 9;
-
-  // DESDE: ___ HASTA: ___ POR MOTIVOS PARTICULARES
-  const fIni = fmt(solicitud.fecha_inicio);
-  const fFin = fmt(solicitud.fecha_fin);
-  doc.setFont('helvetica', 'bold'); doc.text('DESDE:', margen, y);
-  let xD = margen + doc.getTextWidth('DESDE:') + 2;
-  campoLinea(doc, '', fIni, xD, y, xD + 35);
-  xD += 37;
-  doc.setFont('helvetica', 'bold'); doc.text('HASTA:', xD, y);
-  let xH2 = xD + doc.getTextWidth('HASTA:') + 2;
-  campoLinea(doc, '', fFin, xH2, y, xH2 + 35);
-  xH2 += 37;
-  doc.setFont('helvetica', 'bold'); doc.text('POR MOTIVOS PARTICULARES.', xH2, y);
-  y += 9;
-
-  // AM / PM / DÍA
-  const jornada = solicitud.jornada_medio_dia;
-  let xAM = margen + 10;
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5);
-  doc.text('AM', xAM, y);
-  xAM += doc.getTextWidth('AM') + 2;
-  campoLinea(doc, '', jornada === 'AM' ? '✓' : '', xAM, y, xAM + 16);
-  xAM += 20;
-  doc.text('PM', xAM, y);
-  xAM += doc.getTextWidth('PM') + 2;
-  campoLinea(doc, '', jornada === 'PM' ? '✓' : '', xAM, y, xAM + 16);
-  xAM += 20;
-  doc.text('DÍA', xAM, y);
-  xAM += doc.getTextWidth('DÍA') + 2;
-  campoLinea(doc, '', !jornada ? '✓' : '', xAM, y, xAM + 22);
-  y += 10;
-
-  // Motivo
-  if (solicitud.motivo) {
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(20, 20, 20);
-    doc.text('MOTIVO:', margen, y);
-    doc.setFont('helvetica', 'normal');
-    const mLines = doc.splitTextToSize(solicitud.motivo, derecho - margen - doc.getTextWidth('MOTIVO:') - 4);
-    doc.text(mLines, margen + doc.getTextWidth('MOTIVO:') + 3, y);
-    doc.setDrawColor(80, 80, 80); doc.setLineWidth(0.3);
-    for (let i = 0; i < Math.max(mLines.length, 1); i++) {
-      doc.line(margen + doc.getTextWidth('MOTIVO:') + 3, y + 0.9 + i * 5.5, derecho, y + 0.9 + i * 5.5);
-    }
-    y += Math.max(mLines.length, 1) * 5.5 + 5;
-  }
-
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(20, 20, 20);
-  doc.text('EN MI AUSENCIA REALIZARÁ MIS FUNCIONES EL/LA SR./SRA.:', margen, y);
-  const xRem = margen + doc.getTextWidth('EN MI AUSENCIA REALIZARÁ MIS FUNCIONES EL/LA SR./SRA.:') + 2;
-  campoLinea(doc, '', '', xRem, y, derecho);
-  y += 12;
-
-  // Línea separadora
-  doc.setLineWidth(0.5); doc.setDrawColor(0);
-  doc.line(margen, y, derecho, y);
-  y += 8;
-
-  // Caja saldos
-  const totalDias = saldoInfo.total_dias !== undefined ? String(saldoInfo.total_dias) : '';
-  const saldoPend = saldoInfo.saldo_pendiente !== undefined ? String(saldoInfo.saldo_pendiente) : '';
-  const diasSolStr = String(solicitud.dias_solicitados || '');
-  const colW = (ancho - margen * 2) / 3;
-  doc.setDrawColor(0); doc.setLineWidth(0.5);
-  doc.rect(margen, y, ancho - margen * 2, 16);
-  doc.line(margen + colW, y, margen + colW, y + 16);
-  doc.line(margen + colW * 2, y, margen + colW * 2, y + 16);
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(20, 20, 20);
-  doc.text('Nº TOTAL DÍAS', margen + colW / 2, y + 5, { align: 'center' });
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
-  doc.text(totalDias, margen + colW / 2, y + 13, { align: 'center' });
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(8);
-  doc.text('Nº DÍAS SOLICITADOS', margen + colW + colW / 2, y + 5, { align: 'center' });
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
-  doc.text(diasSolStr, margen + colW + colW / 2, y + 13, { align: 'center' });
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(8);
-  doc.text('SALDO PENDIENTE', margen + colW * 2 + colW / 2, y + 5, { align: 'center' });
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
-  doc.text(saldoPend, margen + colW * 2 + colW / 2, y + 13, { align: 'center' });
-  y += 26;
-
-  y = seccionFirmas(doc, ancho, margen, y);
-  y += 10;
-
-  const fechaHoy = format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es });
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(20, 20, 20);
-  doc.text(`TALCAHUANO, ${fechaHoy}`, margen, y);
-  y += 12;
-
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5);
-  doc.text('OBSERVACIÓN IMPORTANTE:', margen, y);
-  y += 5;
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
-  const obs = 'Ningún funcionario puede abandonar sus funciones, si no ha sido autorizado formalmente para hacer uso del permiso solicitado.';
-  doc.text(doc.splitTextToSize(obs, ancho - margen * 2 - 5), margen + 5, y);
-
-  pieInstitucional(doc, 'BULNES # 266  TALCAHUANO  TELÉFONO 41-3835700', ancho, alto, margen);
-  return doc;
-}
+// ─── Plantillas 1, 2 y 3: formatos oficiales DAS ─────────────────────────────
+// Feriado Legal, Permiso Administrativo y Permiso de Capacitación se generan
+// con los formatos institucionales DAS Talcahuano (ver formatosDAS.js).
 
 // ─── Plantilla 3: Permiso Especial ───────────────────────────────────────────
 function construirFormularioEspecial(solicitud, funcionario) {
@@ -1165,9 +843,11 @@ function construirFormularioEspecial(solicitud, funcionario) {
 // ─── Dispatcher principal ────────────────────────────────────────────────────
 function construirFormularioOficial(solicitud, funcionario, saldoInfo = {}) {
   const tipo = detectarTipoFormulario(solicitud);
-  if (tipo === 'feriado')  return construirFormularioFeriado(solicitud, funcionario, saldoInfo);
-  if (tipo === 'especial') return construirFormularioEspecial(solicitud, funcionario);
-  return construirFormularioAdministrativo(solicitud, funcionario, saldoInfo);
+  const folio = codigoDoc(solicitud);
+  if (tipo === 'feriado')      return construirFormatoFeriado(solicitud, funcionario, saldoInfo, folio);
+  if (tipo === 'capacitacion') return construirFormatoCapacitacion(solicitud, funcionario, saldoInfo, folio);
+  if (tipo === 'especial')     return construirFormularioEspecial(solicitud, funcionario);
+  return construirFormatoAdministrativo(solicitud, funcionario, saldoInfo, folio);
 }
 
 export function descargarFormularioOficial(solicitud, funcionario, saldoInfo = {}) {

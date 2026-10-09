@@ -312,9 +312,9 @@ export function construirFormatoFeriado(solicitud, funcionario, saldoInfo = {}, 
   return dibujarFormato(FERIADO, {
     ...v,
     anioCalendario: String(usaArrastre && !usaActual ? anio - 1 : anio),
-    acumulado: usaArrastre ? 'X' : 'NO',
+    acumulado: usaArrastre ? 'X' : '',
     periodo: String(periodoBase),
-    periodo2: usaArrastre && usaActual ? String(anio).slice(2) : '—',
+    periodo2: usaArrastre && usaActual ? String(anio).slice(2) : '',
   }, folio);
 }
 

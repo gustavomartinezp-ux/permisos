@@ -302,9 +302,9 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
           _saldoInfo: saldoInfo,
           // Cada tramo descuenta del saldo que dejó el anterior
           tramos: [
-            { ...data.solicitud_arrastre, _etiqueta: `${data.distribucion.fromArrastre} día(s) de arrastre (período anterior)`,
+            { ...data.solicitud_arrastre, tipo_nombre: saldoSel?.tipo_nombre, es_feriado_legal: true, _etiqueta: `${data.distribucion.fromArrastre} día(s) de arrastre (período anterior)`,
               _saldoInfo: { total_dias: totalDisp, saldo_pendiente: totalDisp - data.distribucion.fromArrastre } },
-            { ...data.solicitud_actual,   _etiqueta: `${data.distribucion.fromActual} día(s) del período actual`,
+            { ...data.solicitud_actual,   tipo_nombre: saldoSel?.tipo_nombre, es_feriado_legal: true, _etiqueta: `${data.distribucion.fromActual} día(s) del período actual`,
               _saldoInfo: { total_dias: totalDisp - data.distribucion.fromArrastre, saldo_pendiente: Math.max(totalDisp - diasSolicitados, 0) } },
           ],
         });

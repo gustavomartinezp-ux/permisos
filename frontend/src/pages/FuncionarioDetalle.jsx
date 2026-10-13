@@ -66,6 +66,10 @@ const estadoCuentaBadge = (f) => {
   return { texto: 'Cuenta activa', clase: 'bg-emerald-100 text-emerald-700 border-emerald-200', Icon: CheckCircle2 };
 };
 
+// Días de arrastre de feriado legal que el funcionario aún puede usar
+const arrastreDisponible = (s) =>
+  Math.max((s.saldo_arrastre || 0) - (s.arrastre_usados || 0) - (s.arrastre_pendientes || 0), 0);
+
 export default function FuncionarioDetalle() {
   const { id } = useParams();
   const location = useLocation();
@@ -212,7 +216,8 @@ export default function FuncionarioDetalle() {
     const inicialArrastre = {};
     funcionario.saldos?.forEach(s => {
       inicialSaldos[s.tipo_permiso_id] = s.dias_asignados;
-      if (s.es_feriado_legal) inicialArrastre[s.tipo_permiso_id] = s.saldo_arrastre || 0;
+      // Se edita el arrastre DISPONIBLE; el backend le suma lo ya usado/en trámite
+      if (s.es_feriado_legal) inicialArrastre[s.tipo_permiso_id] = arrastreDisponible(s);
     });
     setSaldosEdit(inicialSaldos);
     setArrastreEdit(inicialArrastre);
@@ -789,7 +794,7 @@ export default function FuncionarioDetalle() {
                         Usados: {s.dias_usados} · Pend: {s.dias_pendientes || 0}
                       </span>
                       <input
-                        type="number" min="0" max="365"
+                        type="number" min="0" max="365" step="0.5"
                         value={saldosEdit[s.tipo_permiso_id] ?? s.dias_asignados}
                         onChange={e => setSaldosEdit(prev => ({ ...prev, [s.tipo_permiso_id]: e.target.value }))}
                         className="input-field w-20 text-center text-sm py-1.5"
@@ -802,14 +807,14 @@ export default function FuncionarioDetalle() {
                       <div className="flex items-center gap-3 mt-2 pt-2 border-t border-amber-200">
                         <ArrowLeftRight size={12} className="text-amber-500 flex-shrink-0 ml-0.5" />
                         <span className="text-xs text-amber-700 flex-1">
-                          Arrastre período anterior
+                          Arrastre disponible (período anterior)
                           <span className="text-amber-500 ml-1">
-                            (usado: {s.arrastre_usados || 0} · pend: {s.arrastre_pendientes || 0})
+                            (ya usado: {s.arrastre_usados || 0} · en trámite: {s.arrastre_pendientes || 0})
                           </span>
                         </span>
                         <input
-                          type="number" min="0" max="365"
-                          value={arrastreEdit[s.tipo_permiso_id] ?? (s.saldo_arrastre || 0)}
+                          type="number" min="0" max="365" step="0.5"
+                          value={arrastreEdit[s.tipo_permiso_id] ?? arrastreDisponible(s)}
                           onChange={e => setArrastreEdit(prev => ({ ...prev, [s.tipo_permiso_id]: e.target.value }))}
                           className="input-field w-20 text-center text-sm py-1.5 border-amber-300 focus:border-amber-500"
                         />

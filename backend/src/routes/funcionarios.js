@@ -856,7 +856,9 @@ router.put('/:id/saldos', requierePermiso('saldos.ajustar'), async (req, res) =>
 
       const s = saldoActual.rows[0];
       const saldoAnterior = s.dias_asignados - s.dias_usados - s.dias_pendientes;
-      const diasNuevosInt = parseInt(diasNuevos);
+      const diasNuevosInt = parseFloat(diasNuevos);
+      if (!Number.isFinite(diasNuevosInt) || diasNuevosInt < 0) continue;
+      if (diasNuevosInt === Number(s.dias_asignados)) continue; // sin cambio: no ensuciar el historial
 
       await client.query(
         `UPDATE saldos_funcionarios SET dias_asignados=$1, updated_at=NOW() WHERE id=$2`,
@@ -875,7 +877,10 @@ router.put('/:id/saldos', requierePermiso('saldos.ajustar'), async (req, res) =>
       resultados.push({ tipo_permiso_id: tipoId, campo: 'dias_asignados', valor: diasNuevosInt });
     }
 
-    // Ajustar saldo_arrastre (solo feriado legal)
+    // Ajustar arrastre (solo feriado legal). El valor recibido son los días de
+    // arrastre DISPONIBLES (lo que ve y entiende RRHH); saldo_arrastre guarda el
+    // total del arrastre, así que se le suman los ya usados y en trámite —
+    // antes se guardaba tal cual y, con días usados, el disponible quedaba negativo.
     for (const [tipoId, arrNuevo] of Object.entries(arrastres || {})) {
       const saldoActual = await client.query(
         `SELECT sf.*, tp.es_feriado_legal FROM saldos_funcionarios sf
@@ -887,21 +892,23 @@ router.put('/:id/saldos', requierePermiso('saldos.ajustar'), async (req, res) =>
 
       const s = saldoActual.rows[0];
       const arrAnterior = (s.saldo_arrastre || 0) - (s.arrastre_usados || 0) - (s.arrastre_pendientes || 0);
-      const arrNuevoInt = parseInt(arrNuevo);
+      const arrNuevoDisp = parseFloat(arrNuevo);
+      if (!Number.isFinite(arrNuevoDisp) || arrNuevoDisp < 0) continue;
+      if (arrNuevoDisp === arrAnterior) continue;
+      const arrNuevoInt = arrNuevoDisp + (s.arrastre_usados || 0) + (s.arrastre_pendientes || 0);
 
       await client.query(
         `UPDATE saldos_funcionarios SET saldo_arrastre=$1, updated_at=NOW() WHERE id=$2`,
         [arrNuevoInt, s.id]
       );
 
-      const arrNuevoDisp = arrNuevoInt - (s.arrastre_usados || 0) - (s.arrastre_pendientes || 0);
       await client.query(
         `INSERT INTO historial_movimientos
            (funcionario_id, tipo_permiso_id, tipo_movimiento, dias_movimiento,
             saldo_anterior, saldo_nuevo, descripcion, usuario_responsable)
          VALUES ($1,$2,'ajuste',$3,$4,$5,$6,$7)`,
         [funcId, tipoId, arrNuevoInt - (s.saldo_arrastre || 0), arrAnterior, arrNuevoDisp,
-         motivo || `Ajuste manual de arrastre feriado legal a ${arrNuevoInt} días`, req.usuario.id]
+         motivo || `Ajuste manual de arrastre feriado legal a ${arrNuevoDisp} días disponibles`, req.usuario.id]
       );
       resultados.push({ tipo_permiso_id: tipoId, campo: 'saldo_arrastre', valor: arrNuevoInt });
     }

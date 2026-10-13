@@ -171,7 +171,7 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
 
   // Saldo para tipos normales
   const arrastreDisp = saldoSel?.es_feriado_legal
-    ? ((saldoSel.saldo_arrastre || 0) - (saldoSel.arrastre_usados || 0) - (saldoSel.arrastre_pendientes || 0))
+    ? Math.max((saldoSel.saldo_arrastre || 0) - (saldoSel.arrastre_usados || 0) - (saldoSel.arrastre_pendientes || 0), 0)
     : 0;
   const actualDisp = saldoSel
     ? saldoSel.dias_asignados - saldoSel.dias_usados - (saldoSel.dias_pendientes || 0)

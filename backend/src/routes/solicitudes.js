@@ -257,7 +257,7 @@ router.post('/', [
 
     if (esFeriadoLegal) {
       // ── Lógica feriado legal ──────────────────────────────────────────────
-      const arrastreDisponible = (s.saldo_arrastre || 0) - (s.arrastre_usados || 0) - (s.arrastre_pendientes || 0);
+      const arrastreDisponible = Math.max((s.saldo_arrastre || 0) - (s.arrastre_usados || 0) - (s.arrastre_pendientes || 0), 0);
       const actualDisponible = s.dias_asignados - s.dias_usados - s.dias_pendientes;
       const totalDisponible = arrastreDisponible + actualDisponible;
 

@@ -27,7 +27,7 @@ function FilaSaldo({ saldo, index }) {
   const Icono = iconoTipo(saldo.codigo);
   const disponible = saldo.dias_asignados - saldo.dias_usados - (saldo.dias_pendientes || 0);
   const arrastreDisp = saldo.es_feriado_legal
-    ? ((saldo.saldo_arrastre || 0) - (saldo.arrastre_usados || 0) - (saldo.arrastre_pendientes || 0))
+    ? Math.max((saldo.saldo_arrastre || 0) - (saldo.arrastre_usados || 0) - (saldo.arrastre_pendientes || 0), 0)
     : 0;
   const totalDisponible = saldo.es_feriado_legal
     ? (saldo.total_disponible ?? disponible + arrastreDisp)

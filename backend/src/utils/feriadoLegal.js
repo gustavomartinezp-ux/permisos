@@ -50,32 +50,42 @@ function tipoRequiereDiaHabil(tipoPermiso) {
   return tipoPermiso?.codigo === 'ADMIN' || tipoPermiso?.es_feriado_legal === true;
 }
 
-// Valida que una solicitud de Permiso Administrativo o Feriado Legal caiga
-// íntegramente en días hábiles, salvo que el funcionario pertenezca al
-// dispositivo SAR Los Cerros (turnos 24/7), donde cualquier día del año es
-// válido.
+// Valida que una solicitud de Permiso Administrativo o Feriado Legal empiece y
+// termine en día hábil. Los sábados, domingos y feriados que queden DENTRO del
+// rango no invalidan la solicitud: simplemente no se cuentan (los días se
+// calculan como hábiles). Antes se exigía que TODO el rango fuera hábil, lo que
+// impedía pedir, p. ej., 10 días de feriado que cruzaran un fin de semana.
+// Excepción: el dispositivo SAR Los Cerros (turnos 24/7), donde cualquier día
+// del año es válido y los días se cuentan corridos.
 function validarSolicitudPermiso(funcionario, tipoPermiso, fechaInicio, fechaFin) {
   if (!tipoRequiereDiaHabil(tipoPermiso)) return { valido: true };
   if (esDispositivoExcepcion(funcionario)) return { valido: true };
 
-  const diasNoHabiles = [];
-  const cur = new Date(`${toISO(fechaInicio)}T12:00:00`);
-  const end = new Date(`${toISO(fechaFin)}T12:00:00`);
-  while (cur <= end) {
-    if (!esDiaHabil(cur)) diasNoHabiles.push(toISO(cur));
-    cur.setDate(cur.getDate() + 1);
-  }
+  const extremos = [...new Set([toISO(fechaInicio), toISO(fechaFin)])];
+  const diasNoHabiles = extremos.filter((f) => !esDiaHabil(new Date(`${f}T12:00:00`)));
 
   if (diasNoHabiles.length > 0) {
     return {
       valido: false,
-      error: `${tipoPermiso.nombre} solo puede solicitarse en días hábiles (lunes a viernes, sin feriados). ` +
-        `Las siguientes fechas seleccionadas no son hábiles: ${diasNoHabiles.join(', ')}. ` +
+      error: `${tipoPermiso.nombre} debe comenzar y terminar en día hábil (lunes a viernes, sin feriados). ` +
+        `No son hábiles: ${diasNoHabiles.join(', ')}. ` +
         `Excepción: el dispositivo SAR Los Cerros (turnos 24/7) sí puede solicitar en fines de semana y feriados.`,
       dias_no_habiles: diasNoHabiles,
     };
   }
   return { valido: true };
+}
+
+// Días que corresponde descontar para un rango: hábiles en general; corridos
+// para Administrativo/Feriado del dispositivo SAR (turnos 24/7).
+function diasDelRango(funcionario, tipoPermiso, fechaInicio, fechaFin) {
+  const ini = new Date(`${toISO(fechaInicio)}T12:00:00`);
+  const fin = new Date(`${toISO(fechaFin)}T12:00:00`);
+  if (fin < ini) return 0;
+  if (tipoRequiereDiaHabil(tipoPermiso) && esDispositivoExcepcion(funcionario)) {
+    return Math.round((fin - ini) / 86400000) + 1;
+  }
+  return calcularDiasHabiles(ini, fin);
 }
 
 function siguienteDiaHabil(fecha) {
@@ -246,5 +256,6 @@ module.exports = {
   verificarSolapamiento,
   tipoRequiereDiaHabil,
   validarSolicitudPermiso,
+  diasDelRango,
   REGLAS_ESPECIALES,
 };

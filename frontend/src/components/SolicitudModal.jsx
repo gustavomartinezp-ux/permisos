@@ -5,7 +5,7 @@ import { solicitudesApi, saldosApi, tiposPermisosApi } from '../api/client';
 import { descargarFormularioOficial, imprimirFormularioOficial } from '../utils/reportePDF';
 import toast from 'react-hot-toast';
 
-// Feriados Chile 2025-2026 (espejo del backend para preview instantáneo)
+// Feriados Chile 2025-2027 (espejo del backend para preview instantáneo)
 const FERIADOS = new Set([
   '2025-01-01','2025-04-18','2025-04-19','2025-05-01','2025-05-21',
   '2025-06-20','2025-06-29','2025-07-16','2025-08-15','2025-09-18',
@@ -13,6 +13,9 @@ const FERIADOS = new Set([
   '2026-01-01','2026-04-03','2026-04-04','2026-05-01','2026-05-21',
   '2026-06-19','2026-06-29','2026-07-16','2026-08-15','2026-09-18',
   '2026-09-19','2026-10-12','2026-10-31','2026-11-01','2026-12-08','2026-12-25',
+  '2027-01-01','2027-03-26','2027-03-27','2027-05-01','2027-05-21',
+  '2027-06-21','2027-06-29','2027-07-16','2027-08-15','2027-09-18',
+  '2027-09-19','2027-10-12','2027-10-31','2027-11-01','2027-12-08','2027-12-25',
 ]);
 
 function toISO(d) { return d.toISOString().split('T')[0]; }
@@ -21,31 +24,6 @@ function esDiaHabil(d) {
   const dow = d.getDay();
   if (dow === 0 || dow === 6) return false;
   return !FERIADOS.has(toISO(d));
-}
-
-function calcularDiasHabiles(inicio, fin) {
-  if (!inicio || !fin) return 0;
-  const start = new Date(inicio + 'T12:00:00');
-  const end   = new Date(fin   + 'T12:00:00');
-  if (end < start) return 0;
-  let dias = 0;
-  const cur = new Date(start);
-  while (cur <= end) {
-    if (esDiaHabil(cur)) dias++;
-    cur.setDate(cur.getDate() + 1);
-  }
-  return dias;
-}
-
-// Días corridos (calendario) entre dos fechas, inclusive — para el dispositivo
-// SAR Los Cerros, donde el concepto de "día hábil" no aplica (turnos 24/7),
-// así que fines de semana y feriados cuentan igual que cualquier otro día.
-function calcularDiasCorridos(inicio, fin) {
-  if (!inicio || !fin) return 0;
-  const start = new Date(inicio + 'T12:00:00');
-  const end   = new Date(fin   + 'T12:00:00');
-  if (end < start) return 0;
-  return Math.round((end - start) / 86400000) + 1;
 }
 
 // Dispositivo (establecimiento) con régimen de turnos 24/7: único exceptuado
@@ -72,6 +50,23 @@ function obtenerDiasNoHabiles(inicio, fin) {
   return dias;
 }
 
+// Arma el rango de un permiso a partir de la fecha de inicio y el número de
+// días: cuenta solo días hábiles (salta fines de semana y feriados) y, si la
+// fecha elegida no es hábil, el permiso comienza el siguiente día hábil.
+// En SAR (turnos 24/7) los días se cuentan corridos.
+function construirRango(inicio, numDias, corridos) {
+  if (!inicio || !(numDias > 0)) return null;
+  const cur = new Date(inicio + 'T12:00:00');
+  if (isNaN(cur)) return null;
+  const dias = [];
+  let guard = 0;
+  while (dias.length < numDias && guard++ < 730) {
+    if (corridos || esDiaHabil(cur)) dias.push(toISO(cur));
+    cur.setDate(cur.getDate() + 1);
+  }
+  return { inicio: dias[0], fin: dias[dias.length - 1], dias };
+}
+
 function calcularDistribucion(diasSolicitados, arrastreDisp, actualDisp) {
   const fromArrastre = Math.min(diasSolicitados, arrastreDisp);
   const fromActual   = diasSolicitados - fromArrastre;
@@ -96,6 +91,64 @@ function calcularFechaFinEspecialLocal(fechaInicio, diasFijos, tipoDias) {
   return toISO(cur);
 }
 
+const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+const formatoFecha = (iso) => {
+  if (!iso) return '';
+  const d = new Date(iso + 'T12:00:00');
+  return `${['dom','lun','mar','mié','jue','vie','sáb'][d.getDay()]} ${d.getDate()} de ${MESES[d.getMonth()]}`;
+};
+
+// Calendario de los meses que abarca el permiso: marca los días que se
+// descuentan y muestra en gris los fines de semana/feriados que se saltan.
+function CalendarioPermiso({ dias }) {
+  if (!dias?.length) return null;
+  const marcados = new Set(dias);
+  const ini = new Date(dias[0] + 'T12:00:00');
+  const fin = new Date(dias[dias.length - 1] + 'T12:00:00');
+  const meses = [];
+  const m = new Date(ini.getFullYear(), ini.getMonth(), 1, 12);
+  while (m <= fin) { meses.push(new Date(m)); m.setMonth(m.getMonth() + 1); }
+
+  return (
+    <div className={`grid gap-3 ${meses.length > 1 ? 'sm:grid-cols-2' : ''}`}>
+      {meses.map((mes) => {
+        const primero = (mes.getDay() + 6) % 7; // lunes = 0
+        const total = new Date(mes.getFullYear(), mes.getMonth() + 1, 0).getDate();
+        const celdas = [...Array(primero).fill(null), ...Array.from({ length: total }, (_, i) => i + 1)];
+        return (
+          <div key={mes.toISOString()}>
+            <p className="text-xs font-semibold text-dark-700 capitalize mb-1">{MESES[mes.getMonth()]} {mes.getFullYear()}</p>
+            <div className="grid grid-cols-7 gap-0.5 text-center text-[11px]">
+              {['L','M','M','J','V','S','D'].map((d, i) => <span key={i} className="text-dark-400 font-medium">{d}</span>)}
+              {celdas.map((dia, i) => {
+                if (!dia) return <span key={i} />;
+                const iso = toISO(new Date(mes.getFullYear(), mes.getMonth(), dia, 12));
+                const marcado = marcados.has(iso);
+                const dentro = iso > dias[0] && iso < dias[dias.length - 1];
+                const feriado = FERIADOS.has(iso);
+                return (
+                  <span
+                    key={i}
+                    title={marcado ? 'Día del permiso' : feriado ? 'Feriado' : dentro ? 'No hábil (no se descuenta)' : ''}
+                    className={`rounded py-0.5 ${
+                      marcado ? 'bg-brand-600 text-white font-semibold'
+                        : dentro ? 'bg-dark-100 text-dark-400 line-through'
+                        : feriado ? 'text-red-500'
+                        : 'text-dark-600'
+                    }`}
+                  >
+                    {dia}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 const LABEL_TIPO_DIAS = {
   corridos:          'días corridos',
   habiles:           'días hábiles',
@@ -114,6 +167,7 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
     reemplazante: '',
   });
   const [medioDia, setMedioDia]           = useState(false);
+  const [numDias, setNumDias]             = useState('');
   const [jornadaMedioDia, setJornadaMedioDia] = useState('AM');
   const [cargando, setCargando]           = useState(false);
   const [error, setError]                 = useState('');
@@ -161,13 +215,18 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
   // (calendario), no hábiles, porque el concepto no aplica a su régimen.
   const esSectorTurno = DISPOSITIVO_EXCEPCION_DIA_HABIL.test(funcionario?.dispositivo || '');
   const permiteMedioDia = !esEspecial && saldoSel?.permite_medio_dia === true;
+  const cuentaCorridos = esSectorTurno && tipoRequiereDiaHabil(saldoSel);
+  const rango = !esEspecial && !medioDia
+    ? construirRango(form.fecha_inicio, parseInt(numDias, 10) || 0, cuentaCorridos)
+    : null;
+  // Fechas que se envían: el rango calculado (o la fecha única si es medio día)
+  const fechaInicioSol = medioDia ? form.fecha_inicio : (rango?.inicio || '');
+  const fechaFinSol    = medioDia ? form.fecha_inicio : (rango?.fin || '');
   const diasSolicitados = esEspecial
     ? (tipoEspecialSel.dias_fijos || 0)
     : medioDia
       ? 0.5
-      : (esSectorTurno && tipoRequiereDiaHabil(saldoSel))
-        ? calcularDiasCorridos(form.fecha_inicio, form.fecha_fin)
-        : calcularDiasHabiles(form.fecha_inicio, form.fecha_fin);
+      : (rango ? rango.dias.length : 0);
 
   // Saldo para tipos normales
   const arrastreDisp = saldoSel?.es_feriado_legal
@@ -194,9 +253,9 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
     && (diasSolicitados > totalDisp || excedeParcializacion);
 
   const requiereDiaHabil = !esEspecial && tipoRequiereDiaHabil(saldoSel) && !esSectorTurno;
-  const fechaFinParaValidar = medioDia ? form.fecha_inicio : form.fecha_fin;
-  const diasNoHabilesSeleccionados = requiereDiaHabil
-    ? obtenerDiasNoHabiles(form.fecha_inicio, fechaFinParaValidar)
+  const fechaFinParaValidar = fechaFinSol;
+  const diasNoHabilesSeleccionados = requiereDiaHabil && medioDia
+    ? obtenerDiasNoHabiles(form.fecha_inicio, form.fecha_inicio)
     : [];
   const tieneDiasNoHabiles = diasNoHabilesSeleccionados.length > 0;
 
@@ -209,6 +268,7 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
 
   const handleTipoChange = (e) => {
     setForm({ ...form, tipo_permiso_id: e.target.value, fecha_inicio: '', fecha_fin: '' });
+    setNumDias('');
     setMedioDia(false);
     setError('');
   };
@@ -217,6 +277,7 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
     if (cat === categoria) return;
     setCategoria(cat);
     setForm((f) => ({ ...f, tipo_permiso_id: '', fecha_inicio: '', fecha_fin: '' }));
+    setNumDias('');
     setMedioDia(false);
     setError('');
   };
@@ -261,7 +322,7 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
     }
 
     // Flujo normal
-    if (!medioDia && diasSolicitados <= 0) return setError('Las fechas no son válidas');
+    if (!medioDia && diasSolicitados <= 0) return setError('Ingresa el número de días y la fecha de inicio');
     if (medioDia && !jornadaMedioDia)       return setError('Selecciona la jornada AM o PM');
     if (saldoInsuficiente)                  return setError(`Saldo insuficiente. Disponibles: ${totalDisp} días`);
     if (tieneDiasNoHabiles) {
@@ -270,14 +331,13 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
       );
     }
 
-    const fechaFin = medioDia ? form.fecha_inicio : form.fecha_fin;
     setCargando(true);
     try {
       const { data } = await solicitudesApi.crear({
         funcionario_id:    funcionario.id,
         tipo_permiso_id:   parseInt(form.tipo_permiso_id),
-        fecha_inicio:      form.fecha_inicio,
-        fecha_fin:         fechaFin,
+        fecha_inicio:      fechaInicioSol,
+        fecha_fin:         fechaFinSol,
         dias_solicitados:  diasSolicitados,
         motivo:            form.motivo,
         reemplazante:      form.reemplazante,
@@ -697,35 +757,58 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
                 </div>
               </div>
             ) : (
-              /* Permiso normal */
-              <div className={medioDia ? '' : 'grid grid-cols-2 gap-3'}>
-                <div>
-                  <label className="block text-sm font-medium text-dark-700 mb-1.5">
-                    <Calendar size={14} className="inline mr-1" />
-                    {medioDia ? 'Fecha' : 'Fecha inicio'}
-                  </label>
-                  <input
-                    type="date"
-                    value={form.fecha_inicio}
-                    onChange={(e) => setForm({ ...form, fecha_inicio: e.target.value })}
-                    className="input-field"
-                    required
-                  />
-                </div>
-                {!medioDia && (
+              /* Permiso con saldo: número de días + fecha de inicio; el término
+                 y el calendario se calculan solos (solo días hábiles) */
+              <div className="space-y-3">
+                <div className={medioDia ? '' : 'grid grid-cols-2 gap-3'}>
+                  {!medioDia && (
+                    <div>
+                      <label className="block text-sm font-medium text-dark-700 mb-1.5">
+                        <Scale size={14} className="inline mr-1" />
+                        Número de días
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        max={Math.max(Math.floor(totalDisp), 1)}
+                        value={numDias}
+                        onChange={(e) => setNumDias(e.target.value.replace(/[^0-9]/g, ''))}
+                        className="input-field"
+                        placeholder={`Hasta ${Math.floor(totalDisp)}`}
+                        required
+                      />
+                    </div>
+                  )}
                   <div>
                     <label className="block text-sm font-medium text-dark-700 mb-1.5">
                       <Calendar size={14} className="inline mr-1" />
-                      Fecha fin
+                      {medioDia ? 'Fecha' : 'Fecha de inicio'}
                     </label>
                     <input
                       type="date"
-                      value={form.fecha_fin}
-                      min={form.fecha_inicio}
-                      onChange={(e) => setForm({ ...form, fecha_fin: e.target.value })}
+                      value={form.fecha_inicio}
+                      onChange={(e) => setForm({ ...form, fecha_inicio: e.target.value })}
                       className="input-field"
                       required
                     />
+                  </div>
+                </div>
+
+                {rango && (
+                  <div className="rounded-xl border border-dark-200 p-3 space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-1 text-xs">
+                      <span className="text-dark-600">
+                        Del <strong>{formatoFecha(rango.inicio)}</strong> al <strong>{formatoFecha(rango.fin)}</strong>
+                      </span>
+                      <span className="text-dark-400">{cuentaCorridos ? 'días corridos (SAR)' : 'se omiten fines de semana y feriados'}</span>
+                    </div>
+                    {rango.inicio !== form.fecha_inicio && (
+                      <p className="text-xs text-amber-700 bg-amber-50 rounded-lg px-2 py-1.5">
+                        La fecha elegida no es día hábil: el permiso comienza el {formatoFecha(rango.inicio)}.
+                      </p>
+                    )}
+                    <CalendarioPermiso dias={rango.dias} />
                   </div>
                 )}
               </div>
@@ -768,7 +851,7 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
             )}
 
             {/* Resumen días para tipos normales */}
-            {!esEspecial && form.fecha_inicio && form.fecha_fin && diasSolicitados > 0 && (
+            {!esEspecial && fechaInicioSol && fechaFinSol && diasSolicitados > 0 && (
               <motion.div
                 initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
                 className={`rounded-lg p-3 text-sm space-y-2 ${

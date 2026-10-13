@@ -12,6 +12,7 @@ const {
   fechaEnesimoDiaHabil,
   siguienteDiaHabil,
   validarSolicitudPermiso,
+  diasDelRango,
 } = require('../utils/feriadoLegal');
 
 const router = express.Router();
@@ -231,6 +232,20 @@ router.post('/', [
         es_especial: true,
         tipo_especial: tipo.tipo_especial,
         tipo_nombre: tipo.nombre,
+      });
+    }
+
+    // Los días a descontar los determina el rango de fechas (hábiles; corridos
+    // en SAR), no lo que envíe el cliente: así el saldo nunca se descuadra.
+    const diasEsperados = Number(dias_solicitados) === 0.5
+      ? (String(fecha_inicio) === String(fecha_fin) ? 0.5 : null)
+      : diasDelRango(funcionario, tipo, fecha_inicio, fecha_fin);
+    if (diasEsperados === null || diasEsperados !== Number(dias_solicitados)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: diasEsperados === null
+          ? 'Medio día debe solicitarse en una sola fecha'
+          : `El rango ${fecha_inicio} al ${fecha_fin} corresponde a ${diasEsperados} día(s), no a ${dias_solicitados}`,
       });
     }
 

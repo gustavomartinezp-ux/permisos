@@ -25,7 +25,9 @@ const poolConfig = process.env.DATABASE_URL
 
 const pool = new Pool({
   ...poolConfig,
-  max: 10,
+  // Pooler de Supabase en modo transacción: admite muchas conexiones cliente.
+  // 20 evita que las peticiones hagan fila cuando hay muchos usuarios a la vez.
+  max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
 });

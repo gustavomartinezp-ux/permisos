@@ -1,7 +1,7 @@
 const express = require('express');
 const { pool } = require('../db');
 const { verificarToken } = require('../middleware/auth');
-const { cargarPermisos, requierePermiso } = require('../middleware/rbac');
+const { cargarPermisos, invalidarPermisos, requierePermiso } = require('../middleware/rbac');
 
 const router = express.Router();
 router.use(verificarToken, cargarPermisos, requierePermiso('usuarios.gestionar_roles'));
@@ -56,6 +56,7 @@ router.post('/usuarios/:usuarioId/asignar', async (req, res) => {
        ON CONFLICT DO NOTHING`,
       [usuarioId, rol.rows[0].id, req.usuario.id]
     );
+    invalidarPermisos(usuarioId);
     res.json({ mensaje: 'Rol asignado correctamente' });
   } catch (err) {
     console.error(err);
@@ -74,6 +75,7 @@ router.delete('/usuarios/:usuarioId/roles/:codigo', async (req, res) => {
       'DELETE FROM user_roles WHERE usuario_id = $1 AND role_id = $2',
       [usuarioId, rol.rows[0].id]
     );
+    invalidarPermisos(usuarioId);
     res.json({ mensaje: 'Rol revocado correctamente' });
   } catch (err) {
     console.error(err);

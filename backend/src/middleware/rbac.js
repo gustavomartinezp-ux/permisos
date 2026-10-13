@@ -1,53 +1,66 @@
 const { pool } = require('../db');
 
-// Carga los roles RBAC y permisos efectivos del usuario autenticado.
+// Caché en memoria de roles/permisos por usuario. cargarPermisos corre en cada
+// petición; con muchos usuarios simultáneos sus consultas saturaban el pool de
+// conexiones. Se cachea 30 s y se invalida al asignar/revocar roles o crear/
+// cancelar subrogaciones (ver invalidarPermisos).
+const CACHE_TTL_MS = 30 * 1000;
+const cachePermisos = new Map();
+
+// Sin argumento limpia todo (ej. cambios a role_permissions)
+const invalidarPermisos = (usuarioId) => {
+  if (usuarioId == null) cachePermisos.clear();
+  else cachePermisos.delete(String(usuarioId));
+};
+
+// Roles, subrogación vigente y permisos efectivos en UNA sola consulta.
 // Si el usuario está subrogando a un supervisor titular (fecha vigente),
 // hereda además el rol SUPERVISOR y el scope (sector/área) del titular.
-const cargarPermisos = async (req, res, next) => {
-  try {
-    const rolesResult = await pool.query(
-      `SELECT r.codigo
-       FROM user_roles ur
-       JOIN roles r ON r.id = ur.role_id
-       WHERE ur.usuario_id = $1`,
-      [req.usuario.id]
-    );
-    let roles = rolesResult.rows.map((r) => r.codigo);
-
-    const subrogacion = await pool.query(
-      `SELECT s.supervisor_titular_id, u.sector, u.area
+async function resolverPermisos(usuarioId) {
+  const { rows } = await pool.query(
+    `WITH sub AS (
+       SELECT s.supervisor_titular_id, u.sector, u.area
        FROM subrogaciones s
        JOIN usuarios u ON u.id = s.supervisor_titular_id
        WHERE s.usuario_subrogante_id = $1
          AND s.activo = TRUE
          AND CURRENT_DATE BETWEEN s.fecha_inicio AND s.fecha_fin
-       LIMIT 1`,
-      [req.usuario.id]
-    );
+       LIMIT 1
+     ),
+     mis_roles AS (
+       SELECT r.codigo FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.usuario_id = $1
+       UNION
+       SELECT 'SUPERVISOR' WHERE EXISTS (SELECT 1 FROM sub)
+     )
+     SELECT
+       COALESCE((SELECT ARRAY_AGG(codigo) FROM mis_roles), '{}') AS roles,
+       COALESCE((SELECT ARRAY_AGG(DISTINCT p.codigo)
+                 FROM role_permissions rp
+                 JOIN permissions p ON p.id = rp.permission_id
+                 JOIN roles r ON r.id = rp.role_id
+                 WHERE r.codigo IN (SELECT codigo FROM mis_roles)), '{}') AS permisos,
+       (SELECT ROW_TO_JSON(sub) FROM sub) AS sub`,
+    [usuarioId]
+  );
+  return rows[0];
+}
 
-    let scopeEfectivo = { sector: req.usuario.sector || null, area: req.usuario.area || null };
-    let subrogandoA = null;
-
-    if (subrogacion.rows.length > 0) {
-      const sub = subrogacion.rows[0];
-      subrogandoA = sub.supervisor_titular_id;
-      scopeEfectivo = { sector: sub.sector || null, area: sub.area || null };
-      if (!roles.includes('SUPERVISOR')) roles.push('SUPERVISOR');
+const cargarPermisos = async (req, res, next) => {
+  try {
+    const clave = String(req.usuario.id);
+    let entrada = cachePermisos.get(clave);
+    if (!entrada || entrada.expira < Date.now()) {
+      entrada = { datos: await resolverPermisos(req.usuario.id), expira: Date.now() + CACHE_TTL_MS };
+      cachePermisos.set(clave, entrada);
     }
+    const { roles, permisos, sub } = entrada.datos;
 
-    const permisosResult = await pool.query(
-      `SELECT DISTINCT p.codigo
-       FROM role_permissions rp
-       JOIN permissions p ON p.id = rp.permission_id
-       JOIN roles r ON r.id = rp.role_id
-       WHERE r.codigo = ANY($1::varchar[])`,
-      [roles]
-    );
-
-    req.usuario.rolesRBAC = roles;
-    req.usuario.permisos = permisosResult.rows.map((p) => p.codigo);
-    req.usuario.subrogandoA = subrogandoA;
-    req.usuario.scopeEfectivo = scopeEfectivo;
+    req.usuario.rolesRBAC = [...roles];
+    req.usuario.permisos = [...permisos];
+    req.usuario.subrogandoA = sub ? sub.supervisor_titular_id : null;
+    req.usuario.scopeEfectivo = sub
+      ? { sector: sub.sector || null, area: sub.area || null }
+      : { sector: req.usuario.sector || null, area: req.usuario.area || null };
 
     next();
   } catch (err) {
@@ -116,6 +129,6 @@ const tieneVisibilidadGlobalPorUsuarioId = async (usuarioId) => {
 };
 
 module.exports = {
-  cargarPermisos, requierePermiso, noAutoAprobacion, esSoloAutoservicio,
+  cargarPermisos, invalidarPermisos, requierePermiso, noAutoAprobacion, esSoloAutoservicio,
   tieneVisibilidadGlobal, tieneVisibilidadGlobalPorUsuarioId,
 };

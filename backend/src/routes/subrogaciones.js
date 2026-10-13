@@ -1,7 +1,7 @@
 const express = require('express');
 const { pool } = require('../db');
 const { verificarToken } = require('../middleware/auth');
-const { cargarPermisos } = require('../middleware/rbac');
+const { cargarPermisos, invalidarPermisos } = require('../middleware/rbac');
 
 const router = express.Router();
 router.use(verificarToken, cargarPermisos);
@@ -85,6 +85,7 @@ router.post('/', async (req, res) => {
        RETURNING *`,
       [req.usuario.id, usuario_subrogante_id, fecha_inicio, fecha_fin, motivo || null]
     );
+    invalidarPermisos(usuario_subrogante_id);
     res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error(err);
@@ -105,6 +106,7 @@ router.patch('/:id/cancelar', async (req, res) => {
     }
 
     await pool.query('UPDATE subrogaciones SET activo = FALSE WHERE id = $1', [req.params.id]);
+    invalidarPermisos(sub.rows[0].usuario_subrogante_id);
     res.json({ mensaje: 'Subrogación cancelada' });
   } catch (err) {
     console.error(err);

@@ -84,6 +84,12 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Error interno del servidor' });
 });
 
+// Un error asíncrono no capturado no debe tumbar el proceso (y con él a todos
+// los usuarios conectados): se registra y el servidor sigue atendiendo.
+process.on('unhandledRejection', (reason) => {
+  console.error('[proceso] promesa rechazada sin manejar:', reason?.stack || reason);
+});
+
 const PORT = process.env.PORT || 3001;
 runMigrations()
   .then(() => {

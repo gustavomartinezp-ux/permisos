@@ -17,10 +17,15 @@ export function AuthProvider({ children }) {
     if (token) {
       authApi.me()
         .then(({ data }) => setUsuario(data))
-        .catch(() => {
-          localStorage.removeItem('token');
-          localStorage.removeItem('usuario');
-          setUsuario(null);
+        .catch((err) => {
+          // Solo una sesión inválida (401) cierra la sesión. Un corte de red o
+          // el servidor despertando (Render) no debe sacar al usuario: se
+          // mantiene el perfil guardado y la próxima acción reintenta.
+          if (err?.response?.status === 401) {
+            localStorage.removeItem('token');
+            localStorage.removeItem('usuario');
+            setUsuario(null);
+          }
         })
         .finally(() => setCargando(false));
     } else {

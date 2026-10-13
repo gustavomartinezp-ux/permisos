@@ -14,7 +14,11 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401 || error.response?.status === 403) {
+    // Solo 401 significa sesión vencida/inválida. Un 403 es "acción no
+    // permitida" (ej. aprobar la propia solicitud): antes también cerraba la
+    // sesión y el usuario quedaba "botado" al hacer un cambio. Ahora el 403
+    // llega a la pantalla, que muestra el mensaje del servidor.
+    if (error.response?.status === 401) {
       if (window.location.pathname !== '/login') {
         localStorage.removeItem('token');
         localStorage.removeItem('usuario');

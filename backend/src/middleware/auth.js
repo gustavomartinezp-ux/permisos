@@ -13,7 +13,9 @@ const verificarToken = (req, res, next) => {
     req.usuario = decoded;
     next();
   } catch (err) {
-    return res.status(403).json({ error: 'Token inválido o expirado' });
+    // 401 (no 403): el frontend cierra la sesión SOLO ante 401. Los 403 son
+    // "no tienes permiso para esta acción" y deben mostrarse como mensaje.
+    return res.status(401).json({ error: 'Sesión expirada o inválida. Inicia sesión nuevamente.', codigo: 'TOKEN_INVALIDO' });
   }
 };
 

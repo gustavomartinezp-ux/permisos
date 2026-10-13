@@ -177,6 +177,7 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
     ? saldoSel.dias_asignados - saldoSel.dias_usados - (saldoSel.dias_pendientes || 0)
     : 0;
   const totalDisp = saldoSel?.es_feriado_legal ? arrastreDisp + actualDisp : actualDisp;
+  const anioPeriodo = saldoSel?.anio || new Date().getFullYear();
 
   const distribucion = !esEspecial && saldoSel?.es_feriado_legal && diasSolicitados > 0
     ? calcularDistribucion(diasSolicitados, arrastreDisp, actualDisp)
@@ -554,6 +555,30 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
                 <p className="text-xs text-brand-600 mt-1.5">
                   Tienes <strong>{totalDisp} de {(saldoSel.dias_asignados || 0) + (saldoSel.es_feriado_legal ? (saldoSel.saldo_arrastre || 0) : 0)}</strong> días disponibles para {saldoSel.tipo_nombre}.
                 </p>
+
+                {/* Feriado legal: desglose por período — el arrastre se solicita primero */}
+                {saldoSel.es_feriado_legal && (
+                  <div className="mt-2.5 pt-2.5 border-t border-brand-200 space-y-1.5">
+                    <div className={`flex justify-between items-center text-xs rounded-lg px-2 py-1.5 ${arrastreDisp > 0 ? 'bg-amber-100 text-amber-800' : 'text-dark-500'}`}>
+                      <span className="font-medium">Períodos anteriores (arrastre {anioPeriodo - 1})</span>
+                      <span className="font-bold tabular-nums">{Math.max(arrastreDisp, 0)} días</span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs px-2 text-brand-700">
+                      <span className="font-medium">Período actual ({anioPeriodo})</span>
+                      <span className="font-bold tabular-nums">{actualDisp} días</span>
+                    </div>
+                    {arrastreDisp > 0 && (
+                      <p className="flex items-start gap-1.5 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                        <Info size={13} className="flex-shrink-0 mt-0.5" />
+                        <span>
+                          Tienes <strong>{arrastreDisp} día(s) de períodos anteriores</strong>. Estos se descuentan
+                          primero: los próximos {arrastreDisp} día(s) que solicites se imputan al arrastre, y solo
+                          después se usa el período actual.
+                        </span>
+                      </p>
+                    )}
+                  </div>
+                )}
               </motion.div>
             )}
 

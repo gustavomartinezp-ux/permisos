@@ -63,8 +63,10 @@ router.get('/', async (req, res) => {
                'dias_asignados', sf.dias_asignados,
                'dias_usados', sf.dias_usados,
                'dias_pendientes', sf.dias_pendientes,
-               'dias_disponibles', (sf.dias_asignados - sf.dias_usados - sf.dias_pendientes)
-             ) ORDER BY tp.nombre
+               'dias_disponibles', (sf.dias_asignados - sf.dias_usados - sf.dias_pendientes),
+               -- Feriado legal: días de períodos anteriores aún disponibles
+               'arrastre_disponible', CASE WHEN tp.es_feriado_legal THEN GREATEST(sf.saldo_arrastre - sf.arrastre_usados - sf.arrastre_pendientes, 0) ELSE 0 END
+             ) ORDER BY tp.es_feriado_legal DESC, (tp.codigo = 'ADMIN') DESC, tp.nombre
            ) FILTER (WHERE sf.id IS NOT NULL AND tp.activo = TRUE),
            '[]'
          ) AS saldos

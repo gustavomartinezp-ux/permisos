@@ -279,7 +279,9 @@ async function generarReporteBalanceSaldos(filtros, formato, usuarioId) {
   const { rows } = await pool.query(
     `SELECT f.nombres, f.apellidos, f.rut, f.sector, tp.nombre AS tipo_permiso,
             sf.dias_asignados, sf.dias_usados, sf.dias_pendientes,
-            (sf.dias_asignados - sf.dias_usados - sf.dias_pendientes) AS disponible
+            -- Disponible real: período actual + arrastre de feriado legal
+            (sf.dias_asignados - sf.dias_usados - sf.dias_pendientes
+             + CASE WHEN tp.es_feriado_legal THEN GREATEST(sf.saldo_arrastre - sf.arrastre_usados - sf.arrastre_pendientes, 0) ELSE 0 END) AS disponible
      FROM saldos_funcionarios sf
      JOIN funcionarios f ON sf.funcionario_id = f.id
      JOIN tipos_permisos tp ON sf.tipo_permiso_id = tp.id

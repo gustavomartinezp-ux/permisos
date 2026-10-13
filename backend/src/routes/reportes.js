@@ -251,7 +251,9 @@ router.get('/exportar/funcionarios', requierePermiso('reportes.ver_globales', 'a
       pool.query(
         `SELECT sf.funcionario_id, tp.nombre AS tipo, tp.codigo,
                 sf.dias_asignados, sf.dias_usados, sf.dias_pendientes,
-                (sf.dias_asignados-sf.dias_usados-sf.dias_pendientes) AS disponible
+                -- Disponible real: período actual + arrastre de feriado legal
+                (sf.dias_asignados-sf.dias_usados-sf.dias_pendientes
+                 + CASE WHEN tp.es_feriado_legal THEN GREATEST(sf.saldo_arrastre - sf.arrastre_usados - sf.arrastre_pendientes, 0) ELSE 0 END) AS disponible
          FROM saldos_funcionarios sf
          JOIN tipos_permisos tp ON sf.tipo_permiso_id=tp.id
          WHERE sf.anio=$1 AND tp.activo=TRUE ORDER BY tp.nombre`, [anio]

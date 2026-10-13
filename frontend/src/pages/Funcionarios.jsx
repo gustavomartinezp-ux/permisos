@@ -64,11 +64,15 @@ function CardContrata({ funcionario, cfg, onSolicitar, descargarPDF, generandoPD
       <div className="space-y-1.5 mb-3">
         {funcionario.saldos?.slice(0, 3).map((s) => {
           const disp = s.dias_asignados - s.dias_usados - (s.dias_pendientes || 0);
+          const arr  = Number(s.arrastre_disponible || 0);
           return (
             <div key={s.tipo_id} className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
               <span className="text-xs text-dark-500 flex-1 truncate">{s.tipo_nombre}</span>
-              <span className="text-xs font-medium text-dark-700">{disp}/{s.dias_asignados}</span>
+              <span className="text-xs font-medium text-dark-700">
+                {disp}/{s.dias_asignados}
+                {arr > 0 && <span className="text-amber-600"> +{arr} arr.</span>}
+              </span>
             </div>
           );
         })}

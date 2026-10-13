@@ -73,7 +73,12 @@ app.use('/api/cometidos-comisiones',     cometidosComisionesRoutes);
 app.get('/api/health', async (req, res) => {
   try {
     await pool.query('SELECT 1');
-    res.json({ status: 'ok', db: 'conectada', timestamp: new Date().toISOString() });
+    // version: commit desplegado (Render expone RENDER_GIT_COMMIT) — permite
+    // verificar que un despliegue quedó activo.
+    res.json({
+      status: 'ok', db: 'conectada', timestamp: new Date().toISOString(),
+      version: (process.env.RENDER_GIT_COMMIT || 'local').slice(0, 7),
+    });
   } catch {
     res.status(500).json({ status: 'error', db: 'desconectada' });
   }

@@ -257,7 +257,7 @@ router.post('/', requierePermiso('funcionarios.crear'), [
       await client.query(
         `INSERT INTO saldos_funcionarios (funcionario_id, tipo_permiso_id, anio, dias_asignados)
          SELECT $1, tipo_id, $2, dias
-         FROM unnest($3::int[], $4::int[]) AS t(tipo_id, dias)`,
+         FROM unnest($3::int[], $4::numeric[]) AS t(tipo_id, dias)`,
         [funcId, anio, tipoIds, diasArr]
       );
     }
@@ -409,7 +409,7 @@ router.post('/bulk', requierePermiso('funcionarios.crear'), async (req, res) => 
           await client.query(
             `INSERT INTO saldos_funcionarios (funcionario_id, tipo_permiso_id, anio, dias_asignados)
              SELECT $1, tipo_id, $2, dias
-             FROM unnest($3::int[], $4::int[]) AS t(tipo_id, dias)
+             FROM unnest($3::int[], $4::numeric[]) AS t(tipo_id, dias)
              ON CONFLICT (funcionario_id, tipo_permiso_id, anio)
              DO UPDATE SET dias_asignados = EXCLUDED.dias_asignados`,
             [funcId, anio, tipoIds, diasArr]

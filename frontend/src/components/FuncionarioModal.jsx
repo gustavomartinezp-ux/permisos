@@ -800,7 +800,7 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
                         <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: t.color }} />
                         <span className="text-sm text-dark-700 flex-1 truncate">{t.nombre}</span>
                         <input
-                          type="number" min="0" max="365"
+                          type="number" min="0" max="365" step="0.5"
                           value={saldos[t.id] ?? t.dias_anuales_max}
                           onChange={e => setSaldos(s => ({ ...s, [t.id]: e.target.value }))}
                           className="input-field w-20 text-center text-sm py-1.5"

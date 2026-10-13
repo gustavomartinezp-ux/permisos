@@ -166,7 +166,7 @@ function TipoModal({ tipo, onClose, onSuccess }) {
                 {form.es_especial ? 'Días fijos' : 'Días máx/año'} <span className="text-red-500">*</span>
               </label>
               <input
-                type="number" min="0" max="365"
+                type="number" min="0" max="365" step="0.5"
                 value={form.es_especial ? (form.dias_fijos || '') : form.dias_anuales_max}
                 onChange={(e) => setForm({ ...form, dias_anuales_max: e.target.value })}
                 className="input-field"

@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS tipos_permisos (
   codigo           VARCHAR(20) UNIQUE NOT NULL,
   nombre           VARCHAR(100) NOT NULL,
   descripcion      TEXT,
-  dias_anuales_max INTEGER NOT NULL,
+  dias_anuales_max NUMERIC(5,1) NOT NULL,
   requiere_aprobacion BOOLEAN DEFAULT TRUE,
   color            VARCHAR(7) DEFAULT '#3B82F6',
   activo           BOOLEAN DEFAULT TRUE

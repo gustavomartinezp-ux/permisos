@@ -353,6 +353,16 @@ const migrations = [
     id: 'solicitudes_reemplazante_v1',
     sql: `ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS reemplazante VARCHAR(150);`,
   },
+  {
+    // Permiso de Estamento = media jornada PM (0,5 día al año): los días
+    // anuales de un tipo deben admitir decimales.
+    id: 'tipos_dias_decimales_estamento_v1',
+    sql: `
+      ALTER TABLE tipos_permisos ALTER COLUMN dias_anuales_max TYPE NUMERIC(5,1);
+      UPDATE tipos_permisos SET dias_anuales_max = 0.5, permite_medio_dia = TRUE, jornada_forzada = 'PM'
+       WHERE codigo = 'ESTAMENTO';
+    `,
+  },
 ];
 
 async function runMigrations() {

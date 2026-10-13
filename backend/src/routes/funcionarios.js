@@ -252,7 +252,7 @@ router.post('/', requierePermiso('funcionarios.crear'), [
       const tipoIds = tipos.rows.map(t => t.id);
       const diasArr = tipos.rows.map(t => {
         const diasCustom = saldos_custom?.[t.id];
-        return diasCustom !== undefined ? parseInt(diasCustom) : t.dias_anuales_max;
+        return diasCustom !== undefined ? parseFloat(diasCustom) : t.dias_anuales_max;
       });
       await client.query(
         `INSERT INTO saldos_funcionarios (funcionario_id, tipo_permiso_id, anio, dias_asignados)
@@ -404,7 +404,7 @@ router.post('/bulk', requierePermiso('funcionarios.crear'), async (req, res) => 
           const diasArr = tipos.rows.map(t => {
             const diasClave  = t.codigo.toLowerCase();
             const diasCustom = f.saldos?.[t.id] ?? f.saldos?.[diasClave];
-            return diasCustom !== undefined && diasCustom !== '' ? parseInt(diasCustom) : t.dias_anuales_max;
+            return diasCustom !== undefined && diasCustom !== '' ? parseFloat(diasCustom) : t.dias_anuales_max;
           });
           await client.query(
             `INSERT INTO saldos_funcionarios (funcionario_id, tipo_permiso_id, anio, dias_asignados)

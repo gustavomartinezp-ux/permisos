@@ -24,7 +24,7 @@ router.get('/', async (req, res) => {
 router.post('/', requierePermiso('configuracion.gestionar', 'saldos.ajustar'), [
   body('codigo').notEmpty().trim().toUpperCase(),
   body('nombre').notEmpty().trim(),
-  body('dias_anuales_max').isInt({ min: 0 }),
+  body('dias_anuales_max').isFloat({ min: 0 }),
   body('color').optional().matches(/^#[0-9A-Fa-f]{6}$/),
 ], async (req, res) => {
   const errors = validationResult(req);
@@ -45,7 +45,7 @@ router.post('/', requierePermiso('configuracion.gestionar', 'saldos.ajustar'), [
           es_especial, tipo_especial, dias_fijos, tipo_dias, normativa, requiere_certificado)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
       [
-        codigo, nombre, descripcion || null, parseInt(dias_anuales_max),
+        codigo, nombre, descripcion || null, parseFloat(dias_anuales_max),
         requiere_aprobacion !== false, color || '#3B82F6', es_feriado_legal === true,
         es_especial === true, tipo_especial || null,
         dias_fijos ? parseInt(dias_fijos) : null,
@@ -63,7 +63,7 @@ router.post('/', requierePermiso('configuracion.gestionar', 'saldos.ajustar'), [
          FROM funcionarios f
          WHERE f.activo = true
          ON CONFLICT (funcionario_id, tipo_permiso_id, anio) DO NOTHING`,
-        [nuevo.rows[0].id, anio, parseInt(dias_anuales_max)]
+        [nuevo.rows[0].id, anio, parseFloat(dias_anuales_max)]
       );
     }
 
@@ -93,7 +93,7 @@ router.put('/:id', requierePermiso('configuracion.gestionar', 'saldos.ajustar'),
            tipo_dias=$11, normativa=$12, requiere_certificado=$13
        WHERE id=$14 RETURNING *`,
       [
-        nombre, descripcion || null, parseInt(dias_anuales_max),
+        nombre, descripcion || null, parseFloat(dias_anuales_max),
         requiere_aprobacion !== false, color, activo !== false, es_feriado_legal === true,
         es_especial === true, tipo_especial || null,
         dias_fijos ? parseInt(dias_fijos) : null,

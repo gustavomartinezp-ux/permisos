@@ -96,7 +96,13 @@ async function generarExcelEjecutivo({ titulo, subtitulo, kpis = [], columnas, f
   });
 
   filas.forEach((fila, idx) => {
-    const r = wsD.addRow(columnas.map((c) => fila[c.key]));
+    // Columnas de fecha: 'YYYY-MM-DD' → Date a mediodía, para que Excel las trate
+    // como fecha (con su formato) y sin corrimiento de día.
+    const r = wsD.addRow(columnas.map((c) => {
+      const v = fila[c.key];
+      return c.formato === 'fecha' && typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)
+        ? new Date(`${v}T12:00:00Z`) : v;
+    }));
     columnas.forEach((c, i) => {
       if (c.formato && NUMFMT[c.formato]) r.getCell(i + 1).numFmt = NUMFMT[c.formato];
     });

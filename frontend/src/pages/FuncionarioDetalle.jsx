@@ -255,7 +255,7 @@ export default function FuncionarioDetalle() {
   const fetchSolicitudesAnio = async () => {
     const anio = new Date().getFullYear();
     const { data } = await solicitudesApi.listar({ funcionario_id: id, limit: 200 });
-    return (data.solicitudes || []).filter(s => new Date(s.fecha_inicio).getFullYear() === anio);
+    return (data.solicitudes || []).filter(s => parseInt(String(s.fecha_inicio).substring(0, 4), 10) === anio);
   };
 
   const descargarReporte = async () => {
@@ -1100,7 +1100,7 @@ export default function FuncionarioDetalle() {
                   ? `${s.reemplazado_nombres_fn || ''} ${s.reemplazado_apellidos_fn || ''}`.trim()
                   : s.nombre_reemplazado || '—';
                 const diasRestantes = s.estado !== 'finalizada'
-                  ? differenceInDays(new Date(s.fecha_termino), new Date())
+                  ? differenceInDays(new Date(`${String(s.fecha_termino).substring(0, 10)}T12:00:00`), new Date())
                   : null;
                 const diasTotales = differenceInDays(
                   new Date(s.fecha_termino.toString().substring(0,10) + 'T00:00:00'),

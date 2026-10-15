@@ -7,6 +7,8 @@ const COLOR_TEXTO = '#333333';
 
 function formatCelda(v) {
   if (v instanceof Date) return v.toLocaleDateString('es-CL');
+  // Fechas DATE llegan como 'YYYY-MM-DD' → dd-mm-aaaa
+  if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) return v.split('-').reverse().join('-');
   return String(v ?? '');
 }
 

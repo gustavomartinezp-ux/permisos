@@ -318,7 +318,7 @@ router.patch('/:id/prorrogar', requierePermiso('funcionarios.editar'), async (re
       return res.status(404).json({ error: 'Suplencia no encontrada o ya finalizada' });
     }
     const s = rows[0];
-    if (nueva_fecha_termino <= s.fecha_termino.toISOString().split('T')[0]) {
+    if (nueva_fecha_termino <= String(s.fecha_termino).substring(0, 10)) {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: 'La nueva fecha debe ser posterior a la fecha de término actual' });
     }

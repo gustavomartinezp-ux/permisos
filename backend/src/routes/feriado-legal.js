@@ -20,7 +20,7 @@ async function obtenerAlertas(funcionarioId) {
      FROM hitos_antiguedad h
      JOIN funcionarios f ON f.id = h.funcionario_id
      WHERE h.funcionario_id = $1
-       AND h.fecha_cumplimiento >= CURRENT_DATE
+       AND h.fecha_cumplimiento >= (NOW() AT TIME ZONE 'America/Santiago')::date
      ORDER BY h.fecha_cumplimiento DESC`,
     [funcionarioId]
   );

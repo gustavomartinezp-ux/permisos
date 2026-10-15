@@ -16,12 +16,12 @@ router.get('/today', async (req, res) => {
               COALESCE(BOOL_OR(bl.liker_usuario_id = $1), false) AS ya_le_di_like
        FROM funcionarios f
        LEFT JOIN birthday_likes bl
-         ON bl.birthday_funcionario_id = f.id AND bl.dia = CURRENT_DATE
+         ON bl.birthday_funcionario_id = f.id AND bl.dia = (NOW() AT TIME ZONE 'America/Santiago')::date
        WHERE f.activo = true
          AND f.mostrar_cumpleanos = true
          AND f.fecha_nacimiento IS NOT NULL
-         AND EXTRACT(MONTH FROM f.fecha_nacimiento) = EXTRACT(MONTH FROM CURRENT_DATE)
-         AND EXTRACT(DAY FROM f.fecha_nacimiento) = EXTRACT(DAY FROM CURRENT_DATE)
+         AND EXTRACT(MONTH FROM f.fecha_nacimiento) = EXTRACT(MONTH FROM (NOW() AT TIME ZONE 'America/Santiago')::date)
+         AND EXTRACT(DAY FROM f.fecha_nacimiento) = EXTRACT(DAY FROM (NOW() AT TIME ZONE 'America/Santiago')::date)
        GROUP BY f.id
        ORDER BY f.nombres`,
       [req.usuario.id]
@@ -42,8 +42,8 @@ router.post('/:id/like', async (req, res) => {
       `SELECT 1 FROM funcionarios
        WHERE id = $1 AND activo = true AND mostrar_cumpleanos = true
          AND fecha_nacimiento IS NOT NULL
-         AND EXTRACT(MONTH FROM fecha_nacimiento) = EXTRACT(MONTH FROM CURRENT_DATE)
-         AND EXTRACT(DAY FROM fecha_nacimiento) = EXTRACT(DAY FROM CURRENT_DATE)`,
+         AND EXTRACT(MONTH FROM fecha_nacimiento) = EXTRACT(MONTH FROM (NOW() AT TIME ZONE 'America/Santiago')::date)
+         AND EXTRACT(DAY FROM fecha_nacimiento) = EXTRACT(DAY FROM (NOW() AT TIME ZONE 'America/Santiago')::date)`,
       [funcId]
     );
     if (valido.rows.length === 0) {
@@ -52,7 +52,7 @@ router.post('/:id/like', async (req, res) => {
 
     const existente = await pool.query(
       `SELECT id FROM birthday_likes
-       WHERE birthday_funcionario_id = $1 AND liker_usuario_id = $2 AND dia = CURRENT_DATE`,
+       WHERE birthday_funcionario_id = $1 AND liker_usuario_id = $2 AND dia = (NOW() AT TIME ZONE 'America/Santiago')::date`,
       [funcId, req.usuario.id]
     );
 
@@ -62,14 +62,14 @@ router.post('/:id/like', async (req, res) => {
       yaLeDiLike = false;
     } else {
       await pool.query(
-        `INSERT INTO birthday_likes (birthday_funcionario_id, liker_usuario_id) VALUES ($1, $2)`,
+        `INSERT INTO birthday_likes (birthday_funcionario_id, liker_usuario_id, dia) VALUES ($1, $2, (NOW() AT TIME ZONE 'America/Santiago')::date)`,
         [funcId, req.usuario.id]
       );
       yaLeDiLike = true;
     }
 
     const conteo = await pool.query(
-      `SELECT COUNT(*) FROM birthday_likes WHERE birthday_funcionario_id = $1 AND dia = CURRENT_DATE`,
+      `SELECT COUNT(*) FROM birthday_likes WHERE birthday_funcionario_id = $1 AND dia = (NOW() AT TIME ZONE 'America/Santiago')::date`,
       [funcId]
     );
     res.json({ ya_le_di_like: yaLeDiLike, likes_count: parseInt(conteo.rows[0].count, 10) });
@@ -91,7 +91,7 @@ router.get('/:id/likers', async (req, res) => {
        FROM birthday_likes bl
        JOIN usuarios u ON u.id = bl.liker_usuario_id
        LEFT JOIN funcionarios f ON f.id = u.funcionario_id
-       WHERE bl.birthday_funcionario_id = $1 AND bl.dia = CURRENT_DATE
+       WHERE bl.birthday_funcionario_id = $1 AND bl.dia = (NOW() AT TIME ZONE 'America/Santiago')::date
        ORDER BY bl.created_at`,
       [req.params.id]
     );

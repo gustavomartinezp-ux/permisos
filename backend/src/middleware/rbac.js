@@ -24,7 +24,7 @@ async function resolverPermisos(usuarioId) {
        JOIN usuarios u ON u.id = s.supervisor_titular_id
        WHERE s.usuario_subrogante_id = $1
          AND s.activo = TRUE
-         AND CURRENT_DATE BETWEEN s.fecha_inicio AND s.fecha_fin
+         AND (NOW() AT TIME ZONE 'America/Santiago')::date BETWEEN s.fecha_inicio AND s.fecha_fin
        LIMIT 1
      ),
      mis_roles AS (

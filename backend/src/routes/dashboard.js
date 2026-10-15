@@ -74,7 +74,7 @@ router.get('/stats', async (req, res) => {
        LEFT JOIN servicios s ON f.servicio_id = s.id
        JOIN tipos_permisos tp ON sol.tipo_permiso_id = tp.id
        WHERE sol.estado = 'aprobado'
-         AND CURRENT_DATE BETWEEN sol.fecha_inicio AND sol.fecha_fin
+         AND (NOW() AT TIME ZONE 'America/Santiago')::date BETWEEN sol.fecha_inicio AND sol.fecha_fin
          ${fCond1}
        ORDER BY f.sector NULLS LAST, f.apellidos`,
       pFilt
@@ -87,8 +87,8 @@ router.get('/stats', async (req, res) => {
        JOIN funcionarios f ON sol.funcionario_id = f.id
        JOIN tipos_permisos tp ON sol.tipo_permiso_id = tp.id
        WHERE sol.estado = 'aprobado'
-         AND sol.fecha_inicio > CURRENT_DATE
-         AND sol.fecha_inicio <= CURRENT_DATE + INTERVAL '7 days'
+         AND sol.fecha_inicio > (NOW() AT TIME ZONE 'America/Santiago')::date
+         AND sol.fecha_inicio <= (NOW() AT TIME ZONE 'America/Santiago')::date + INTERVAL '7 days'
          ${fCond1}
        ORDER BY sol.fecha_inicio ASC
        LIMIT 5`,

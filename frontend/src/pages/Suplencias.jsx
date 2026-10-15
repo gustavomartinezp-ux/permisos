@@ -525,7 +525,7 @@ function FilaSuplencia({ s, esAdmin, onProrrogar, onFinalizar }) {
   const today = hoy();
   const estaVencida = s.estado !== 'finalizada' && s.fecha_termino?.toString().substring(0,10) < today;
   const diasRestantes = s.estado !== 'finalizada'
-    ? differenceInDays(new Date(s.fecha_termino), new Date())
+    ? differenceInDays(new Date(`${String(s.fecha_termino).substring(0, 10)}T12:00:00`), new Date())
     : null;
 
   const reemplazadoNombre = s.funcionario_reemplazado_id

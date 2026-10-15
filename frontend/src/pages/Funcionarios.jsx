@@ -102,7 +102,7 @@ function CardContrata({ funcionario, cfg, onSolicitar, descargarPDF, generandoPD
 function CardHonorarios({ funcionario, cfg }) {
   const fechaTermino = funcionario.fecha_termino_contrato;
   const diasRestantes = fechaTermino
-    ? differenceInDays(new Date(fechaTermino.toString().substring(0,10)), new Date())
+    ? differenceInDays(new Date(fechaTermino.toString().substring(0,10) + 'T12:00:00'), new Date())
     : null;
 
   let vigenciaClass = 'text-dark-500';
@@ -150,7 +150,7 @@ function CardHonorarios({ funcionario, cfg }) {
 function CardSuplentes({ funcionario }) {
   const fechaTermino = funcionario.fecha_termino_contrato;
   const diasRestantes = fechaTermino
-    ? differenceInDays(new Date(fechaTermino.toString().substring(0,10)), new Date())
+    ? differenceInDays(new Date(fechaTermino.toString().substring(0,10) + 'T12:00:00'), new Date())
     : null;
 
   return (
@@ -207,7 +207,7 @@ function FuncionarioCard({ funcionario, index, onSolicitar, grupo, puedeEditar, 
         solicitudesApi.listar({ funcionario_id: funcionario.id, limit: 200 }),
       ]);
       const solsAnio = (sols.data.solicitudes || []).filter(s =>
-        new Date(s.fecha_inicio).getFullYear() === anio
+        parseInt(String(s.fecha_inicio).substring(0, 4), 10) === anio
       );
       generarReporteFuncionario(detalle.data, solsAnio);
     } catch {
@@ -444,7 +444,7 @@ export default function Funcionarios({ grupo }) {
   const conVencimiento = grupo !== 'contrata'
     ? filtrados.filter(f => {
         if (!f.fecha_termino_contrato) return false;
-        const d = differenceInDays(new Date(f.fecha_termino_contrato.toString().substring(0,10)), new Date());
+        const d = differenceInDays(new Date(f.fecha_termino_contrato.toString().substring(0,10) + 'T12:00:00'), new Date());
         return d <= 30;
       })
     : [];

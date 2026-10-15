@@ -3,6 +3,10 @@ require('dotenv').config();
 
 // Devolver NUMERIC como float en vez de string
 types.setTypeParser(1700, (val) => parseFloat(val));
+// Devolver DATE como texto 'YYYY-MM-DD'. Por defecto pg lo convierte a un Date
+// a medianoche UTC; en el navegador (Chile, UTC-3/-4) eso se muestra como el
+// día ANTERIOR (ej. un permiso del 15-oct aparecía "hasta 14 oct").
+types.setTypeParser(1082, (val) => val);
 
 // Supabase (y otros hosts remotos) requieren SSL
 const sslConfig = process.env.DATABASE_URL || process.env.DB_SSL === 'true'

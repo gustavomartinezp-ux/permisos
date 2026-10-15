@@ -525,7 +525,7 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
                       />
                     </div>
                     <div className="p-2.5 bg-amber-100/60 rounded-lg text-xs text-amber-700">
-                      Los funcionarios a honorarios no tienen derecho a feriado legal institucional ni saldo de vacaciones.
+                      Los días de feriado y permisos de un honorario dependen de su convenio: ajústalos en "Saldos de permisos" (usa 0 si el convenio no los contempla).
                     </div>
                   </div>
                 </section>

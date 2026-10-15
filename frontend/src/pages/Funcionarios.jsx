@@ -313,7 +313,17 @@ function FuncionarioCard({ funcionario, index, onSolicitar, grupo, puedeEditar, 
 
       {/* Contenido específico por grupo */}
       {grupo === 'honorarios' ? (
-        <CardHonorarios funcionario={funcionario} cfg={cfg} />
+        // Honorarios: convenio/vigencia + sus saldos (feriado y permisos según planilla RRHH)
+        <div className="space-y-3">
+          <CardHonorarios funcionario={funcionario} cfg={cfg} />
+          <CardContrata
+            funcionario={funcionario}
+            cfg={cfg}
+            onSolicitar={onSolicitar}
+            descargarPDF={descargarPDF}
+            generandoPDF={generandoPDF}
+          />
+        </div>
       ) : grupo === 'suplentes' ? (
         <CardSuplentes funcionario={funcionario} />
       ) : (
@@ -547,7 +557,7 @@ export default function Funcionarios({ grupo }) {
               grupo={grupo}
               puedeEditar={puedeEditar}
               puedeEliminar={puedeEliminar}
-              onSolicitar={(esSupervisor || tienePermiso('solicitudes.crear_terceros')) && grupo !== 'honorarios' ? setModalSolicitud : null}
+              onSolicitar={(esSupervisor || tienePermiso('solicitudes.crear_terceros')) ? setModalSolicitud : null}
               onPasivar={setConfirmPasivar}
               onActivar={handleActivar}
               onEliminar={abrirEliminar}

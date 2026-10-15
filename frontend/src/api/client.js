@@ -43,7 +43,7 @@ export const funcionariosApi = {
   actualizar: (id, data) => api.put(`/funcionarios/${id}`, data),
   toggleActivo: (id, activo) => api.patch(`/funcionarios/${id}/activo`, { activo }),
   eliminar: (id, password_admin) => api.delete(`/funcionarios/${id}`, { data: { password_admin } }),
-  actualizarSaldos: (id, saldos, arrastres, anio, motivo) => api.put(`/funcionarios/${id}/saldos`, { saldos, arrastres, anio, motivo }),
+  actualizarSaldos: (id, saldos, arrastres, anio, motivo, usados) => api.put(`/funcionarios/${id}/saldos`, { saldos, usados, arrastres, anio, motivo }),
   actualizarFoto: (id, foto_base64) => api.put(`/funcionarios/${id}/foto`, { foto_base64 }),
   eliminarFoto: (id) => api.delete(`/funcionarios/${id}/foto`),
   bulk: (funcionarios) => api.post('/funcionarios/bulk', { funcionarios }),
@@ -108,6 +108,8 @@ export const solicitudesApi = {
   aprobar: (id, observaciones) => api.patch(`/solicitudes/${id}/aprobar`, { observaciones }),
   rechazar: (id, observaciones) => api.patch(`/solicitudes/${id}/rechazar`, { observaciones }),
   reintegrar: (id, observaciones) => api.patch(`/solicitudes/${id}/reintegrar`, { observaciones }),
+  // Corrige tipo/fechas/días de una solicitud pendiente o aprobada, reajustando saldos
+  editar: (id, data) => api.patch(`/solicitudes/${id}/editar`, data),
 };
 
 export const saldosApi = {

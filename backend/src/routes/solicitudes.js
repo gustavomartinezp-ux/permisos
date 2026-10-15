@@ -100,8 +100,10 @@ router.get('/', async (req, res) => {
        LEFT JOIN LATERAL (
          SELECT hm.saldo_anterior, hm.saldo_nuevo
          FROM historial_movimientos hm
-         WHERE hm.solicitud_id = sol.id AND hm.tipo_movimiento = 'reserva'
-         ORDER BY hm.id
+         WHERE hm.solicitud_id = sol.id AND hm.tipo_permiso_id = sol.tipo_permiso_id
+           AND (hm.tipo_movimiento = 'reserva'
+                OR (hm.tipo_movimiento = 'descuento' AND hm.descripcion LIKE 'Corrección de solicitud%'))
+         ORDER BY hm.id DESC
          LIMIT 1
        ) mov ON TRUE
        JOIN tipos_permisos tp ON sol.tipo_permiso_id = tp.id
@@ -803,6 +805,206 @@ router.patch('/:id/rechazar', requierePermiso('solicitudes.pre_aprobar', 'solici
     await client.query('ROLLBACK');
     console.error(err);
     res.status(500).json({ error: 'Error al rechazar solicitud' });
+  } finally {
+    client.release();
+  }
+});
+
+// EDITAR solicitud — corrige tipo, fechas, días, jornada, motivo o reemplazante
+// de una solicitud pendiente, pre-aprobada o aprobada (ej. se ingresó como
+// Feriado Legal y era Permiso Administrativo). En una sola transacción:
+//   1) devuelve los días al saldo del tipo/año original (pendientes o usados
+//      según el estado),
+//   2) valida el nuevo rango con las mismas reglas que al crear (día hábil,
+//      días = hábiles del rango, sin solapes, saldo suficiente),
+//   3) descuenta del saldo del tipo/año nuevo manteniendo el mismo estado.
+// Los permisos especiales (sin saldo) no se editan: se rechazan y se crean de nuevo.
+router.patch('/:id/editar', requierePermiso('solicitudes.aprobar'), async (req, res) => {
+  const { id } = req.params;
+  const {
+    tipo_permiso_id, fecha_inicio, fecha_fin, dias_solicitados,
+    jornada_medio_dia, motivo, motivo_cambio,
+  } = req.body;
+  const reemplazante = String(req.body.reemplazante || '').trim().slice(0, 150) || null;
+
+  if (!motivo_cambio || !String(motivo_cambio).trim()) {
+    return res.status(400).json({ error: 'Indica el motivo de la corrección' });
+  }
+  if (!tipo_permiso_id || !fecha_inicio || !fecha_fin || !(Number(dias_solicitados) > 0)) {
+    return res.status(400).json({ error: 'Faltan el tipo, las fechas o los días' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const actual = await client.query(
+      `SELECT sol.*, tp.nombre AS tipo_nombre, tp.es_especial, tp.es_feriado_legal,
+              d.nombre AS dispositivo
+       FROM solicitudes sol
+       JOIN tipos_permisos tp ON tp.id = sol.tipo_permiso_id
+       JOIN funcionarios f ON f.id = sol.funcionario_id
+       LEFT JOIN dispositivos d ON d.id = f.dispositivo_id
+       WHERE sol.id = $1 AND sol.estado IN ('pendiente', 'pre_aprobado', 'aprobado')
+       FOR UPDATE OF sol`,
+      [id]
+    );
+    if (actual.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Solicitud no encontrada o ya rechazada/cancelada' });
+    }
+    const sol = actual.rows[0];
+
+    if (noAutoAprobacion(sol.funcionario_id, req)) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'No puede editar su propia solicitud' });
+    }
+
+    const tipoNuevo = (await client.query('SELECT * FROM tipos_permisos WHERE id = $1', [tipo_permiso_id])).rows[0];
+    if (sol.es_especial || !tipoNuevo || tipoNuevo.es_especial || !tipoNuevo.activo) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Solo se pueden editar permisos con saldo (no especiales). Para un permiso especial, recházalo y crea uno nuevo.' });
+    }
+
+    // ── Validaciones del nuevo rango (mismas reglas que al crear) ──────────
+    const funcionario = { dispositivo: sol.dispositivo };
+    const validacion = validarSolicitudPermiso(funcionario, tipoNuevo, fecha_inicio, fecha_fin);
+    if (!validacion.valido) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: validacion.error });
+    }
+    const jornadaFinal = tipoNuevo.jornada_forzada || (Number(dias_solicitados) === 0.5 ? (jornada_medio_dia || null) : null);
+    if (tipoNuevo.jornada_forzada && Number(dias_solicitados) !== 0.5) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: `${tipoNuevo.nombre} solo puede ser media jornada ${tipoNuevo.jornada_forzada}` });
+    }
+    const diasEsperados = Number(dias_solicitados) === 0.5
+      ? (String(fecha_inicio) === String(fecha_fin) ? 0.5 : null)
+      : diasDelRango(funcionario, tipoNuevo, fecha_inicio, fecha_fin);
+    if (diasEsperados === null || diasEsperados !== Number(dias_solicitados)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        error: diasEsperados === null
+          ? 'Medio día debe solicitarse en una sola fecha'
+          : `El rango ${fecha_inicio} al ${fecha_fin} corresponde a ${diasEsperados} día(s), no a ${dias_solicitados}`,
+      });
+    }
+    if (await verificarSolapamiento(client, sol.funcionario_id, fecha_inicio, fecha_fin, id)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Las nuevas fechas se solapan con otra solicitud del funcionario' });
+    }
+
+    const aprobada = sol.estado === 'aprobado';
+    const diasViejos = Number(sol.dias_solicitados);
+    const arrViejo = Number(sol.dias_arrastre) || 0;
+    const actViejo = sol.dias_periodo_actual != null ? Number(sol.dias_periodo_actual) : diasViejos;
+    const anioViejo = new Date(sol.fecha_inicio).getFullYear();
+    const anioNuevo = new Date(`${fecha_inicio}T12:00:00`).getFullYear();
+
+    // Bloquea ambos saldos en orden de id para evitar interbloqueos
+    const saldos = (await client.query(
+      `SELECT * FROM saldos_funcionarios
+       WHERE funcionario_id = $1 AND ((tipo_permiso_id = $2 AND anio = $3) OR (tipo_permiso_id = $4 AND anio = $5))
+       ORDER BY id FOR UPDATE`,
+      [sol.funcionario_id, sol.tipo_permiso_id, anioViejo, tipo_permiso_id, anioNuevo]
+    )).rows;
+    const sViejo = saldos.find((s) => s.tipo_permiso_id === sol.tipo_permiso_id && s.anio === anioViejo);
+    if (!saldos.find((s) => s.tipo_permiso_id === Number(tipo_permiso_id) && s.anio === anioNuevo)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: `El funcionario no tiene saldo de ${tipoNuevo.nombre} para ${anioNuevo}` });
+    }
+    const disponible = (s) => (s.dias_asignados - s.dias_usados - s.dias_pendientes)
+      + Math.max(s.saldo_arrastre - s.arrastre_usados - s.arrastre_pendientes, 0);
+
+    // 1) Devolver los días de la solicitud original
+    if (sViejo) {
+      const antes = disponible(sViejo);
+      await client.query(
+        aprobada
+          ? `UPDATE saldos_funcionarios SET arrastre_usados = GREATEST(arrastre_usados - $1, 0),
+               dias_usados = GREATEST(dias_usados - $2, 0), updated_at = NOW() WHERE id = $3`
+          : `UPDATE saldos_funcionarios SET arrastre_pendientes = GREATEST(arrastre_pendientes - $1, 0),
+               dias_pendientes = GREATEST(dias_pendientes - $2, 0), updated_at = NOW() WHERE id = $3`,
+        [arrViejo, actViejo, sViejo.id]
+      );
+      await registrarMovimiento(client, {
+        funcionarioId: sol.funcionario_id, solicitudId: id, tipoPermisoId: sol.tipo_permiso_id,
+        tipoMovimiento: 'reintegro', diasMovimiento: diasViejos,
+        saldoAnterior: antes, saldoNuevo: antes + diasViejos,
+        descripcion: `Corrección de solicitud N° ${id}: se devuelven ${diasViejos} día(s) de ${sol.tipo_nombre} — ${motivo_cambio}`,
+        usuarioId: req.usuario.id,
+      });
+    }
+
+    // 2) Descontar del saldo nuevo (ya con la devolución aplicada)
+    const sNuevo = (await client.query(
+      'SELECT * FROM saldos_funcionarios WHERE funcionario_id = $1 AND tipo_permiso_id = $2 AND anio = $3',
+      [sol.funcionario_id, tipo_permiso_id, anioNuevo]
+    )).rows[0];
+    const diasNuevos = Number(dias_solicitados);
+    const arrDisp = tipoNuevo.es_feriado_legal
+      ? Math.max(sNuevo.saldo_arrastre - sNuevo.arrastre_usados - sNuevo.arrastre_pendientes, 0) : 0;
+    const actDisp = sNuevo.dias_asignados - sNuevo.dias_usados - sNuevo.dias_pendientes;
+    if (arrDisp + actDisp < diasNuevos) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: `Saldo insuficiente de ${tipoNuevo.nombre}: disponibles ${arrDisp + actDisp}, solicitados ${diasNuevos}` });
+    }
+    const { fromArrastre, fromActual } = tipoNuevo.es_feriado_legal
+      ? calcularDistribucion(diasNuevos, arrDisp, actDisp)
+      : { fromArrastre: 0, fromActual: diasNuevos };
+    await client.query(
+      aprobada
+        ? `UPDATE saldos_funcionarios SET arrastre_usados = arrastre_usados + $1,
+             dias_usados = dias_usados + $2, updated_at = NOW() WHERE id = $3`
+        : `UPDATE saldos_funcionarios SET arrastre_pendientes = arrastre_pendientes + $1,
+             dias_pendientes = dias_pendientes + $2, updated_at = NOW() WHERE id = $3`,
+      [fromArrastre, fromActual, sNuevo.id]
+    );
+    const antesNuevo = arrDisp + actDisp;
+    // 'reserva' para pendientes y 'descuento' para aprobadas; el saldo antes/después
+    // de este movimiento es el que imprime el formato oficial de la solicitud.
+    await registrarMovimiento(client, {
+      funcionarioId: sol.funcionario_id, solicitudId: id, tipoPermisoId: Number(tipo_permiso_id),
+      tipoMovimiento: aprobada ? 'descuento' : 'reserva', diasMovimiento: diasNuevos,
+      saldoAnterior: antesNuevo, saldoNuevo: antesNuevo - diasNuevos,
+      descripcion: `Corrección de solicitud N° ${id}: ${diasNuevos} día(s) de ${tipoNuevo.nombre} del ${fecha_inicio} al ${fecha_fin} — ${motivo_cambio}`,
+      usuarioId: req.usuario.id,
+    });
+
+    // 3) Actualizar la solicitud
+    const cambio = `[${new Date().toLocaleDateString('es-CL')}] Corregida: ${sol.tipo_nombre} ${diasViejos} día(s) del `
+      + `${String(sol.fecha_inicio).substring(0, 10)} → ${tipoNuevo.nombre} ${diasNuevos} día(s) del ${fecha_inicio}. Motivo: ${motivo_cambio}`;
+    await client.query(
+      `UPDATE solicitudes
+       SET tipo_permiso_id = $1, fecha_inicio = $2, fecha_fin = $3, dias_solicitados = $4,
+           dias_arrastre = $5, dias_periodo_actual = $6, jornada_medio_dia = $7,
+           motivo = $8, reemplazante = $9,
+           observaciones = CONCAT_WS(' | ', NULLIF(observaciones, ''), $10::text)
+       WHERE id = $11`,
+      [tipo_permiso_id, fecha_inicio, fecha_fin, diasNuevos, fromArrastre, fromActual, jornadaFinal,
+       motivo ?? sol.motivo, reemplazante, cambio, id]
+    );
+
+    // Bloque obligatorio de 10 días de feriado (si una aprobada entra o sale de feriado)
+    if (aprobada) {
+      for (const s of [sViejo, sNuevo]) {
+        if (!s) continue;
+        const tp = s.tipo_permiso_id === Number(tipo_permiso_id) ? tipoNuevo : { es_feriado_legal: sol.es_feriado_legal };
+        if (!tp.es_feriado_legal) continue;
+        const b = await validarBloqueObligatorio10Dias(client, sol.funcionario_id, s.tipo_permiso_id, s.anio);
+        await client.query(
+          `UPDATE saldos_funcionarios SET bloque_10_dias_cumplido = $1, fecha_inicio_bloque = $2, fecha_fin_bloque = $3 WHERE id = $4`,
+          [b.cumplido, b.fecha_inicio_bloque || null, b.fecha_fin_bloque || null, s.id]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+    res.json({ mensaje: 'Solicitud corregida y saldos actualizados', saldo_nuevo: antesNuevo - diasNuevos });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    res.status(500).json({ error: 'Error al editar la solicitud' });
   } finally {
     client.release();
   }

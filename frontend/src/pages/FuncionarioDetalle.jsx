@@ -124,6 +124,7 @@ export default function FuncionarioDetalle() {
   const [editandoSaldos, setEditandoSaldos] = useState(false);
   const [saldosEdit, setSaldosEdit] = useState({});
   const [arrastreEdit, setArrastreEdit] = useState({});
+  const [usadosEdit, setUsadosEdit] = useState({});
   const [motivoEdit, setMotivoEdit] = useState('');
   const [guardandoSaldos, setGuardandoSaldos] = useState(false);
   const [generandoPDF, setGenerandoPDF] = useState(false);
@@ -214,13 +215,16 @@ export default function FuncionarioDetalle() {
   const iniciarEdicionSaldos = () => {
     const inicialSaldos = {};
     const inicialArrastre = {};
+    const inicialUsados = {};
     funcionario.saldos?.forEach(s => {
       inicialSaldos[s.tipo_permiso_id] = s.dias_asignados;
+      inicialUsados[s.tipo_permiso_id] = s.dias_usados;
       // Se edita el arrastre DISPONIBLE; el backend le suma lo ya usado/en trámite
       if (s.es_feriado_legal) inicialArrastre[s.tipo_permiso_id] = arrastreDisponible(s);
     });
     setSaldosEdit(inicialSaldos);
     setArrastreEdit(inicialArrastre);
+    setUsadosEdit(inicialUsados);
     setMotivoEdit('');
     setEditandoSaldos(true);
   };
@@ -229,6 +233,7 @@ export default function FuncionarioDetalle() {
     setEditandoSaldos(false);
     setSaldosEdit({});
     setArrastreEdit({});
+    setUsadosEdit({});
     setMotivoEdit('');
   };
 
@@ -236,12 +241,12 @@ export default function FuncionarioDetalle() {
     if (!motivoEdit.trim()) return toast.error('Ingresa un motivo para el ajuste');
     setGuardandoSaldos(true);
     try {
-      await funcionariosApi.actualizarSaldos(id, saldosEdit, arrastreEdit, new Date().getFullYear(), motivoEdit);
+      await funcionariosApi.actualizarSaldos(id, saldosEdit, arrastreEdit, new Date().getFullYear(), motivoEdit, usadosEdit);
       toast.success('Saldos actualizados correctamente');
       cancelarEdicionSaldos();
       cargarFuncionario();
-    } catch {
-      toast.error('Error al actualizar saldos');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al actualizar saldos');
     } finally {
       setGuardandoSaldos(false);
     }
@@ -780,8 +785,11 @@ export default function FuncionarioDetalle() {
           {editandoSaldos ? (
             <div className="card p-5 space-y-4">
               <div>
-                <p className="text-sm font-semibold text-dark-800">Ajuste manual de días asignados</p>
-                <p className="text-xs text-dark-500 mt-0.5">Útil para cambios de grado. Se registra en el historial con motivo.</p>
+                <p className="text-sm font-semibold text-dark-800">Ajuste manual de saldos</p>
+                <p className="text-xs text-dark-500 mt-0.5">
+                  <strong>Días año</strong>: días asignados (cambios de grado). <strong>Usados</strong>: días ya ocupados;
+                  bájalo para reintegrar (ej. disponible 3,5 → usados −0,5 → disponible 4). Todo queda en el historial con el motivo.
+                </p>
               </div>
               <div className="space-y-3">
                 {funcionario.saldos?.map(s => (
@@ -791,15 +799,28 @@ export default function FuncionarioDetalle() {
                       <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: s.color }} />
                       <span className="text-sm text-dark-700 flex-1 truncate font-medium">{s.tipo_nombre}</span>
                       <span className="text-xs text-dark-400 hidden sm:block">
-                        Usados: {s.dias_usados} · Pend: {s.dias_pendientes || 0}
+                        En trámite: {s.dias_pendientes || 0} · Disponible: {
+                          Number(saldosEdit[s.tipo_permiso_id] ?? s.dias_asignados)
+                          - Number(usadosEdit[s.tipo_permiso_id] ?? s.dias_usados)
+                          - Number(s.dias_pendientes || 0)
+                        }
                       </span>
                       <input
                         type="number" min="0" max="365" step="0.5"
                         value={saldosEdit[s.tipo_permiso_id] ?? s.dias_asignados}
                         onChange={e => setSaldosEdit(prev => ({ ...prev, [s.tipo_permiso_id]: e.target.value }))}
                         className="input-field w-20 text-center text-sm py-1.5"
+                        title="Días asignados del año"
                       />
                       <span className="text-xs text-dark-400 w-14">días año</span>
+                      <input
+                        type="number" min="0" max="365" step="0.5"
+                        value={usadosEdit[s.tipo_permiso_id] ?? s.dias_usados}
+                        onChange={e => setUsadosEdit(prev => ({ ...prev, [s.tipo_permiso_id]: e.target.value }))}
+                        className="input-field w-20 text-center text-sm py-1.5"
+                        title="Días usados (bajar para reintegrar)"
+                      />
+                      <span className="text-xs text-dark-400 w-12">usados</span>
                     </div>
 
                     {/* Fila extra: arrastre (solo feriado legal) */}

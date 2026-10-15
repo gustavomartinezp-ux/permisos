@@ -4,40 +4,12 @@ import { X, Calendar, FileText, AlertCircle, ArrowLeftRight, Info, Download, Pri
 import { solicitudesApi, saldosApi, tiposPermisosApi } from '../api/client';
 import { descargarFormularioOficial, imprimirFormularioOficial } from '../utils/reportePDF';
 import toast from 'react-hot-toast';
+import {
+  FERIADOS, toISO, esDiaHabil, DISPOSITIVO_EXCEPCION_DIA_HABIL, tipoRequiereDiaHabil,
+  construirRango, formatoFecha,
+} from '../utils/diasHabiles';
+import CalendarioPermiso from './CalendarioPermiso';
 
-// Feriados Chile 2025-2027 (espejo del backend para preview instantáneo)
-const FERIADOS = new Set([
-  '2025-01-01','2025-04-18','2025-04-19','2025-05-01','2025-05-21',
-  '2025-06-20','2025-06-29','2025-07-16','2025-08-15','2025-09-18',
-  '2025-09-19','2025-10-12','2025-10-31','2025-11-01','2025-12-08','2025-12-25',
-  '2026-01-01','2026-04-03','2026-04-04','2026-05-01','2026-05-21',
-  '2026-06-19','2026-06-29','2026-07-16','2026-08-15','2026-09-18',
-  '2026-09-19','2026-10-12','2026-10-31','2026-11-01','2026-12-08','2026-12-25',
-  '2027-01-01','2027-03-26','2027-03-27','2027-05-01','2027-05-21',
-  '2027-06-21','2027-06-29','2027-07-16','2027-08-15','2027-09-18',
-  '2027-09-19','2027-10-12','2027-10-31','2027-11-01','2027-12-08','2027-12-25',
-]);
-
-function toISO(d) { return d.toISOString().split('T')[0]; }
-
-function esDiaHabil(d) {
-  const dow = d.getDay();
-  if (dow === 0 || dow === 6) return false;
-  return !FERIADOS.has(toISO(d));
-}
-
-// Dispositivo (establecimiento) con régimen de turnos 24/7: único exceptuado
-// de la regla de "solo día hábil" para Permiso Administrativo y Feriado
-// Legal. Es `funcionario.dispositivo` (nombre del establecimiento), no
-// `funcionario.sector` — ese campo está vacío para todos los funcionarios.
-const DISPOSITIVO_EXCEPCION_DIA_HABIL = /\bSAR\b/i;
-
-function tipoRequiereDiaHabil(saldo) {
-  return saldo?.codigo === 'ADMIN' || saldo?.es_feriado_legal === true;
-}
-
-// Espejo de validarSolicitudPermiso del backend, para feedback instantáneo
-// antes de enviar la solicitud.
 function obtenerDiasNoHabiles(inicio, fin) {
   if (!inicio || !fin) return [];
   const dias = [];
@@ -48,23 +20,6 @@ function obtenerDiasNoHabiles(inicio, fin) {
     cur.setDate(cur.getDate() + 1);
   }
   return dias;
-}
-
-// Arma el rango de un permiso a partir de la fecha de inicio y el número de
-// días: cuenta solo días hábiles (salta fines de semana y feriados) y, si la
-// fecha elegida no es hábil, el permiso comienza el siguiente día hábil.
-// En SAR (turnos 24/7) los días se cuentan corridos.
-function construirRango(inicio, numDias, corridos) {
-  if (!inicio || !(numDias > 0)) return null;
-  const cur = new Date(inicio + 'T12:00:00');
-  if (isNaN(cur)) return null;
-  const dias = [];
-  let guard = 0;
-  while (dias.length < numDias && guard++ < 730) {
-    if (corridos || esDiaHabil(cur)) dias.push(toISO(cur));
-    cur.setDate(cur.getDate() + 1);
-  }
-  return { inicio: dias[0], fin: dias[dias.length - 1], dias };
 }
 
 function calcularDistribucion(diasSolicitados, arrastreDisp, actualDisp) {
@@ -89,64 +44,6 @@ function calcularFechaFinEspecialLocal(fechaInicio, diasFijos, tipoDias) {
     if (count < diasFijos) cur.setDate(cur.getDate() + 1);
   }
   return toISO(cur);
-}
-
-const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
-const formatoFecha = (iso) => {
-  if (!iso) return '';
-  const d = new Date(iso + 'T12:00:00');
-  return `${['dom','lun','mar','mié','jue','vie','sáb'][d.getDay()]} ${d.getDate()} de ${MESES[d.getMonth()]}`;
-};
-
-// Calendario de los meses que abarca el permiso: marca los días que se
-// descuentan y muestra en gris los fines de semana/feriados que se saltan.
-function CalendarioPermiso({ dias }) {
-  if (!dias?.length) return null;
-  const marcados = new Set(dias);
-  const ini = new Date(dias[0] + 'T12:00:00');
-  const fin = new Date(dias[dias.length - 1] + 'T12:00:00');
-  const meses = [];
-  const m = new Date(ini.getFullYear(), ini.getMonth(), 1, 12);
-  while (m <= fin) { meses.push(new Date(m)); m.setMonth(m.getMonth() + 1); }
-
-  return (
-    <div className={`grid gap-3 ${meses.length > 1 ? 'sm:grid-cols-2' : ''}`}>
-      {meses.map((mes) => {
-        const primero = (mes.getDay() + 6) % 7; // lunes = 0
-        const total = new Date(mes.getFullYear(), mes.getMonth() + 1, 0).getDate();
-        const celdas = [...Array(primero).fill(null), ...Array.from({ length: total }, (_, i) => i + 1)];
-        return (
-          <div key={mes.toISOString()}>
-            <p className="text-xs font-semibold text-dark-700 capitalize mb-1">{MESES[mes.getMonth()]} {mes.getFullYear()}</p>
-            <div className="grid grid-cols-7 gap-0.5 text-center text-[11px]">
-              {['L','M','M','J','V','S','D'].map((d, i) => <span key={i} className="text-dark-400 font-medium">{d}</span>)}
-              {celdas.map((dia, i) => {
-                if (!dia) return <span key={i} />;
-                const iso = toISO(new Date(mes.getFullYear(), mes.getMonth(), dia, 12));
-                const marcado = marcados.has(iso);
-                const dentro = iso > dias[0] && iso < dias[dias.length - 1];
-                const feriado = FERIADOS.has(iso);
-                return (
-                  <span
-                    key={i}
-                    title={marcado ? 'Día del permiso' : feriado ? 'Feriado' : dentro ? 'No hábil (no se descuenta)' : ''}
-                    className={`rounded py-0.5 ${
-                      marcado ? 'bg-brand-600 text-white font-semibold'
-                        : dentro ? 'bg-dark-100 text-dark-400 line-through'
-                        : feriado ? 'text-red-500'
-                        : 'text-dark-600'
-                    }`}
-                  >
-                    {dia}
-                  </span>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
 }
 
 const LABEL_TIPO_DIAS = {

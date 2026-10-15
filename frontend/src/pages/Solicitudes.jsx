@@ -3,12 +3,13 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { FileText, CheckCircle2, XCircle, Search, ShieldCheck, RotateCcw, Download, Printer, ArrowLeftRight } from 'lucide-react';
+import { FileText, CheckCircle2, XCircle, Search, ShieldCheck, RotateCcw, Download, Printer, ArrowLeftRight, Pencil } from 'lucide-react';
 import { solicitudesApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { descargarFormularioOficial, imprimirFormularioOficial, descargarFormatoTraspaso } from '../utils/reportePDF';
 import EstadoBadge from '../components/EstadoBadge';
 import RechazoModal from '../components/RechazoModal';
+import EditarSolicitudModal from '../components/EditarSolicitudModal';
 import toast from 'react-hot-toast';
 
 const fmtFecha = (d, fmt) => {
@@ -83,6 +84,7 @@ export default function Solicitudes() {
   const [procesando, setProcesando] = useState(null);
   const [rechazandoId, setRechazandoId] = useState(null);
   const [anulandoId, setAnulandoId] = useState(null);
+  const [editando, setEditando] = useState(null);
 
   const cargar = useCallback(() => {
     setCargando(true);
@@ -359,6 +361,18 @@ export default function Solicitudes() {
                         </button>
                       </>
                     )}
+                    {/* RRHH: corregir tipo/fechas/días (reajusta saldos) — no la propia */}
+                    {puedeAprobar && !sol.es_especial
+                      && ['pendiente', 'pre_aprobado', 'aprobado'].includes(sol.estado)
+                      && String(sol.funcionario_id) !== String(usuario?.funcionario_id) && (
+                      <button
+                        onClick={() => setEditando(sol)}
+                        className="p-2 rounded-lg bg-sky-50 text-sky-700 hover:bg-sky-100 transition-colors"
+                        title="Corregir solicitud (tipo, días o fechas)"
+                      >
+                        <Pencil size={17} />
+                      </button>
+                    )}
                     {/* Admin: anular permiso aprobado y reintegrar días */}
                     {puedeReintegrar && sol.estado === 'aprobado' && (
                       <button
@@ -422,6 +436,14 @@ export default function Solicitudes() {
           cargando={procesando === rechazandoId}
           onClose={() => setRechazandoId(null)}
           onConfirm={confirmarRechazo}
+        />
+      )}
+
+      {editando && (
+        <EditarSolicitudModal
+          solicitud={editando}
+          onClose={() => setEditando(null)}
+          onSuccess={cargar}
         />
       )}
 

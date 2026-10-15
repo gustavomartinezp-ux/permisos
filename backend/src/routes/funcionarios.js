@@ -838,7 +838,7 @@ router.delete('/:id/foto', async (req, res) => {
 
 // Actualizar saldos manualmente (cambio de grado + ajuste arrastre feriado legal)
 router.put('/:id/saldos', requierePermiso('saldos.ajustar'), async (req, res) => {
-  const { saldos, arrastres, anio, motivo } = req.body;
+  const { saldos, usados, arrastres, anio, motivo } = req.body;
   const funcId = req.params.id;
   const client = await pool.connect();
 
@@ -847,8 +847,12 @@ router.put('/:id/saldos', requierePermiso('saldos.ajustar'), async (req, res) =>
     const anioTarget = anio || new Date().getFullYear();
     const resultados = [];
 
-    // Ajustar dias_asignados
-    for (const [tipoId, diasNuevos] of Object.entries(saldos || {})) {
+    // Ajustar días asignados y/o días usados del período. "Usados" permite
+    // reintegrar (o descontar) días cargados masivamente: ej. disponible 3,5 y
+    // se reintegra 0,5 → usados baja 0,5 → disponible 4. Ambos campos se
+    // actualizan en un solo UPDATE para respetar la restricción usados+pendientes ≤ asignados.
+    const tiposAjuste = new Set([...Object.keys(saldos || {}), ...Object.keys(usados || {})]);
+    for (const tipoId of tiposAjuste) {
       const saldoActual = await client.query(
         `SELECT * FROM saldos_funcionarios
          WHERE funcionario_id=$1 AND tipo_permiso_id=$2 AND anio=$3 FOR UPDATE`,
@@ -857,26 +861,55 @@ router.put('/:id/saldos', requierePermiso('saldos.ajustar'), async (req, res) =>
       if (saldoActual.rows.length === 0) continue;
 
       const s = saldoActual.rows[0];
+      const leer = (mapa, actual) => {
+        if (!mapa || mapa[tipoId] === undefined || mapa[tipoId] === '') return Number(actual);
+        const v = parseFloat(mapa[tipoId]);
+        return Number.isFinite(v) && v >= 0 ? v : Number(actual);
+      };
+      const asigNuevo = leer(saldos, s.dias_asignados);
+      const usadosNuevo = leer(usados, s.dias_usados);
+      if (asigNuevo === Number(s.dias_asignados) && usadosNuevo === Number(s.dias_usados)) continue; // sin cambio
+
+      if (usadosNuevo + Number(s.dias_pendientes) > asigNuevo) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          error: `Los días usados (${usadosNuevo}) más los en trámite (${s.dias_pendientes}) no pueden superar los asignados (${asigNuevo})`,
+        });
+      }
+
       const saldoAnterior = s.dias_asignados - s.dias_usados - s.dias_pendientes;
-      const diasNuevosInt = parseFloat(diasNuevos);
-      if (!Number.isFinite(diasNuevosInt) || diasNuevosInt < 0) continue;
-      if (diasNuevosInt === Number(s.dias_asignados)) continue; // sin cambio: no ensuciar el historial
-
       await client.query(
-        `UPDATE saldos_funcionarios SET dias_asignados=$1, updated_at=NOW() WHERE id=$2`,
-        [diasNuevosInt, s.id]
+        `UPDATE saldos_funcionarios SET dias_asignados=$1, dias_usados=$2, updated_at=NOW() WHERE id=$3`,
+        [asigNuevo, usadosNuevo, s.id]
       );
+      const saldoNuevo = asigNuevo - usadosNuevo - s.dias_pendientes;
 
-      const saldoNuevo = diasNuevosInt - s.dias_usados - s.dias_pendientes;
-      await client.query(
-        `INSERT INTO historial_movimientos
-           (funcionario_id, tipo_permiso_id, tipo_movimiento, dias_movimiento,
-            saldo_anterior, saldo_nuevo, descripcion, usuario_responsable)
-         VALUES ($1,$2,'ajuste',$3,$4,$5,$6,$7)`,
-        [funcId, tipoId, diasNuevosInt - s.dias_asignados, saldoAnterior, saldoNuevo,
-         motivo || `Ajuste manual de días asignados a ${diasNuevosInt}`, req.usuario.id]
-      );
-      resultados.push({ tipo_permiso_id: tipoId, campo: 'dias_asignados', valor: diasNuevosInt });
+      if (asigNuevo !== Number(s.dias_asignados)) {
+        await client.query(
+          `INSERT INTO historial_movimientos
+             (funcionario_id, tipo_permiso_id, tipo_movimiento, dias_movimiento,
+              saldo_anterior, saldo_nuevo, descripcion, usuario_responsable)
+           VALUES ($1,$2,'ajuste',$3,$4,$5,$6,$7)`,
+          [funcId, tipoId, asigNuevo - s.dias_asignados, saldoAnterior,
+           saldoAnterior + (asigNuevo - s.dias_asignados),
+           motivo || `Ajuste manual de días asignados a ${asigNuevo}`, req.usuario.id]
+        );
+        resultados.push({ tipo_permiso_id: tipoId, campo: 'dias_asignados', valor: asigNuevo });
+      }
+      if (usadosNuevo !== Number(s.dias_usados)) {
+        const delta = Number(s.dias_usados) - usadosNuevo; // > 0 reintegra, < 0 descuenta
+        await client.query(
+          `INSERT INTO historial_movimientos
+             (funcionario_id, tipo_permiso_id, tipo_movimiento, dias_movimiento,
+              saldo_anterior, saldo_nuevo, descripcion, usuario_responsable)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+          [funcId, tipoId, delta > 0 ? 'reintegro' : 'descuento', Math.abs(delta),
+           saldoNuevo - delta, saldoNuevo,
+           `${delta > 0 ? 'Reintegro' : 'Descuento'} manual de ${Math.abs(delta)} día(s) (usados ${s.dias_usados} → ${usadosNuevo})${motivo ? ' — ' + motivo : ''}`,
+           req.usuario.id]
+        );
+        resultados.push({ tipo_permiso_id: tipoId, campo: 'dias_usados', valor: usadosNuevo });
+      }
     }
 
     // Ajustar arrastre (solo feriado legal). El valor recibido son los días de

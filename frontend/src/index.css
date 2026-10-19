@@ -32,7 +32,7 @@
            hover:bg-red-700 active:bg-red-800 transition-colors duration-150;
   }
   .input-field {
-    @apply w-full px-3 py-2 text-sm border border-dark-300 rounded-lg bg-white
+    @apply w-full px-3 py-2 text-sm text-dark-900 border border-dark-300 rounded-lg bg-white
            focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent
            transition-shadow duration-150 placeholder-dark-400;
   }

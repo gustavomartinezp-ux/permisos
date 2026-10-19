@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, KeyRound, Eye, EyeOff } from 'lucide-react';
 import { authApi } from '../api/client';
@@ -29,9 +30,11 @@ export default function CambiarPasswordModal({ onClose, obligatorio = false, onS
     }
   };
 
-  return (
+  // Se monta en <body> (portal): desde el menú lateral heredaba su texto blanco
+  // (lo escrito no se veía) y en móvil quedaba encerrado en el panel animado.
+  return createPortal(
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 text-dark-900">
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -109,6 +112,7 @@ export default function CambiarPasswordModal({ onClose, obligatorio = false, onS
           </form>
         </motion.div>
       </div>
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }

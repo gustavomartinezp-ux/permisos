@@ -30,9 +30,14 @@ const { evaluarHitosAntiguedad } = require('./workers/antiguedadWorker');
 
 const app = express();
 
+// Orígenes del frontend que pueden llamar a la API. FRONTEND_URL admite varias
+// URLs separadas por coma; el dominio institucional queda siempre permitido
+// para que funcione apenas se apunte el DNS, sin tocar variables en Render.
 const originesPermitidos = [
   'http://localhost:5173',
-  process.env.FRONTEND_URL,
+  'https://permisos.dastalcahuano.cl',
+  'https://cesfam-permisos.vercel.app',
+  ...(process.env.FRONTEND_URL || '').split(',').map((u) => u.trim().replace(/\/$/, '')),
 ].filter(Boolean);
 
 app.use(cors({

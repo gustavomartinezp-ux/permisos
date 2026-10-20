@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Heart, PartyPopper } from 'lucide-react';
 import { birthdaysApi } from '../api/client';
@@ -16,7 +17,7 @@ function Avatar({ nombres, apellidos, foto_url }) {
   return <div className={cls}>{inicial(nombres)}{inicial(apellidos)}</div>;
 }
 
-function LikersPopover({ funcionarioId, onClose }) {
+function LikersPopover({ funcionarioId, anchor, onClose }) {
   const [likers, setLikers] = useState(null);
 
   useEffect(() => {
@@ -25,14 +26,22 @@ function LikersPopover({ funcionarioId, onClose }) {
       .catch(() => setLikers([]));
   }, [funcionarioId]);
 
-  return (
+  // Se posiciona fijo en <body> bajo el botón: dentro de la tarjeta quedaba
+  // recortado por el carrusel con scroll horizontal.
+  const rect = anchor?.getBoundingClientRect();
+  const pos = rect
+    ? { top: rect.bottom + 8, left: Math.max(8, Math.min(rect.right - 256, window.innerWidth - 264)) }
+    : { top: 80, left: 8 };
+
+  return createPortal(
     <>
-      <div className="fixed inset-0 z-10" onClick={onClose} />
+      <div className="fixed inset-0 z-40" onClick={onClose} />
       <motion.div
         initial={{ opacity: 0, y: -6 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -6 }}
-        className="absolute right-0 top-full mt-2 z-20 w-64 bg-white rounded-xl shadow-xl border border-dark-200 p-3"
+        style={pos}
+        className="fixed z-50 w-64 bg-white rounded-xl shadow-xl border border-dark-200 p-3"
       >
         <p className="text-xs font-semibold text-dark-700 mb-2">Han felicitado hoy</p>
         {likers === null && <p className="text-xs text-dark-400">Cargando…</p>}
@@ -50,7 +59,8 @@ function LikersPopover({ funcionarioId, onClose }) {
           ))}
         </div>
       </motion.div>
-    </>
+    </>,
+    document.body
   );
 }
 
@@ -58,6 +68,7 @@ function BirthdayCard({ f, onLikeToggled }) {
   const [popover, setPopover] = useState(false);
   const [rebotando, setRebotando] = useState(false);
   const [procesando, setProcesando] = useState(false);
+  const botonLikers = useRef(null);
 
   const toggleLike = async () => {
     if (procesando) return;
@@ -101,8 +112,8 @@ function BirthdayCard({ f, onLikeToggled }) {
         <Avatar nombres={f.nombres} apellidos={f.apellidos} foto_url={f.foto_url} />
         <div className="min-w-0">
           <p className="text-[11px] uppercase tracking-wide text-white/80 font-semibold">¡Feliz cumpleaños! 🎂</p>
-          <p className="font-bold leading-tight truncate">{f.nombres} {f.apellidos}</p>
-          {unidad && <p className="text-xs text-white/80 truncate">{unidad}</p>}
+          <p className="font-bold leading-tight break-words">{f.nombres} {f.apellidos}</p>
+          {unidad && <p className="text-xs text-white/80 break-words">{unidad}</p>}
         </div>
       </div>
 
@@ -124,13 +135,14 @@ function BirthdayCard({ f, onLikeToggled }) {
 
         <div className="relative">
           <button
+            ref={botonLikers}
             onClick={() => setPopover((p) => !p)}
             className="text-[11px] text-white/90 underline decoration-white/40 underline-offset-2 text-right"
           >
             {f.likes_count} {f.likes_count === 1 ? 'compañero ha felicitado' : 'compañeros han felicitado'}
           </button>
           <AnimatePresence>
-            {popover && <LikersPopover funcionarioId={f.id} onClose={() => setPopover(false)} />}
+            {popover && <LikersPopover funcionarioId={f.id} anchor={botonLikers.current} onClose={() => setPopover(false)} />}
           </AnimatePresence>
         </div>
       </div>
@@ -158,14 +170,14 @@ export default function CumpleanosBanner() {
   if (!cargado || cumpleanieros.length === 0) return null;
 
   return (
-    <div className="px-4 sm:px-6 pt-4">
+    <div className="px-4 sm:px-6 pt-4 flex-shrink-0">
       <div className="flex items-center gap-2 mb-2">
         <PartyPopper size={16} className="text-amber-500" />
         <p className="text-sm font-semibold text-dark-700">
           {cumpleanieros.length === 1 ? 'Hoy celebramos un cumpleaños' : `Hoy celebramos ${cumpleanieros.length} cumpleaños`}
         </p>
       </div>
-      <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
+      <div className="flex items-stretch gap-3 overflow-x-auto pb-2 -mx-1 px-1">
         {cumpleanieros.map((f) => (
           <BirthdayCard key={f.id} f={f} onLikeToggled={actualizarLike} />
         ))}

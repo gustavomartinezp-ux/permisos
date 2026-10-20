@@ -22,7 +22,7 @@ export default function AlertaAntiguedad() {
   if (!cargado || alertas.length === 0) return null;
 
   return (
-    <div className="px-4 sm:px-6 pt-4 space-y-2">
+    <div className="px-4 sm:px-6 pt-4 space-y-2 flex-shrink-0">
       <AnimatePresence>
         {alertas.map((a) => (
           <motion.div

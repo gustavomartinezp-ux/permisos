@@ -156,6 +156,13 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
 
   const set = (key, val) => setForm(f => ({ ...f, [key]: val }));
 
+  // "Otra cantidad" de horas: se lleva aparte del valor, porque al escribir el
+  // número el campo dejaba de valer 'otro' y el input manual desaparecía.
+  const [horasManual, setHorasManual] = useState(() => {
+    const h = funcEdit?.horas_contrato;
+    return h != null && h !== '' && !HORAS_OPCIONES.map(String).includes(String(h));
+  });
+
   const handleReemplazaA = (id) => {
     const rep = todosFunc.find(f => String(f.id) === String(id));
     if (!rep) { set('reemplaza_a', ''); return; }
@@ -300,17 +307,25 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
                     <label className="block text-xs font-medium text-dark-700 mb-1.5">
                       <Clock size={12} className="inline mr-1" />Horas semanales
                     </label>
-                    <select value={form.horas_contrato || ''} onChange={e => set('horas_contrato', e.target.value)} className="input-field">
+                    <select
+                      value={horasManual ? 'otro' : (form.horas_contrato ?? '')}
+                      onChange={e => {
+                        const v = e.target.value;
+                        setHorasManual(v === 'otro');
+                        set('horas_contrato', v === 'otro' ? '' : v);
+                      }}
+                      className="input-field"
+                    >
                       <option value="">Sin especificar</option>
                       {HORAS_OPCIONES.map(h => <option key={h} value={h}>{h} horas</option>)}
                       <option value="otro">Otra cantidad</option>
                     </select>
                   </div>
 
-                  {form.horas_contrato === 'otro' && (
+                  {horasManual && (
                     <div>
                       <label className="block text-xs font-medium text-dark-700 mb-1.5">Horas (manual)</label>
-                      <input type="number" min="1" max="44" onChange={e => set('horas_contrato', e.target.value)} className="input-field" placeholder="Ej: 28" />
+                      <input type="number" min="1" max="44" step="1" value={form.horas_contrato ?? ''} onChange={e => set('horas_contrato', e.target.value)} className="input-field" placeholder="Ej: 5" autoFocus />
                     </div>
                   )}
 

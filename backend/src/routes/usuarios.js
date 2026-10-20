@@ -1,5 +1,6 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
+const { hashPasswordDefault } = require('../utils/credenciales');
 const { body, validationResult } = require('express-validator');
 const { pool } = require('../db');
 const { verificarToken } = require('../middleware/auth');
@@ -69,8 +70,7 @@ router.post('/', [
 
   const { email, rol, sector } = req.body;
   try {
-    if (!process.env.INITIAL_PASSWORD) return res.status(500).json({ error: 'INITIAL_PASSWORD no está configurada en el servidor' });
-    const hash = await bcrypt.hash(process.env.INITIAL_PASSWORD, 10);
+    const hash = await hashPasswordDefault();
     const result = await pool.query(
       `INSERT INTO usuarios (email, password_hash, rol, sector)
        VALUES ($1, $2, $3, $4)

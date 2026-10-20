@@ -295,18 +295,34 @@ router.post('/', requierePermiso('funcionarios.crear'), [
       );
     }
 
-    // Crear cuenta de usuario si se provee email
+    // Crear cuenta de usuario si se provee email (personal o institucional).
+    // Contraseña por defecto común (hashPasswordDefault): antes exigía
+    // INITIAL_PASSWORD, que no está en Render, y la creación fallaba con correo.
     if (email && email.trim()) {
-      if (!process.env.INITIAL_PASSWORD) throw new Error('INITIAL_PASSWORD no está configurada en el servidor');
-      const hash = await bcrypt.hash(process.env.INITIAL_PASSWORD, 10);
+      const emailNorm = email.trim().toLowerCase();
+      if (!EMAIL_REGEX.test(emailNorm)) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'El correo ingresado no es válido' });
+      }
+      const enUso = await client.query('SELECT 1 FROM usuarios WHERE email = $1', [emailNorm]);
+      if (enUso.rows.length) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: 'Ese correo ya está en uso por otra cuenta' });
+      }
+      const hash = await hashPasswordDefault();
       const rolUsuario = ['admin', 'supervisor', 'funcionario'].includes(rol_sistema) ? rol_sistema : 'funcionario';
       const sectorUser = rolUsuario === 'supervisor' ? (sector_supervisa || null) : null;
       const areaUser   = rolUsuario === 'supervisor' ? (area_supervisa   || null) : null;
+      const u = await client.query(
+        `INSERT INTO usuarios (email, password_hash, rol, funcionario_id, sector, area, must_change_password)
+         VALUES ($1, $2, $3, $4, $5, $6, TRUE) RETURNING id`,
+        [emailNorm, hash, rolUsuario, funcId, sectorUser, areaUser]
+      );
+      // Rol RBAC base, igual que el resto de las cuentas de funcionarios
       await client.query(
-        `INSERT INTO usuarios (email, password_hash, rol, funcionario_id, sector, area)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT (email) DO UPDATE SET rol=$3, sector=$5, area=$6`,
-        [email.trim().toLowerCase(), hash, rolUsuario, funcId, sectorUser, areaUser]
+        `INSERT INTO user_roles (usuario_id, role_id)
+         SELECT $1, id FROM roles WHERE codigo = 'EMPLOYEE' ON CONFLICT DO NOTHING`,
+        [u.rows[0].id]
       );
     }
 
@@ -418,8 +434,7 @@ router.post('/bulk', requierePermiso('funcionarios.crear'), async (req, res) => 
 
         // Crear usuario si tiene email
         if (f.email && f.email.trim()) {
-          if (!process.env.INITIAL_PASSWORD) throw new Error('INITIAL_PASSWORD no está configurada en el servidor');
-          const hash = await bcrypt.hash(process.env.INITIAL_PASSWORD, 10);
+          const hash = await hashPasswordDefault();
           await client.query(
             `INSERT INTO usuarios (email, password_hash, rol, funcionario_id)
              VALUES ($1, $2, 'funcionario', $3)
@@ -595,6 +610,11 @@ router.put('/:id/email', requierePermiso('funcionarios.gestionar_credenciales'),
       usuarioId = nuevo.rows[0].id;
       mustChangePassword = true;
       cuentaCreada = true;
+      await client.query(
+        `INSERT INTO user_roles (usuario_id, role_id)
+         SELECT $1, id FROM roles WHERE codigo = 'EMPLOYEE' ON CONFLICT DO NOTHING`,
+        [usuarioId]
+      );
 
       await client.query(
         `INSERT INTO auditoria_credenciales (target_funcionario_id, target_usuario_id, accion, actualizado_por, detalle)

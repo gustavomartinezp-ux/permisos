@@ -7,6 +7,7 @@ const { cargarPermisos, requierePermiso, esSoloAutoservicio, tieneVisibilidadGlo
 const { EMAIL_REGEX, hashPasswordDefault } = require('../utils/credenciales');
 
 const router = express.Router();
+const SEXOS = ['Femenino', 'Masculino'];
 
 router.use(verificarToken, cargarPermisos);
 
@@ -47,7 +48,7 @@ router.get('/', async (req, res) => {
     const result = await pool.query(
       `SELECT
          f.id, f.rut, f.nombres, f.apellidos, f.cargo, f.fecha_ingreso, f.activo, f.sector, f.area,
-         f.tipo_contrato, f.horas_contrato, f.reemplaza_a, f.grupo_contractual,
+         f.tipo_contrato, f.horas_contrato, f.reemplaza_a, f.grupo_contractual, f.sexo,
          f.convenio_honorarios, f.prestacion, f.fecha_termino_contrato,
          s.nombre AS servicio,
          d.nombre AS dispositivo, d.id AS dispositivo_id,
@@ -215,7 +216,7 @@ router.post('/', requierePermiso('funcionarios.crear'), [
     fecha_nacimiento, telefono, direccion_particular, numero_reloj,
     convenio_honorarios, prestacion, fecha_termino_contrato,
     escalafon, categoria, nivel,
-    suplencia_fecha_inicio, motivo_reemplazo,
+    suplencia_fecha_inicio, motivo_reemplazo, sexo,
   } = req.body;
   const client = await pool.connect();
 
@@ -228,8 +229,8 @@ router.post('/', requierePermiso('funcionarios.crear'), [
           sector, area, tipo_contrato, horas_contrato, dispositivo_id, reemplaza_a,
           fecha_nacimiento, telefono, direccion_particular, numero_reloj,
           convenio_honorarios, prestacion, fecha_termino_contrato,
-          escalafon, categoria, nivel)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22) RETURNING *`,
+          escalafon, categoria, nivel, sexo)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23) RETURNING *`,
       [
         rut, nombres, apellidos, cargo,
         servicio_id || null, fecha_ingreso || null,
@@ -240,6 +241,7 @@ router.post('/', requierePermiso('funcionarios.crear'), [
         direccion_particular || null, numero_reloj ? parseInt(numero_reloj) : null,
         convenio_honorarios || null, prestacion || null, fecha_termino_contrato || null,
         escalafon || null, categoria || null, nivel || null,
+        SEXOS.includes(sexo) ? sexo : null,
       ]
     );
 
@@ -484,7 +486,7 @@ router.put('/:id', async (req, res, next) => {
     fecha_nacimiento, telefono, direccion_particular, numero_reloj,
     rol_sistema, sector_supervisa, area_supervisa,
     convenio_honorarios, prestacion, fecha_termino_contrato,
-    escalafon, categoria, nivel,
+    escalafon, categoria, nivel, sexo,
   } = req.body;
 
   if (activo === false && req.usuario.rol !== 'admin') {
@@ -511,7 +513,8 @@ router.put('/:id', async (req, res, next) => {
                fecha_ingreso=$10, sector=$11, area=$12,
                fecha_nacimiento=$13, telefono=$14, direccion_particular=$15, numero_reloj=$16,
                convenio_honorarios=$17, prestacion=$18, fecha_termino_contrato=$19,
-               escalafon=$20, categoria=$21, nivel=$22
+               escalafon=$20, categoria=$21, nivel=$22,
+               sexo = COALESCE($24, sexo)
            WHERE id=$23 RETURNING *`,
           [
             nombres, apellidos, cargo,
@@ -535,6 +538,7 @@ router.put('/:id', async (req, res, next) => {
             categoria || null,
             nivel || null,
             req.params.id,
+            SEXOS.includes(sexo) ? sexo : null,
           ]
         );
 

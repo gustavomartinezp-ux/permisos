@@ -105,7 +105,7 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
 
   const [form, setForm] = useState({
     rut: '', nombres: '', apellidos: '', cargo: '',
-    servicio_id: '', email: '',
+    servicio_id: '', email: '', sexo: '',
     telefono: '', direccion_particular: '', numero_reloj: '',
     tipo_contrato: tipoContratoInicial,
     horas_contrato: '', dispositivo_id: '', reemplaza_a: '',
@@ -245,6 +245,14 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
                   <div>
                     <label className="block text-xs font-medium text-dark-700 mb-1.5">Apellidos <span className="text-red-500">*</span></label>
                     <input value={form.apellidos} onChange={e => set('apellidos', e.target.value)} className="input-field" required />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-dark-700 mb-1.5">Sexo</label>
+                    <select value={form.sexo || ''} onChange={e => set('sexo', e.target.value)} className="input-field">
+                      <option value="">Seleccionar…</option>
+                      <option value="Femenino">Femenino</option>
+                      <option value="Masculino">Masculino</option>
+                    </select>
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-dark-700 mb-1.5">

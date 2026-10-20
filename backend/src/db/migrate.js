@@ -363,6 +363,20 @@ const migrations = [
        WHERE codigo = 'ESTAMENTO';
     `,
   },
+  {
+    // Sexo del funcionario. Se precarga una estimación según el primer nombre
+    // (el dato no existía en el sistema ni en las planillas de RRHH); RRHH lo
+    // corrige desde la ficha cuando corresponda.
+    id: 'funcionarios_sexo_v1',
+    sql: `
+      ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS sexo VARCHAR(10)
+        CHECK (sexo IN ('Femenino', 'Masculino'));
+      UPDATE funcionarios
+         SET sexo = CASE WHEN upper(split_part(trim(nombres), ' ', 1)) IN ('ALEJANDRO','ÁLVARO','ALVARO','ANGEL','ÁNGEL','ANTONIO','BERNARDO','CARLOS','CESAR','CÉSAR','CLAUDIO','CRISTIAN','CRISTIÁN','CRISTOBAL','CRISTÓBAL','DANIEL','DAVID','EDUARDO','ENRIQUE','ESTEBAN','FELIPE','FERNANDO','FRANCISCO','GERARDO','GIULIANO','GONZALO','GUSTAVO','HUGO','IGNACIO','ISMAEL','IVAN','IVÁN','JAIME','JOEL','JORGE','JOSE','JOSÉ','JUAN','JULIO','LUIS','MARCELO','MARIO','MATIAS','MATÍAS','MAURICIO','MAXIMIANO','MOISES','MOISÉS','NICOLAS','NICOLÁS','OSVALDO','PABLO','REINALDO','RICARDO','RICHARD','RODRIGO','ROMEO','SEBASTIAN','SEBASTIÁN','VICTOR','VÍCTOR','ALEXIS','JEAN')
+                         THEN 'Masculino' ELSE 'Femenino' END
+       WHERE sexo IS NULL AND trim(COALESCE(nombres, '')) <> '';
+    `,
+  },
 ];
 
 async function runMigrations() {

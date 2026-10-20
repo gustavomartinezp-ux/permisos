@@ -284,7 +284,7 @@ router.get('/exportar/funcionarios', requierePermiso('reportes.ver_globales', 'a
     const ws = wb.addWorksheet('Funcionarios', { views: [{ state: 'frozen', ySplit: 3 }] });
 
     // Título institucional
-    ws.mergeCells('A1:S1');
+    ws.mergeCells('A1:T1');
     const t1 = ws.getCell('A1');
     t1.value = 'CESFAM LOS CERROS — TALCAHUANO  |  Reporte de Funcionarios';
     t1.font  = { bold: true, size: 13, color: { argb: 'FFFFFFFF' } };
@@ -292,7 +292,7 @@ router.get('/exportar/funcionarios', requierePermiso('reportes.ver_globales', 'a
     t1.alignment = { horizontal: 'center', vertical: 'middle' };
     ws.getRow(1).height = 30;
 
-    ws.mergeCells('A2:S2');
+    ws.mergeCells('A2:T2');
     const t2 = ws.getCell('A2');
     t2.value = `Año ${anio}  |  Generado: ${new Date().toLocaleString('es-CL')}  |  Por: ${req.usuario.email || ''}`;
     t2.font  = { italic: true, size: 10, color: { argb: 'FFFFFFFF' } };
@@ -305,6 +305,7 @@ router.get('/exportar/funcionarios', requierePermiso('reportes.ver_globales', 'a
       { h: 'RUT',           k: 'rut',               width: 14 },
       { h: 'Apellidos',     k: 'apellidos',          width: 22 },
       { h: 'Nombres',       k: 'nombres',            width: 22 },
+      { h: 'Sexo',          k: 'sexo',               width: 11 },
       { h: 'Cargo',         k: 'cargo',              width: 24 },
       { h: 'Sector',        k: 'sector',             width: 12 },
       { h: 'Área',          k: 'area',               width: 14 },
@@ -339,7 +340,7 @@ router.get('/exportar/funcionarios', requierePermiso('reportes.ver_globales', 'a
       const pa = sl.find(s => s.codigo === 'PA' || s.tipo?.toLowerCase().includes('administrativ'));
 
       const row = ws.addRow([
-        f.id, f.rut, f.apellidos, f.nombres, f.cargo,
+        f.id, f.rut, f.apellidos, f.nombres, f.sexo || '', f.cargo,
         f.sector, f.area, f.servicio_nombre, f.dispositivo_nombre,
         f.tipo_contrato, f.horas_contrato,
         f.fecha_ingreso ? new Date(f.fecha_ingreso).toLocaleDateString('es-CL') : '',

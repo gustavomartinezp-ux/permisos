@@ -607,6 +607,7 @@ function TabExportar({ anio }) {
   const puedeExportarFuncionarios = tienePermiso('reportes.ver_globales', 'auditoria.ver_todo');
   const [descargando, setDescargando] = useState(null);
   const [filtrosCSV, setFiltrosCSV]   = useState({ fecha_inicio: '', fecha_fin: '', estado: '', sector: '' });
+  const [mesesAntiguedad, setMesesAntiguedad] = useState('6');
 
   const descargar = (endpoint, filename) =>
     descargarArchivo(endpoint, filename, setDescargando);
@@ -650,6 +651,34 @@ function TabExportar({ anio }) {
             onClick={() => descargar(`/reportes/exportar/funcionarios?anio=${anio}`, `funcionarios_${anio}.xlsx`)}
             nombre={`Funcionarios ${anio}`}
             desc="Datos completos + saldos + ausentismo"
+            ext=".xlsx"
+          />
+        </div>
+      )}
+
+      {/* Excel antigüedad + sexo */}
+      {puedeExportarFuncionarios && (
+        <div className="card p-5 space-y-3">
+          <h3 className="font-semibold text-dark-800 flex items-center gap-2">
+            <FileSpreadsheet size={16} className="text-emerald-600" />
+            Antigüedad y sexo de funcionarios
+          </h3>
+          <p className="text-sm text-dark-500">
+            Funcionarios activos con la antigüedad mínima indicada, con sexo, contrato y dispositivo.
+            Incluye resumen por tipo de contrato y sexo, y los que no tienen fecha de ingreso.
+          </p>
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-dark-600">Antigüedad mínima</label>
+            <select value={mesesAntiguedad} onChange={e => setMesesAntiguedad(e.target.value)} className="input-field text-sm w-auto">
+              {[3, 6, 12, 24, 36, 60, 120].map(m => (
+                <option key={m} value={m}>{m < 12 ? `${m} meses` : `${m / 12} año${m === 12 ? '' : 's'}`}</option>
+              ))}
+            </select>
+          </div>
+          <BtnDescarga
+            onClick={() => descargar(`/reportes/exportar/antiguedad?meses=${mesesAntiguedad}`, `antiguedad_${mesesAntiguedad}_meses.xlsx`)}
+            nombre="Antigüedad y sexo"
+            desc="Listado + resumen por contrato y sexo"
             ext=".xlsx"
           />
         </div>

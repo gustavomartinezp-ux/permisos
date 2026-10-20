@@ -424,6 +424,93 @@ router.get('/exportar/funcionarios', requierePermiso('reportes.ver_globales', 'a
   }
 });
 
+// ─── Exportar antigüedad (con sexo) → Excel ───────────────────────────────────
+// Funcionarios activos con antigüedad >= N meses (por defecto 6), con hoja de
+// resumen por tipo de contrato y sexo, y hoja aparte con los que no tienen
+// fecha de ingreso registrada.
+router.get('/exportar/antiguedad', requierePermiso('reportes.ver_globales', 'auditoria.ver_todo'), async (req, res) => {
+  const meses = Math.min(Math.max(parseInt(req.query.meses, 10) || 6, 1), 600);
+  const HOY = `(NOW() AT TIME ZONE 'America/Santiago')::date`;
+  try {
+    const base = `
+      SELECT f.rut, f.nombres, f.apellidos, f.sexo, f.cargo, f.tipo_contrato, f.horas_contrato,
+             d.nombre AS dispositivo, f.fecha_ingreso,
+             EXTRACT(YEAR FROM age(${HOY}, f.fecha_ingreso))::int AS anios,
+             EXTRACT(MONTH FROM age(${HOY}, f.fecha_ingreso))::int AS meses
+      FROM funcionarios f LEFT JOIN dispositivos d ON d.id = f.dispositivo_id
+      WHERE f.activo`;
+    const { rows: con } = await pool.query(
+      `${base} AND f.fecha_ingreso <= ${HOY} - make_interval(months => $1) ORDER BY f.apellidos, f.nombres`, [meses]);
+    const { rows: sin } = await pool.query(`${base} AND f.fecha_ingreso IS NULL ORDER BY f.apellidos, f.nombres`);
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'CESFAM Los Cerros';
+    const generado = new Date().toLocaleDateString('es-CL', { timeZone: 'America/Santiago' });
+    const estiloEncabezado = (c) => {
+      c.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1F4E79' } };
+      c.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+    };
+    const plural = (n, s, p) => `${n} ${n === 1 ? s : p}`;
+    const hoja = (nombre, filas, titulo) => {
+      const ws = wb.addWorksheet(nombre, { views: [{ state: 'frozen', ySplit: 4 }] });
+      ws.mergeCells('A1:K1');
+      ws.getCell('A1').value = titulo;
+      ws.getCell('A1').font = { bold: true, size: 13 };
+      ws.mergeCells('A2:K2');
+      ws.getCell('A2').value = `CESFAM Los Cerros — generado el ${generado} — ${filas.length} funcionario(s)`;
+      ws.getCell('A2').font = { italic: true, color: { argb: 'FF666666' } };
+      const cols = [['N°', 5], ['RUT', 13], ['Nombres', 22], ['Apellidos', 24], ['Sexo', 11], ['Cargo', 30],
+        ['Tipo contrato', 14], ['Horas', 7], ['Dispositivo', 26], ['Fecha ingreso', 13], ['Antigüedad', 18]];
+      const h = ws.getRow(4);
+      cols.forEach(([t, w], i) => { h.getCell(i + 1).value = t; ws.getColumn(i + 1).width = w; });
+      h.eachCell(estiloEncabezado);
+      filas.forEach((f, i) => {
+        const r = ws.addRow([
+          i + 1, f.rut, f.nombres, f.apellidos, f.sexo || 'Sin registro', f.cargo, f.tipo_contrato,
+          f.horas_contrato, f.dispositivo,
+          f.fecha_ingreso ? new Date(`${f.fecha_ingreso}T12:00:00Z`) : 'Sin registro',
+          f.fecha_ingreso ? [f.anios && plural(f.anios, 'año', 'años'), (f.meses || !f.anios) && plural(f.meses, 'mes', 'meses')].filter(Boolean).join(' ') : '—',
+        ]);
+        r.getCell(10).numFmt = 'dd-mm-yyyy';
+      });
+      ws.autoFilter = { from: 'A4', to: `K${4 + filas.length}` };
+    };
+
+    hoja(`Más de ${meses} meses`, con, `Funcionarios con antigüedad de ${meses} meses o más`);
+
+    const rs = wb.addWorksheet('Resumen');
+    rs.getCell('A1').value = `Resumen — funcionarios con antigüedad de ${meses} meses o más`;
+    rs.getCell('A1').font = { bold: true, size: 13 };
+    rs.getColumn(1).width = 22;
+    [2, 3, 4, 5].forEach((c) => { rs.getColumn(c).width = 14; });
+    const hr = rs.getRow(3);
+    ['Tipo contrato', 'Femenino', 'Masculino', 'Sin registro', 'Total'].forEach((t, i) => { hr.getCell(i + 1).value = t; });
+    hr.eachCell(estiloEncabezado);
+    const total = { Femenino: 0, Masculino: 0, otro: 0 };
+    const tipos = [...new Set(con.map((f) => f.tipo_contrato || '(sin tipo)'))].sort();
+    for (const t of tipos) {
+      const c = { Femenino: 0, Masculino: 0, otro: 0 };
+      con.filter((f) => (f.tipo_contrato || '(sin tipo)') === t).forEach((f) => {
+        const k = f.sexo === 'Femenino' || f.sexo === 'Masculino' ? f.sexo : 'otro';
+        c[k]++; total[k]++;
+      });
+      rs.addRow([t, c.Femenino, c.Masculino, c.otro, c.Femenino + c.Masculino + c.otro]);
+    }
+    rs.addRow(['Total', total.Femenino, total.Masculino, total.otro, con.length]).font = { bold: true };
+
+    hoja('Sin fecha de ingreso', sin, 'Funcionarios activos sin fecha de ingreso registrada (revisar)');
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="antiguedad_${meses}_meses.xlsx"`);
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al generar Excel de antigüedad' });
+  }
+});
+
 // ─── Exportar permisos → CSV ──────────────────────────────────────────────────
 router.get('/exportar/permisos', async (req, res) => {
   try {

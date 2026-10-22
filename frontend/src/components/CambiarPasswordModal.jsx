@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, KeyRound, Eye, EyeOff } from 'lucide-react';
+import { X, KeyRound, Eye, EyeOff, LogOut } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { authApi } from '../api/client';
 import toast from 'react-hot-toast';
 
@@ -9,6 +11,15 @@ export default function CambiarPasswordModal({ onClose, obligatorio = false, onS
   const [form, setForm] = useState({ actual: '', nueva: '', confirmar: '' });
   const [mostrar, setMostrar] = useState({ actual: false, nueva: false, confirmar: false });
   const [guardando, setGuardando] = useState(false);
+  const { logout } = useAuth();
+  const navigate = useNavigate();
+
+  // En el cambio obligatorio (primer ingreso) no se puede cerrar el recuadro y
+  // seguir usando el sistema, pero sí salir: antes la pantalla quedaba bloqueada.
+  const cerrarSesion = () => {
+    logout();
+    navigate('/login');
+  };
 
   const toggle = (campo) => setMostrar(p => ({ ...p, [campo]: !p[campo] }));
   const set = (campo, valor) => setForm(p => ({ ...p, [campo]: valor }));
@@ -55,16 +66,20 @@ export default function CambiarPasswordModal({ onClose, obligatorio = false, onS
               </div>
               <h2 className="text-lg font-semibold text-dark-900">Cambiar contraseña</h2>
             </div>
-            {!obligatorio && (
-              <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-dark-100 text-dark-400">
-                <X size={18} />
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={obligatorio ? cerrarSesion : onClose}
+              title={obligatorio ? 'Cerrar sesión' : 'Cerrar'}
+              className="p-1.5 rounded-lg hover:bg-dark-100 text-dark-400"
+            >
+              <X size={18} />
+            </button>
           </div>
 
           {obligatorio && (
             <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
               Estás usando una contraseña por defecto. Debes crear una contraseña personal antes de continuar.
+              Si prefieres hacerlo después, puedes cerrar sesión.
             </p>
           )}
 
@@ -97,7 +112,11 @@ export default function CambiarPasswordModal({ onClose, obligatorio = false, onS
             ))}
 
             <div className="flex gap-3 pt-1">
-              {!obligatorio && (
+              {obligatorio ? (
+                <button type="button" onClick={cerrarSesion} className="btn-secondary flex-1 justify-center">
+                  <LogOut size={15} /> Cerrar sesión
+                </button>
+              ) : (
                 <button type="button" onClick={onClose} className="btn-secondary flex-1 justify-center">
                   Cancelar
                 </button>

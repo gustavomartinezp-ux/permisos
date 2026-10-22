@@ -3,11 +3,34 @@ const { body, validationResult } = require('express-validator');
 const bcrypt = require('bcryptjs');
 const { pool } = require('../db');
 const { verificarToken } = require('../middleware/auth');
-const { cargarPermisos, requierePermiso, esSoloAutoservicio, tieneVisibilidadGlobal } = require('../middleware/rbac');
+const { cargarPermisos, requierePermiso, esSoloAutoservicio, tieneVisibilidadGlobal, invalidarPermisos } = require('../middleware/rbac');
 const { EMAIL_REGEX, hashPasswordDefault } = require('../utils/credenciales');
 
 const router = express.Router();
 const SEXOS = ['Femenino', 'Masculino'];
+
+// El menú y los permisos salen de los roles RBAC (user_roles), no del rol
+// legacy usuarios.rol: al nombrar supervisor (jefe de sector/área o referente
+// de programa) desde la ficha se asigna también el rol SUPERVISOR, y se quita
+// al volver a funcionario.
+async function sincronizarRolSupervisor(client, usuarioIds, rolLegacy) {
+  if (!usuarioIds.length || rolLegacy === 'admin') return;
+  if (rolLegacy === 'supervisor') {
+    await client.query(
+      `INSERT INTO user_roles (usuario_id, role_id)
+       SELECT u, r.id FROM unnest($1::int[]) AS u, roles r WHERE r.codigo = 'SUPERVISOR'
+       ON CONFLICT DO NOTHING`,
+      [usuarioIds]
+    );
+  } else {
+    await client.query(
+      `DELETE FROM user_roles
+       WHERE usuario_id = ANY($1::int[]) AND role_id = (SELECT id FROM roles WHERE codigo = 'SUPERVISOR')`,
+      [usuarioIds]
+    );
+  }
+  usuarioIds.forEach((id) => invalidarPermisos(id));
+}
 
 router.use(verificarToken, cargarPermisos);
 
@@ -332,6 +355,7 @@ router.post('/', requierePermiso('funcionarios.crear'), [
          SELECT $1, id FROM roles WHERE codigo = 'EMPLOYEE' ON CONFLICT DO NOTHING`,
         [u.rows[0].id]
       );
+      await sincronizarRolSupervisor(client, [u.rows[0].id], rolUsuario);
     }
 
     await client.query('COMMIT');
@@ -553,12 +577,17 @@ router.put('/:id', async (req, res, next) => {
       const rolValido = ['admin', 'supervisor', 'funcionario'].includes(rol_sistema) ? rol_sistema : 'funcionario';
       const sectorUser = rolValido === 'supervisor' ? (sector_supervisa || null) : null;
       const areaUser   = rolValido === 'supervisor' ? (area_supervisa   || null) : null;
-      await client.query(
-        `UPDATE usuarios
+      const cuentas = await client.query(
+        `UPDATE usuarios u
          SET rol=$1, sector=$2, area=$3
-         WHERE funcionario_id=$4 AND activo=true`,
+         FROM (SELECT id, rol AS rol_anterior FROM usuarios WHERE funcionario_id=$4 AND activo=true) prev
+         WHERE u.id = prev.id RETURNING u.id, prev.rol_anterior`,
         [rolValido, sectorUser, areaUser, req.params.id]
       );
+      // Solo al cambiar el rol: editar otros datos no debe quitar un SUPERVISOR
+      // asignado desde Roles y Permisos.
+      await sincronizarRolSupervisor(
+        client, cuentas.rows.filter((r) => r.rol_anterior !== rolValido).map((r) => r.id), rolValido);
     }
 
     await client.query('COMMIT');

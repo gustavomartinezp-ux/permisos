@@ -259,7 +259,7 @@ const SECTOR_COLORS = {
   Lila: 'bg-purple-100 text-purple-700', SAR: 'bg-cyan-100 text-cyan-700',
 };
 const AREAS_SUPERVISOR = [
-  'Técnica', 'Administrativa', 'Salud Familiar', 'SOME', 'Estadística', 'Servicios Generales',
+  'Técnica', 'Administrativa', 'Salud Familiar', 'SOME', 'Estadística', 'Servicios Generales', 'Dental',
   'Programa Infantil', 'Programa Adolescente', 'Programa Salud Reproductiva',
   'Programa del Adulto', 'Programa Adulto Mayor', 'Programa Salud Dental',
   'Programa de Salud Mental', 'Programa Comunitario', 'Referente OIRS', 'Médico Gestor',

@@ -242,8 +242,43 @@ function calcularFechaFinEspecial(fechaInicio, diasFijos, tipoDias) {
   return cur.toISOString().split('T')[0];
 }
 
+// ── Bloque obligatorio de 10 días del período actual ─────────────────────────
+// Quien tiene 10 o más días disponibles del período actual y aún no toma su
+// bloque de 10 días hábiles seguidos, no puede parcializar esos 10: cada
+// solicitud parcial (< 10 días del período actual) debe dejarle al menos 10.
+// Los días de arrastre (períodos anteriores) se usan libremente.
+async function bloqueObligatorioTomado(client, saldo, excludeId = null) {
+  if (saldo.bloque_10_dias_cumplido || saldo.bloque_10_planilla) return true;
+  const r = await client.query(
+    `SELECT 1 FROM solicitudes
+     WHERE funcionario_id = $1 AND tipo_permiso_id = $2
+       AND EXTRACT(YEAR FROM fecha_inicio) = $3
+       AND estado IN ('pendiente', 'pre_aprobado', 'aprobado')
+       AND dias_periodo_actual >= 10
+       AND ($4::int IS NULL OR id <> $4)
+     LIMIT 1`,
+    [saldo.funcionario_id, saldo.tipo_permiso_id, saldo.anio, excludeId]
+  );
+  return r.rows.length > 0;
+}
+
+function errorParcializacion({ actualDisponible, fromActual, bloqueTomado, anio }) {
+  if (fromActual <= 0 || fromActual >= 10 || bloqueTomado || actualDisponible < 10) return null;
+  const maxParcial = actualDisponible - 10;
+  if (fromActual <= maxParcial) return null;
+  return {
+    error: maxParcial > 0
+      ? `Debe tomar 10 días hábiles seguidos de su feriado ${anio} (bloque obligatorio). Tiene ${actualDisponible} días del período ${anio}: puede pedir hasta ${maxParcial} día(s) en forma parcial, o bien 10 o más días juntos.`
+      : `Debe tomar 10 días hábiles seguidos de su feriado ${anio} (bloque obligatorio). Con ${actualDisponible} días del período ${anio} no puede parcializarlos: solicite 10 o más días juntos.`,
+    max_parcial: maxParcial,
+    actual_disponible: actualDisponible,
+  };
+}
+
 module.exports = {
   FERIADOS_CHILE,
+  bloqueObligatorioTomado,
+  errorParcializacion,
   DISPOSITIVO_EXCEPCION_DIA_HABIL,
   esDispositivoExcepcion,
   esDiaHabil,

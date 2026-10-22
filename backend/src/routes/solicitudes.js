@@ -13,6 +13,8 @@ const {
   siguienteDiaHabil,
   validarSolicitudPermiso,
   diasDelRango,
+  bloqueObligatorioTomado,
+  errorParcializacion,
 } = require('../utils/feriadoLegal');
 
 const router = express.Router();
@@ -293,33 +295,15 @@ router.post('/', [
         dias_solicitados, arrastreDisponible, actualDisponible
       );
 
-      // ── Regla de parcialización ───────────────────────────────────────────
-      // Si la solicitud toma días del período actual Y son menos de 10 (parcial),
-      // validar que no supere el tope: dias_asignados - 10
+      // ── Bloque obligatorio de 10 días (solo período actual) ───────────────
       if (fromActual > 0 && fromActual < 10) {
-        const maxParciales = Math.max(s.dias_asignados - 10, 0);
-        const parcialesRes = await client.query(
-          `SELECT COALESCE(SUM(dias_periodo_actual), 0) AS total
-           FROM solicitudes
-           WHERE funcionario_id = $1
-             AND tipo_permiso_id = $2
-             AND EXTRACT(YEAR FROM fecha_inicio) = $3
-             AND estado IN ('aprobado','pendiente')
-             AND dias_periodo_actual > 0
-             AND dias_periodo_actual < 10`,
-          [funcionario_id, tipo_permiso_id, anio]
-        );
-        const parcialesExistentes = parseInt(parcialesRes.rows[0].total) || 0;
-
-        if (parcialesExistentes + fromActual > maxParciales) {
+        const bloqueo = errorParcializacion({
+          actualDisponible, fromActual, anio,
+          bloqueTomado: await bloqueObligatorioTomado(client, s),
+        });
+        if (bloqueo) {
           await client.query('ROLLBACK');
-          const disponibles = Math.max(maxParciales - parcialesExistentes, 0);
-          return res.status(400).json({
-            error: `Solo puede parcializar ${maxParciales} día(s) del período actual (${s.dias_asignados} días − 10 del bloque obligatorio). Ya lleva ${parcialesExistentes} día(s) parcializados y quedan ${disponibles} disponibles para parcializar.`,
-            max_parciales: maxParciales,
-            parciales_usados: parcialesExistentes,
-            parciales_disponibles: disponibles,
-          });
+          return res.status(400).json(bloqueo);
         }
       }
 
@@ -952,6 +936,16 @@ router.patch('/:id/editar', requierePermiso('solicitudes.aprobar'), async (req, 
     const { fromArrastre, fromActual } = tipoNuevo.es_feriado_legal
       ? calcularDistribucion(diasNuevos, arrDisp, actDisp)
       : { fromArrastre: 0, fromActual: diasNuevos };
+    if (tipoNuevo.es_feriado_legal && fromActual > 0 && fromActual < 10) {
+      const bloqueo = errorParcializacion({
+        actualDisponible: actDisp, fromActual, anio: anioNuevo,
+        bloqueTomado: await bloqueObligatorioTomado(client, sNuevo, Number(id)),
+      });
+      if (bloqueo) {
+        await client.query('ROLLBACK');
+        return res.status(400).json(bloqueo);
+      }
+    }
     await client.query(
       aprobada
         ? `UPDATE saldos_funcionarios SET arrastre_usados = arrastre_usados + $1,

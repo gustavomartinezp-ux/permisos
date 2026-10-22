@@ -257,8 +257,8 @@ function construirReporte(funcionario, solicitudes = []) {
 
     const dispAct = saldoFL.dias_asignados - saldoFL.dias_usados - (saldoFL.dias_pendientes || 0);
     const arrDisp = Math.max((saldoFL.saldo_arrastre || 0) - (saldoFL.arrastre_usados || 0) - (saldoFL.arrastre_pendientes || 0), 0);
-    const maxParc = Math.max((saldoFL.dias_asignados || 0) - 10, 0);
-    const parcUsados = saldoFL.dias_parciales_usados || 0;
+    const bloqueTomado = !!(saldoFL.bloque_obligatorio_tomado || saldoFL.bloque_10_dias_cumplido);
+    const parcPermitido = bloqueTomado || dispAct < 10 ? dispAct : dispAct - 10;
 
     const filas = [
       ['Días período actual asignados',    saldoFL.dias_asignados],
@@ -266,10 +266,8 @@ function construirReporte(funcionario, solicitudes = []) {
       ['Días arrastre (año anterior)',      saldoFL.saldo_arrastre || 0],
       ['Días arrastre disponibles',         arrDisp],
       ['Total disponible',                  dispAct + arrDisp],
-      ['Máximo días parcializables',        maxParc],
-      ['Días parcializados ya utilizados',  parcUsados],
-      ['Días parcializables restantes',     Math.max(maxParc - parcUsados, 0)],
-      ['Bloque 10 días consecutivos',       saldoFL.bloque_10_dias_cumplido ? 'CUMPLIDO' : 'PENDIENTE'],
+      ['Días que puede tomar en forma parcial', parcPermitido],
+      ['Bloque 10 días consecutivos',       bloqueTomado ? 'CUMPLIDO' : (dispAct < 10 ? 'NO APLICA' : 'PENDIENTE')],
     ];
 
     autoTable(doc, {

@@ -156,19 +156,25 @@ router.get('/:id', async (req, res) => {
               GREATEST(sf.saldo_arrastre - sf.arrastre_usados - sf.arrastre_pendientes, 0) AS arrastre_disponible,
               (sf.dias_asignados - sf.dias_usados - sf.dias_pendientes
                + GREATEST(sf.saldo_arrastre - sf.arrastre_usados - sf.arrastre_pendientes, 0)) AS total_disponible,
-              GREATEST(sf.dias_asignados - 10, 0) AS max_parciales,
-              COALESCE((
-                SELECT SUM(sol.dias_periodo_actual)
-                FROM solicitudes sol
-                WHERE sol.funcionario_id = sf.funcionario_id
-                  AND sol.tipo_permiso_id = sf.tipo_permiso_id
-                  AND EXTRACT(YEAR FROM sol.fecha_inicio) = sf.anio
-                  AND sol.estado IN ('aprobado','pendiente')
-                  AND sol.dias_periodo_actual > 0
-                  AND sol.dias_periodo_actual < 10
-              ), 0) AS dias_parciales_usados
+              bo.tomado AS bloque_obligatorio_tomado,
+              -- Días del período actual que aún puede pedir en forma parcial
+              -- (< 10): si no ha tomado su bloque de 10 y tiene 10 o más,
+              -- debe reservar esos 10 (ver errorParcializacion).
+              CASE WHEN bo.tomado OR (sf.dias_asignados - sf.dias_usados - sf.dias_pendientes) < 10
+                   THEN (sf.dias_asignados - sf.dias_usados - sf.dias_pendientes)
+                   ELSE (sf.dias_asignados - sf.dias_usados - sf.dias_pendientes) - 10 END AS parcial_permitido
        FROM saldos_funcionarios sf
        JOIN tipos_permisos tp ON sf.tipo_permiso_id = tp.id
+       CROSS JOIN LATERAL (
+         SELECT (sf.bloque_10_dias_cumplido OR sf.bloque_10_planilla OR EXISTS (
+           SELECT 1 FROM solicitudes sol
+           WHERE sol.funcionario_id = sf.funcionario_id
+             AND sol.tipo_permiso_id = sf.tipo_permiso_id
+             AND EXTRACT(YEAR FROM sol.fecha_inicio) = sf.anio
+             AND sol.estado IN ('pendiente','pre_aprobado','aprobado')
+             AND sol.dias_periodo_actual >= 10
+         )) AS tomado
+       ) bo
        WHERE sf.funcionario_id = $1 AND sf.anio = $2 AND tp.es_especial = FALSE AND tp.activo = TRUE
        ORDER BY tp.es_feriado_legal DESC, tp.nombre`,
       [id, anio]

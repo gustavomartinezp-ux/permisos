@@ -139,12 +139,15 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
     ? calcularDistribucion(diasSolicitados, arrastreDisp, actualDisp)
     : null;
 
-  const maxParciales          = saldoSel?.es_feriado_legal ? Math.max((saldoSel.dias_asignados || 0) - 10, 0) : null;
-  const parcialesUsados       = saldoSel?.es_feriado_legal ? (saldoSel.dias_parciales_usados || 0) : 0;
-  const parcialesDisponibles  = maxParciales !== null ? Math.max(maxParciales - parcialesUsados, 0) : null;
+  // Bloque obligatorio de 10 días (solo período actual): si aún no lo toma y
+  // tiene 10 o más días del período, una solicitud parcial (< 10) debe dejarle
+  // al menos 10. Misma regla que el backend (errorParcializacion).
+  const bloqueTomado          = !!(saldoSel?.bloque_obligatorio_tomado || saldoSel?.bloque_10_dias_cumplido);
+  const reservaBloque         = saldoSel?.es_feriado_legal && !bloqueTomado && actualDisp >= 10;
+  const parcialesDisponibles  = reservaBloque ? actualDisp - 10 : actualDisp;
   const fromActual            = distribucion?.fromActual ?? 0;
   const esParcial             = saldoSel?.es_feriado_legal && fromActual > 0 && fromActual < 10;
-  const excedeParcializacion  = esParcial && (parcialesUsados + fromActual) > maxParciales;
+  const excedeParcializacion  = reservaBloque && esParcial && fromActual > parcialesDisponibles;
 
   const saldoInsuficiente = !esEspecial && !!form.tipo_permiso_id
     && (diasSolicitados > totalDisp || excedeParcializacion);
@@ -794,40 +797,16 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
                   </div>
                 )}
 
-                {saldoSel?.es_feriado_legal && maxParciales !== null && (
-                  <div className={`border-t pt-2 mt-1 space-y-1 ${excedeParcializacion ? 'border-red-200' : 'border-brand-200'}`}>
-                    <p className={`text-xs font-medium flex items-center gap-1 ${excedeParcializacion ? 'text-red-600' : 'text-dark-500'}`}>
-                      <Info size={12} />
-                      Días parcializados del período actual
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 h-1.5 bg-dark-200 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all ${excedeParcializacion ? 'bg-red-500' : 'bg-amber-400'}`}
-                          style={{ width: `${Math.min(((parcialesUsados + (esParcial ? fromActual : 0)) / Math.max(maxParciales, 1)) * 100, 100)}%` }}
-                        />
-                      </div>
-                      <span className={`text-xs font-semibold whitespace-nowrap ${excedeParcializacion ? 'text-red-600' : 'text-dark-600'}`}>
-                        {parcialesUsados + (esParcial ? fromActual : 0)} / {maxParciales} días
-                      </span>
-                    </div>
-                    {excedeParcializacion && (
-                      <p className="text-xs text-red-600">
-                        Supera el límite. Solo puede parcializar {parcialesDisponibles} día(s) más del período actual.
-                      </p>
-                    )}
-                    {!excedeParcializacion && esParcial && parcialesDisponibles <= 2 && parcialesDisponibles > 0 && (
-                      <p className="text-xs text-amber-600">
-                        Solo quedan {parcialesDisponibles} día(s) disponibles para parcializar.
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {saldoSel?.es_feriado_legal && !saldoSel?.bloque_10_dias_cumplido && (
-                  <div className="flex items-start gap-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                {reservaBloque && (
+                  <div className={`flex items-start gap-1 text-xs rounded p-2 border ${excedeParcializacion ? 'text-red-700 bg-red-50 border-red-200' : 'text-amber-700 bg-amber-50 border-amber-200'}`}>
                     <AlertCircle size={12} className="flex-shrink-0 mt-0.5" />
-                    Recuerda: debes tomar al menos 10 días hábiles consecutivos del período actual en algún momento del año.
+                    <span>
+                      <strong>Bloque obligatorio:</strong> debe tomar 10 días hábiles seguidos de su feriado {anioPeriodo}.{' '}
+                      {parcialesDisponibles > 0
+                        ? <>De sus {actualDisp} días del período {anioPeriodo} puede pedir hasta <strong>{parcialesDisponibles} día(s)</strong> en forma parcial, o 10 o más días juntos.</>
+                        : <>Con {actualDisp} días del período {anioPeriodo} no puede parcializarlos: solicite <strong>10 o más días juntos</strong>.</>}
+                      {arrastreDisp > 0 && <> Los {arrastreDisp} día(s) de períodos anteriores los puede usar libremente.</>}
+                    </span>
                   </div>
                 )}
 

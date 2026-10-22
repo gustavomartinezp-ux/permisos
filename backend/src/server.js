@@ -29,6 +29,9 @@ const cometidosComisionesRoutes = require('./routes/cometidos-comisiones');
 const { evaluarHitosAntiguedad } = require('./workers/antiguedadWorker');
 
 const app = express();
+// Render atiende detrás de un proxy: sin esto req.ip es la IP del proxy y el
+// límite de inicio de sesión se compartía entre todos los usuarios.
+app.set('trust proxy', 1);
 
 // Orígenes del frontend que pueden llamar a la API. FRONTEND_URL admite varias
 // URLs separadas por coma; el dominio institucional queda siempre permitido

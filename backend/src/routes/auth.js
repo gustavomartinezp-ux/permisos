@@ -2,22 +2,40 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
-const rateLimit = require('express-rate-limit');
+const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 const { pool } = require('../db');
 const { verificarToken } = require('../middleware/auth');
 const { cargarPermisos } = require('../middleware/rbac');
 
 const router = express.Router();
 
-const loginLimiter = rateLimit({
+// Protección contra fuerza bruta. Todo el CESFAM sale a internet por la misma
+// IP, así que limitar solo por IP bloqueaba a todos cuando muchos ingresaban a
+// la vez. Ahora:
+//  - por cuenta (IP + correo): 10 intentos FALLIDOS en 15 min; los ingresos
+//    correctos no cuentan.
+//  - por IP: tope amplio de intentos fallidos (cubre el probar muchas cuentas).
+const claveIp = (req) => ipKeyGenerator(req.ip || '');
+const loginLimiterCuenta = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  limit: 10,
+  skipSuccessfulRequests: true,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Demasiados intentos de inicio de sesión. Intente nuevamente en 15 minutos.' },
+  keyGenerator: (req) => `${claveIp(req)}|${String(req.body?.email || '').trim().toLowerCase()}`,
+  message: { error: 'Demasiados intentos fallidos para esta cuenta. Intente nuevamente en 15 minutos.' },
+});
+const loginLimiterIp = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 200,
+  skipSuccessfulRequests: true,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: claveIp,
+  message: { error: 'Demasiados intentos de inicio de sesión desde esta red. Intente nuevamente en unos minutos.' },
 });
 
-router.post('/login', loginLimiter, [
+router.post('/login', loginLimiterIp, loginLimiterCuenta, [
   body('email').isEmail().withMessage('Email inválido'),
   body('password').notEmpty().withMessage('Contraseña requerida'),
 ], async (req, res) => {

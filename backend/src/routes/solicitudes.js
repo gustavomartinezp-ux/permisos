@@ -20,6 +20,16 @@ const {
 const router = express.Router();
 router.use(verificarToken, cargarPermisos);
 
+// Saldo del período imputado (antes → después) para el formato oficial.
+async function guardarSaldoPeriodo(client, solicitudId, disponibleAntes, dias) {
+  const r = await client.query(
+    `UPDATE solicitudes SET saldo_periodo_antes = $1, saldo_periodo_despues = $2
+     WHERE id = $3 RETURNING *`,
+    [disponibleAntes, Math.max(disponibleAntes - dias, 0), solicitudId]
+  );
+  return r.rows[0];
+}
+
 async function registrarMovimiento(client, {
   funcionarioId, solicitudId = null, tipoPermisoId, tipoMovimiento,
   diasMovimiento, saldoAnterior, saldoNuevo, descripcion, usuarioId,
@@ -87,8 +97,10 @@ router.get('/', async (req, res) => {
          -- Datos del formato oficial, según el movimiento de reserva de esta
          -- solicitud: saldo disponible antes ("Nº TOTAL DÍAS") y después
          -- ("SALDO PENDIENTE"), para reimprimirlo idéntico días después.
-         mov.saldo_anterior AS saldo_total_formulario,
-         mov.saldo_nuevo    AS saldo_pendiente_formulario,
+         -- En feriado se usa el saldo del período imputado (arrastre o actual)
+         -- si está registrado; si no, el total del movimiento.
+         COALESCE(sol.saldo_periodo_antes, mov.saldo_anterior)  AS saldo_total_formulario,
+         COALESCE(sol.saldo_periodo_despues, mov.saldo_nuevo)   AS saldo_pendiente_formulario,
          tp.nombre AS tipo_nombre, tp.codigo AS tipo_codigo, tp.color,
          tp.es_feriado_legal, tp.es_especial, tp.tipo_especial,
          aprobador.nombres AS aprobador_nombres,
@@ -365,11 +377,14 @@ router.post('/', [
           usuarioId: req.usuario.id,
         });
 
+        const arrConSaldo = await guardarSaldoPeriodo(client, solArrastre.rows[0].id, arrastreDisponible, fromArrastre);
+        const actConSaldo = await guardarSaldoPeriodo(client, solActual.rows[0].id, actualDisponible, fromActual);
+
         await client.query('COMMIT');
         return res.status(201).json({
           dividida: true,
-          solicitud_arrastre: solArrastre.rows[0],
-          solicitud_actual: solActual.rows[0],
+          solicitud_arrastre: arrConSaldo,
+          solicitud_actual: actConSaldo,
           distribucion: { fromArrastre, fromActual },
         });
       }
@@ -394,9 +409,13 @@ router.post('/', [
         usuarioId: req.usuario.id,
       });
 
+      const conSaldo = fromActual > 0
+        ? await guardarSaldoPeriodo(client, nuevaSolicitud.rows[0].id, actualDisponible, fromActual)
+        : await guardarSaldoPeriodo(client, nuevaSolicitud.rows[0].id, arrastreDisponible, fromArrastre);
+
       await client.query('COMMIT');
       return res.status(201).json({
-        ...nuevaSolicitud.rows[0],
+        ...conSaldo,
         distribucion: { fromArrastre, fromActual },
       });
     }
@@ -973,10 +992,15 @@ router.patch('/:id/editar', requierePermiso('solicitudes.aprobar'), async (req, 
        SET tipo_permiso_id = $1, fecha_inicio = $2, fecha_fin = $3, dias_solicitados = $4,
            dias_arrastre = $5, dias_periodo_actual = $6, jornada_medio_dia = $7,
            motivo = $8, reemplazante = $9,
-           observaciones = CONCAT_WS(' | ', NULLIF(observaciones, ''), $10::text)
+           observaciones = CONCAT_WS(' | ', NULLIF(observaciones, ''), $10::text),
+           saldo_periodo_antes = $12, saldo_periodo_despues = $13
        WHERE id = $11`,
       [tipo_permiso_id, fecha_inicio, fecha_fin, diasNuevos, fromArrastre, fromActual, jornadaFinal,
-       motivo ?? sol.motivo, reemplazante, cambio, id]
+       motivo ?? sol.motivo, reemplazante, cambio, id,
+       // Feriado de un solo período: saldo de ese período; mixto u otro tipo: total
+       !tipoNuevo.es_feriado_legal || (fromArrastre > 0 && fromActual > 0) ? null : (fromActual > 0 ? actDisp : arrDisp),
+       !tipoNuevo.es_feriado_legal || (fromArrastre > 0 && fromActual > 0) ? null
+         : Math.max((fromActual > 0 ? actDisp - fromActual : arrDisp - fromArrastre), 0)]
     );
 
     // Bloque obligatorio de 10 días de feriado (si una aprobada entra o sale de feriado)

@@ -245,9 +245,16 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
       });
       // Formato oficial: "Nº TOTAL DÍAS" = saldo disponible antes de pedir,
       // "SALDO PENDIENTE" = lo que le queda (ej. 1,5 − 0,5 = 1).
+      // En feriado legal se informa el saldo del período al que se imputan
+      // los días (arrastre o período actual), no la suma de ambos.
+      const saldoDePeriodo = (antes, dias) => ({ total_dias: antes, saldo_pendiente: Math.max(antes - dias, 0) });
+      const dist = data.distribucion;
       const saldoInfo = {
-        total_dias:     totalDisp,
-        saldo_pendiente: Math.max(totalDisp - diasSolicitados, 0),
+        ...(saldoSel?.es_feriado_legal && dist
+          ? (dist.fromActual > 0
+              ? saldoDePeriodo(actualDisp, dist.fromActual)
+              : saldoDePeriodo(arrastreDisp, dist.fromArrastre))
+          : saldoDePeriodo(totalDisp, diasSolicitados)),
         tiene_arrastre:  (saldoSel?.saldo_arrastre || 0) > 0,
       };
 
@@ -264,9 +271,9 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
           // Cada tramo descuenta del saldo que dejó el anterior
           tramos: [
             { ...data.solicitud_arrastre, tipo_nombre: saldoSel?.tipo_nombre, es_feriado_legal: true, _etiqueta: `${data.distribucion.fromArrastre} día(s) de arrastre (período anterior)`,
-              _saldoInfo: { total_dias: totalDisp, saldo_pendiente: totalDisp - data.distribucion.fromArrastre } },
+              _saldoInfo: saldoDePeriodo(arrastreDisp, data.distribucion.fromArrastre) },
             { ...data.solicitud_actual,   tipo_nombre: saldoSel?.tipo_nombre, es_feriado_legal: true, _etiqueta: `${data.distribucion.fromActual} día(s) del período actual`,
-              _saldoInfo: { total_dias: totalDisp - data.distribucion.fromArrastre, saldo_pendiente: Math.max(totalDisp - diasSolicitados, 0) } },
+              _saldoInfo: saldoDePeriodo(actualDisp, data.distribucion.fromActual) },
           ],
         });
       } else {

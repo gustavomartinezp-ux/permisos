@@ -364,6 +364,16 @@ const migrations = [
     `,
   },
   {
+    // Saldo del PERÍODO al que se imputa la solicitud de feriado (arrastre o
+    // período actual), antes y después: lo imprime el formato oficial en vez
+    // de la suma de ambos períodos.
+    id: 'solicitudes_saldo_periodo_v1',
+    sql: `
+      ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS saldo_periodo_antes NUMERIC(6,1);
+      ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS saldo_periodo_despues NUMERIC(6,1);
+    `,
+  },
+  {
     // Bloque obligatorio de 10 días ya tomado según la planilla histórica de
     // RRHH (antes del sistema). Se carga aparte; independiente del cálculo
     // automático bloque_10_dias_cumplido, que se recalcula al aprobar.

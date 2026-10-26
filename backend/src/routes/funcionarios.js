@@ -8,6 +8,20 @@ const { EMAIL_REGEX, hashPasswordDefault } = require('../utils/credenciales');
 
 const router = express.Router();
 const SEXOS = ['Femenino', 'Masculino'];
+const TIPOS_CONTRATO = ['Indefinido', 'Plazo Fijo', 'Honorarios', 'Suplencia'];
+
+// Segundo contrato (opcional): tipo + horas (+ término si es a plazo). La suma
+// de horas de ambos contratos no puede superar 44 semanales.
+function normalizarContrato2(body) {
+  const tipo = TIPOS_CONTRATO.includes(body.tipo_contrato_2) ? body.tipo_contrato_2 : null;
+  if (!tipo) return { valores: [null, null, null] };
+  const h2 = parseInt(body.horas_contrato_2, 10);
+  if (!(h2 >= 1 && h2 <= 44)) return { error: 'Indique las horas del segundo contrato (entre 1 y 44)' };
+  const h1 = parseInt(body.horas_contrato, 10) || 0;
+  if (h1 + h2 > 44) return { error: `La suma de horas de ambos contratos (${h1} + ${h2}) supera las 44 horas semanales` };
+  const termino = ['Plazo Fijo', 'Honorarios', 'Suplencia'].includes(tipo) ? (body.fecha_termino_contrato_2 || null) : null;
+  return { valores: [tipo, h2, termino] };
+}
 
 // El menú y los permisos salen de los roles RBAC (user_roles), no del rol
 // legacy usuarios.rol: al nombrar supervisor (jefe de sector/área o referente
@@ -72,6 +86,7 @@ router.get('/', async (req, res) => {
       `SELECT
          f.id, f.rut, f.nombres, f.apellidos, f.cargo, f.fecha_ingreso, f.activo, f.sector, f.area,
          f.tipo_contrato, f.horas_contrato, f.reemplaza_a, f.grupo_contractual, f.sexo,
+         f.tipo_contrato_2, f.horas_contrato_2,
          f.convenio_honorarios, f.prestacion, f.fecha_termino_contrato,
          s.nombre AS servicio,
          d.nombre AS dispositivo, d.id AS dispositivo_id,
@@ -247,6 +262,8 @@ router.post('/', requierePermiso('funcionarios.crear'), [
     escalafon, categoria, nivel,
     suplencia_fecha_inicio, motivo_reemplazo, sexo,
   } = req.body;
+  const contrato2 = normalizarContrato2(req.body);
+  if (contrato2.error) return res.status(400).json({ error: contrato2.error });
   const client = await pool.connect();
 
   try {
@@ -258,8 +275,9 @@ router.post('/', requierePermiso('funcionarios.crear'), [
           sector, area, tipo_contrato, horas_contrato, dispositivo_id, reemplaza_a,
           fecha_nacimiento, telefono, direccion_particular, numero_reloj,
           convenio_honorarios, prestacion, fecha_termino_contrato,
-          escalafon, categoria, nivel, sexo)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23) RETURNING *`,
+          escalafon, categoria, nivel, sexo,
+          tipo_contrato_2, horas_contrato_2, fecha_termino_contrato_2)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26) RETURNING *`,
       [
         rut, nombres, apellidos, cargo,
         servicio_id || null, fecha_ingreso || null,
@@ -271,6 +289,7 @@ router.post('/', requierePermiso('funcionarios.crear'), [
         convenio_honorarios || null, prestacion || null, fecha_termino_contrato || null,
         escalafon || null, categoria || null, nivel || null,
         SEXOS.includes(sexo) ? sexo : null,
+        ...contrato2.valores,
       ]
     );
 
@@ -522,6 +541,8 @@ router.put('/:id', async (req, res, next) => {
   if (activo === false && req.usuario.rol !== 'admin') {
     return res.status(403).json({ error: 'Solo el administrador puede desactivar funcionarios' });
   }
+  const contrato2 = normalizarContrato2(req.body);
+  if (!req.edicionBasica && contrato2.error) return res.status(400).json({ error: contrato2.error });
 
   const client = await pool.connect();
   try {
@@ -544,7 +565,10 @@ router.put('/:id', async (req, res, next) => {
                fecha_nacimiento=$13, telefono=$14, direccion_particular=$15, numero_reloj=$16,
                convenio_honorarios=$17, prestacion=$18, fecha_termino_contrato=$19,
                escalafon=$20, categoria=$21, nivel=$22,
-               sexo = COALESCE($24, sexo)
+               sexo = COALESCE($24, sexo),
+               tipo_contrato_2          = CASE WHEN $28 THEN tipo_contrato_2 ELSE $25 END,
+               horas_contrato_2         = CASE WHEN $28 THEN horas_contrato_2 ELSE $26::int END,
+               fecha_termino_contrato_2 = CASE WHEN $28 THEN fecha_termino_contrato_2 ELSE $27::date END
            WHERE id=$23 RETURNING *`,
           [
             nombres, apellidos, cargo,
@@ -569,6 +593,9 @@ router.put('/:id', async (req, res, next) => {
             nivel || null,
             req.params.id,
             SEXOS.includes(sexo) ? sexo : null,
+            ...contrato2.valores,
+            // Sin el campo en el cuerpo (página antigua en caché): conservar el 2° contrato
+            !('tipo_contrato_2' in req.body),
           ]
         );
 

@@ -251,6 +251,11 @@ function FuncionarioCard({ funcionario, index, onSolicitar, grupo, puedeEditar, 
                   {funcionario.tipo_contrato}
                 </span>
               )}
+              {funcionario.tipo_contrato_2 && (
+                <span className="text-xs px-1.5 py-0.5 rounded-full font-medium bg-dark-100 text-dark-600" title="Segundo contrato">
+                  + {funcionario.tipo_contrato_2}{funcionario.horas_contrato_2 ? ` ${funcionario.horas_contrato_2}h` : ''}
+                </span>
+              )}
             </div>
             <p className="text-xs text-dark-500">{funcionario.cargo}</p>
             {funcionario.servicio && <p className="text-xs text-dark-400">{funcionario.servicio}</p>}

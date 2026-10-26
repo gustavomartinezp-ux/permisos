@@ -516,6 +516,20 @@ export default function FuncionarioDetalle() {
                   {funcionario.horas_contrato}h/sem
                 </span>
               )}
+              {funcionario.tipo_contrato_2 && (
+                <>
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${CONTRATO_COLORS[funcionario.tipo_contrato_2] || 'bg-dark-100 text-dark-600'}`}>
+                    + {funcionario.tipo_contrato_2}
+                  </span>
+                  {funcionario.horas_contrato_2 && (
+                    <span className="text-xs text-dark-500 flex items-center gap-1">
+                      <Clock size={11} />
+                      {funcionario.horas_contrato_2}h/sem
+                      {funcionario.horas_contrato && <> · total {Number(funcionario.horas_contrato) + Number(funcionario.horas_contrato_2)}h</>}
+                    </span>
+                  )}
+                </>
+              )}
               {funcionario.tipo_contrato === 'Suplencia' && funcionario.reemplaza_nombres && (
                 <span className="text-xs text-purple-600 font-medium">
                   Reemplaza a: {funcionario.reemplaza_nombres} {funcionario.reemplaza_apellidos}

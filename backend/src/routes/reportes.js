@@ -284,7 +284,7 @@ router.get('/exportar/funcionarios', requierePermiso('reportes.ver_globales', 'a
     const ws = wb.addWorksheet('Funcionarios', { views: [{ state: 'frozen', ySplit: 3 }] });
 
     // Título institucional
-    ws.mergeCells('A1:T1');
+    ws.mergeCells('A1:U1');
     const t1 = ws.getCell('A1');
     t1.value = 'CESFAM LOS CERROS — TALCAHUANO  |  Reporte de Funcionarios';
     t1.font  = { bold: true, size: 13, color: { argb: 'FFFFFFFF' } };
@@ -292,7 +292,7 @@ router.get('/exportar/funcionarios', requierePermiso('reportes.ver_globales', 'a
     t1.alignment = { horizontal: 'center', vertical: 'middle' };
     ws.getRow(1).height = 30;
 
-    ws.mergeCells('A2:T2');
+    ws.mergeCells('A2:U2');
     const t2 = ws.getCell('A2');
     t2.value = `Año ${anio}  |  Generado: ${new Date().toLocaleString('es-CL')}  |  Por: ${req.usuario.email || ''}`;
     t2.font  = { italic: true, size: 10, color: { argb: 'FFFFFFFF' } };
@@ -313,6 +313,7 @@ router.get('/exportar/funcionarios', requierePermiso('reportes.ver_globales', 'a
       { h: 'Dispositivo',   k: 'dispositivo_nombre', width: 18 },
       { h: 'Tipo Contrato', k: 'tipo_contrato',      width: 18 },
       { h: 'Hrs Contrato',  k: 'horas_contrato',     width: 12 },
+      { h: '2° Contrato',   k: 'contrato_2',         width: 18 },
       { h: 'Fecha Ingreso', k: 'fecha_ingreso',      width: 14 },
       { h: 'Activo',        k: 'activo',             width: 9  },
       { h: 'Email',         k: 'usuario_email',      width: 28 },
@@ -343,6 +344,7 @@ router.get('/exportar/funcionarios', requierePermiso('reportes.ver_globales', 'a
         f.id, f.rut, f.apellidos, f.nombres, f.sexo || '', f.cargo,
         f.sector, f.area, f.servicio_nombre, f.dispositivo_nombre,
         f.tipo_contrato, f.horas_contrato,
+        f.tipo_contrato_2 ? `${f.tipo_contrato_2} ${f.horas_contrato_2 || ''} h`.trim() : '',
         f.fecha_ingreso ? new Date(f.fecha_ingreso).toLocaleDateString('es-CL') : '',
         f.activo ? 'Activo' : 'Inactivo',
         f.usuario_email, f.usuario_rol,

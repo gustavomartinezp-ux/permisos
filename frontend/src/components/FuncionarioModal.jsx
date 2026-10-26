@@ -109,6 +109,7 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
     telefono: '', direccion_particular: '', numero_reloj: '',
     tipo_contrato: tipoContratoInicial,
     horas_contrato: '', dispositivo_id: '', reemplaza_a: '',
+    tipo_contrato_2: '', horas_contrato_2: '',
     sector: '', area: '', activo: true,
     convenio_honorarios: '', prestacion: '',
     escalafon: '', categoria: '', nivel: '',
@@ -117,6 +118,7 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
     fecha_ingreso: normFecha(funcEdit?.fecha_ingreso),
     fecha_nacimiento: normFecha(funcEdit?.fecha_nacimiento),
     fecha_termino_contrato: normFecha(funcEdit?.fecha_termino_contrato),
+    fecha_termino_contrato_2: normFecha(funcEdit?.fecha_termino_contrato_2),
     rol_sistema: funcEdit?.usuario_rol || 'funcionario',
     tipo_supervisor: funcEdit?.supervisor_sector
       ? 'sector'
@@ -155,6 +157,8 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
   }, []);
 
   const set = (key, val) => setForm(f => ({ ...f, [key]: val }));
+  const [tieneContrato2, setTieneContrato2] = useState(!!funcEdit?.tipo_contrato_2);
+  const horasTotales = (parseInt(form.horas_contrato, 10) || 0) + (tieneContrato2 ? (parseInt(form.horas_contrato_2, 10) || 0) : 0);
 
   // "Otra cantidad" de horas: se lleva aparte del valor, porque al escribir el
   // número el campo dejaba de valer 'otro' y el input manual desaparecía.
@@ -326,6 +330,46 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
                     <div>
                       <label className="block text-xs font-medium text-dark-700 mb-1.5">Horas (manual)</label>
                       <input type="number" min="1" max="44" step="1" value={form.horas_contrato ?? ''} onChange={e => set('horas_contrato', e.target.value)} className="input-field" placeholder="Ej: 5" autoFocus />
+                    </div>
+                  )}
+
+                  {/* Segundo contrato (mismo funcionario, un solo saldo) */}
+                  <div className="col-span-2">
+                    <label className="inline-flex items-center gap-2 text-xs font-medium text-dark-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={tieneContrato2}
+                        onChange={e => {
+                          setTieneContrato2(e.target.checked);
+                          if (!e.target.checked) setForm(f => ({ ...f, tipo_contrato_2: '', horas_contrato_2: '', fecha_termino_contrato_2: '' }));
+                        }}
+                      />
+                      Tiene un segundo contrato (ej. 22 h Indefinido + 22 h Plazo Fijo)
+                    </label>
+                  </div>
+                  {tieneContrato2 && (
+                    <div className="col-span-2 grid grid-cols-2 gap-3 p-3 bg-dark-50 border border-dark-200 rounded-xl">
+                      <div>
+                        <label className="block text-xs font-medium text-dark-700 mb-1.5">Tipo del 2° contrato</label>
+                        <select value={form.tipo_contrato_2 || ''} onChange={e => set('tipo_contrato_2', e.target.value)} className="input-field">
+                          <option value="">Seleccionar…</option>
+                          {TIPOS_CONTRATO.map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-dark-700 mb-1.5">Horas del 2° contrato</label>
+                        <input type="number" min="1" max="44" step="1" value={form.horas_contrato_2 ?? ''} onChange={e => set('horas_contrato_2', e.target.value)} className="input-field" placeholder="Ej: 22" />
+                      </div>
+                      {['Plazo Fijo', 'Honorarios', 'Suplencia'].includes(form.tipo_contrato_2) && (
+                        <div>
+                          <label className="block text-xs font-medium text-dark-700 mb-1.5">Término del 2° contrato</label>
+                          <input type="date" value={form.fecha_termino_contrato_2 || ''} onChange={e => set('fecha_termino_contrato_2', e.target.value)} className="input-field" />
+                        </div>
+                      )}
+                      <p className={`col-span-2 text-xs ${horasTotales > 44 ? 'text-red-600 font-medium' : 'text-dark-500'}`}>
+                        Total semanal: {horasTotales} h{horasTotales > 44 ? ' — supera las 44 horas permitidas' : ''}.
+                        {' '}El funcionario mantiene un solo saldo de feriado y permisos.
+                      </p>
                     </div>
                   )}
 

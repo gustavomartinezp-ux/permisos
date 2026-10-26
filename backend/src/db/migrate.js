@@ -364,6 +364,16 @@ const migrations = [
     `,
   },
   {
+    // Segundo contrato del mismo funcionario (ej. 22 h Indefinido + 22 h Plazo
+    // Fijo). Es informativo: el funcionario mantiene un único saldo y cuenta.
+    id: 'funcionarios_contrato_2_v1',
+    sql: `
+      ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS tipo_contrato_2 VARCHAR(30);
+      ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS horas_contrato_2 INTEGER;
+      ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS fecha_termino_contrato_2 DATE;
+    `,
+  },
+  {
     // Saldo del PERÍODO al que se imputa la solicitud de feriado (arrastre o
     // período actual), antes y después: lo imprime el formato oficial en vez
     // de la suma de ambos períodos.

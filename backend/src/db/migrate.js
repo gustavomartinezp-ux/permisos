@@ -364,6 +364,11 @@ const migrations = [
     `,
   },
   {
+    // Las Jornadas pueden solicitarse por medio día (AM o PM)
+    id: 'jornadas_medio_dia_v1',
+    sql: `UPDATE tipos_permisos SET permite_medio_dia = TRUE WHERE codigo = 'JORNADAS';`,
+  },
+  {
     // Segundo sector del funcionario (atiende en 2 sectores): lo ven los
     // supervisores de ambos.
     id: 'funcionarios_sector_2_v1',

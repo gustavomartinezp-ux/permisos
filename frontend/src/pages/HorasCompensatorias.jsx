@@ -4,10 +4,11 @@ import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
   Plus, X, Clock, CheckCircle2, XCircle, AlertCircle,
-  Trash2, Calendar, Users, TrendingUp, Hourglass, ChevronDown, ChevronUp,
+  Trash2, Calendar, Users, TrendingUp, Hourglass, ChevronDown, ChevronUp, FileDown,
 } from 'lucide-react';
 import { horasCompensatoriasApi, solicitudesCompensacionApi, funcionariosApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { descargarFormatoCompensatorio } from '../utils/formatosEscaneados';
 import toast from 'react-hot-toast';
 
 const TIPO_DIA_BADGE = {
@@ -178,6 +179,7 @@ function RegistrarHorasModal({ funcionarios, onClose, onSuccess }) {
 function SolicitarCompModal({ funcionario, saldo, registros = [], onClose, onSuccess }) {
   const [horas, setHoras]   = useState('');
   const [fecha, setFecha]   = useState('');
+  const [horaInicio, setHoraInicio] = useState('');
   const [motivo, setMotivo] = useState('');
   const [cargando, setCargando] = useState(false);
   const [error, setError]       = useState('');
@@ -225,6 +227,7 @@ function SolicitarCompModal({ funcionario, saldo, registros = [], onClose, onSuc
         funcionario_id:    funcionario.id,
         fecha_jornada:     fecha,
         horas_solicitadas: horasNum,
+        hora_inicio:       horaInicio || undefined,
         motivo,
       });
       toast.success('Solicitud registrada correctamente');
@@ -321,6 +324,26 @@ function SolicitarCompModal({ funcionario, saldo, registros = [], onClose, onSuc
             <input type="date" value={fecha}
               onChange={(e) => setFecha(e.target.value)}
               className="input-field" required />
+          </div>
+
+          {/* Hora de inicio (va en el formato oficial: "a partir de las __ hrs.") */}
+          <div>
+            <label className="block text-xs font-medium text-dark-700 mb-1.5">
+              <Clock size={12} className="inline mr-1" />
+              Desde las (hora de inicio)
+            </label>
+            <input type="time" value={horaInicio}
+              onChange={(e) => setHoraInicio(e.target.value)}
+              className="input-field" />
+            {horaInicio && horasNum > 0 && (
+              <p className="text-xs text-dark-500 mt-1">
+                Hasta las {(() => {
+                  const [h, m] = horaInicio.split(':').map(Number);
+                  const t = h * 60 + m + horasNum * 60;
+                  return `${String(Math.floor(t / 60) % 24).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+                })()} hrs.
+              </p>
+            )}
           </div>
 
           {/* Preview FIFO */}
@@ -610,6 +633,11 @@ export default function HorasCompensatorias() {
                     {sol.motivo && <p className="text-xs text-dark-400 truncate">{sol.motivo}</p>}
                   </div>
                   <div className="flex items-center gap-1.5">
+                    <button onClick={() => descargarFormatoCompensatorio(sol, sol)}
+                      className="p-1.5 rounded-lg bg-dark-50 text-dark-500 hover:bg-dark-100 transition-colors"
+                      title="Descargar formato de descanso compensatorio">
+                      <FileDown size={16} />
+                    </button>
                     <button onClick={() => aprobarSolicitud(sol.id)} disabled={procesando === sol.id}
                       className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors disabled:opacity-50"
                       title="Aprobar">
@@ -762,6 +790,13 @@ export default function HorasCompensatorias() {
                   </div>
                   {sol.motivo && <p className="text-xs text-dark-400 truncate mt-0.5">{sol.motivo}</p>}
                 </div>
+                {sol.estado !== 'cancelado' && sol.estado !== 'rechazado' && (
+                  <button onClick={() => descargarFormatoCompensatorio(sol, sol)}
+                    className="p-1.5 rounded-lg hover:bg-dark-100 text-dark-400 hover:text-dark-700 transition-colors"
+                    title="Descargar formato de descanso compensatorio">
+                    <FileDown size={15} />
+                  </button>
+                )}
                 {sol.estado === 'pendiente' && (
                   <button onClick={() => cancelarSolicitud(sol.id)} disabled={procesando === sol.id}
                     className="p-1.5 rounded-lg hover:bg-red-100 text-dark-400 hover:text-red-600 transition-colors"

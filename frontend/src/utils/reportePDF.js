@@ -2,7 +2,8 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { construirFormatoAdministrativo, construirFormatoFeriado, construirFormatoCapacitacion, construirFormatoTraspaso } from './formatosDAS';
+import { construirFormatoAdministrativo, construirFormatoFeriado, construirFormatoTraspaso } from './formatosDAS';
+import { construirFormatoCapacitacionDAS } from './formatosEscaneados';
 
 const COLOR_PRIMARIO  = [30, 64, 175];   // brand blue
 const COLOR_GRIS      = [100, 116, 139];
@@ -843,7 +844,7 @@ function construirFormularioOficial(solicitud, funcionario, saldoInfo = {}) {
   const tipo = detectarTipoFormulario(solicitud);
   const folio = codigoDoc(solicitud);
   if (tipo === 'feriado')      return construirFormatoFeriado(solicitud, funcionario, saldoInfo, folio);
-  if (tipo === 'capacitacion') return construirFormatoCapacitacion(solicitud, funcionario, saldoInfo, folio);
+  if (tipo === 'capacitacion') return construirFormatoCapacitacionDAS(solicitud, funcionario, saldoInfo, folio);
   if (tipo === 'especial')     return construirFormularioEspecial(solicitud, funcionario);
   return construirFormatoAdministrativo(solicitud, funcionario, saldoInfo, folio);
 }

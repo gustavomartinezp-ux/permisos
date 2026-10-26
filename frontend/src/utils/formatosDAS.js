@@ -5,7 +5,7 @@ import { ENCABEZADO_DAS_PNG } from './encabezadoDAS';
 
 // ═════════════════════════════════════════════════════════════════════════════
 // Formatos oficiales DAS Talcahuano (Feriado Legal, Permiso Administrativo y
-// Permiso de Capacitación), calcados de las plantillas Word institucionales:
+// Traspaso de feriado), calcados de las plantillas Word institucionales:
 // mismo tamaño de hoja (8,5" x 12,6"), marco, encabezado, rótulos y líneas en
 // las mismas coordenadas (puntos, medidas tomadas del documento original).
 // Cada plantilla declara sus rótulos fijos, líneas de llenado y el campo que
@@ -252,44 +252,6 @@ const FERIADO = (() => {
   };
 })();
 
-const CAPACITACION = (() => {
-  const f = firmas(586, 677, 605, 687, 2);
-  return {
-    titulo: 'SOLICITUD PERMISO DE CAPACITACIÓN',
-    marco: [23.8, 29.0, 592.3, 875.7], encabezadoY: 9, tituloY: 97,
-    observacionY: 807, pieY: 864,
-    rotulos: [
-      [65, 148, 'NOMBRE COMPLETO:'],
-      [65, 175, 'R.U.T:'], [351, 178, 'JORNADA:'], [490, 178, 'HRS.'],
-      [65, 214, 'CARGO:'],
-      [66, 245, 'TIPO CONTRATO: INDEFINIDO'], [298, 245, 'PLAZO FIJO'], [426, 245, 'REEMPLAZO'],
-      [66, 277, 'CESFAM:'],
-      [65, 310, 'SOLICITO:'], [179, 310, 'DÍA (S) DE PERMISO DE CAPACITACIÓN CON GOCE DE'],
-      [65, 334, 'REMUNERACIONES DESDE:'], [276, 334, 'HASTA:'],
-      [64, 378, 'NOMBRE O ACTIVIDAD DE CAPACITACIÓN:'],
-      [66, 473, 'Nº DE TOTAL DÍAS:'],
-      [65, 492, 'Nº DÍAS SOLICITADOS:'],
-      [63, 510, 'SALDO PENDIENTE:'],
-      [66, 745, 'TALCAHUANO:'],
-      ...f.rotulos,
-    ],
-    campos: {
-      nombre: [177, 568, 159.5], rut: [95, 304, 185.5], jornada: [403, 487, 189.5], cargo: [106, 566, 225.5],
-      indefinido: [226, 295, 256.5], plazo: [366, 423, 256.5], reemplazo: [492, 568, 256.5],
-      cesfam: [112, 567, 288.5],
-      dias: [120, 177, 320.5],
-      desde: [209, 273, 345.5], hasta: [315, 409, 345.5],
-      actividad: [289, 563, 389.5], actividad2: [64, 563, 409.5],
-      total: [189, 249, 484], solicitados: [192, 250, 503], saldo: [189, 249, 521.5],
-      ciudad: [141, 318, 756.5],
-    },
-    marcas: ['indefinido', 'plazo', 'reemplazo', 'dias', 'jornada', 'total', 'solicitados', 'saldo'],
-    // La actividad continúa en una segunda línea solo si no cabe en la primera
-    opcionales: ['actividad2'],
-    lineas: f.lineas,
-  };
-})();
-
 // ─── Builders públicos ───────────────────────────────────────────────────────
 
 export function construirFormatoAdministrativo(solicitud, funcionario, saldoInfo = {}, folio) {
@@ -392,21 +354,5 @@ export function construirFormatoTraspaso(solicitud, funcionario, saldoInfo = {},
     ...v,
     anioCalendario: String(anioCalendario),
     anioAcumulado: String(anioCalendario),
-  }, folio);
-}
-
-export function construirFormatoCapacitacion(solicitud, funcionario, saldoInfo = {}, folio) {
-  const v = valoresBase(solicitud, funcionario, saldoInfo);
-  // El nombre de la actividad se registra en el campo "motivo" de la solicitud;
-  // si es largo continúa en la línea siguiente.
-  const doc = new jsPDF({ unit: 'pt', format: PAGINA });
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
-  const actividad = (solicitud.motivo || '').trim();
-  const [linea1 = '', ...resto] = actividad ? doc.splitTextToSize(actividad, 270) : [];
-  return dibujarFormato(CAPACITACION, {
-    ...v,
-    actividad: linea1,
-    actividad2: resto.join(' '),
   }, folio);
 }

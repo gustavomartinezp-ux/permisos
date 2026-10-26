@@ -364,6 +364,12 @@ const migrations = [
     `,
   },
   {
+    // Hora desde la que se toma el descanso compensatorio (formato DAS:
+    // "a partir de las __ hrs."); la hora de término = inicio + horas.
+    id: 'solicitudes_compensacion_hora_inicio_v1',
+    sql: `ALTER TABLE solicitudes_compensacion ADD COLUMN IF NOT EXISTS hora_inicio TIME;`,
+  },
+  {
     // Las Jornadas pueden solicitarse por medio día (AM o PM)
     id: 'jornadas_medio_dia_v1',
     sql: `UPDATE tipos_permisos SET permite_medio_dia = TRUE WHERE codigo = 'JORNADAS';`,

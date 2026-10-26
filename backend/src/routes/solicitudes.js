@@ -93,6 +93,7 @@ router.get('/', async (req, res) => {
          sol.*,
          f.nombres, f.apellidos, f.rut, f.cargo, f.sector, f.area AS funcionario_area,
          f.tipo_contrato, f.horas_contrato, d.nombre AS dispositivo,
+         f.escalafon, f.tipo_contrato_2, f.horas_contrato_2,
          s.nombre AS servicio,
          -- Datos del formato oficial, según el movimiento de reserva de esta
          -- solicitud: saldo disponible antes ("Nº TOTAL DÍAS") y después

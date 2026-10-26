@@ -88,9 +88,13 @@ router.get('/', async (req, res) => {
     const result = await pool.query(
       `SELECT sc.*,
               f.nombres, f.apellidos, f.rut, f.sector,
+              -- Datos para el formato oficial de descanso compensatorio
+              f.cargo, f.escalafon, f.tipo_contrato, f.horas_contrato,
+              f.tipo_contrato_2, f.horas_contrato_2, disp.nombre AS dispositivo,
               aprobador.nombres AS aprobador_nombres, aprobador.apellidos AS aprobador_apellidos
        FROM solicitudes_compensacion sc
        JOIN funcionarios f ON sc.funcionario_id = f.id
+       LEFT JOIN dispositivos disp ON disp.id = f.dispositivo_id
        LEFT JOIN usuarios u ON sc.aprobado_por = u.id
        LEFT JOIN funcionarios aprobador ON u.funcionario_id = aprobador.id
        WHERE ${where}
@@ -131,6 +135,7 @@ router.get('/', async (req, res) => {
 // ─── POST /api/solicitudes-compensacion ──────────────────────────────────────
 router.post('/', async (req, res) => {
   const { funcionario_id, fecha_jornada, horas_solicitadas, motivo } = req.body;
+  const horaInicio = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(req.body.hora_inicio || '')) ? req.body.hora_inicio : null;
 
   // Validar funcionario_id
   if (!funcionario_id || !Number.isInteger(Number(funcionario_id))) {
@@ -165,12 +170,13 @@ router.post('/', async (req, res) => {
   try {
     const result = await pool.query(
       `INSERT INTO solicitudes_compensacion
-         (funcionario_id, fecha_inicio, fecha_fin, horas_solicitadas, motivo, saldo_anterior, saldo_restante)
-       VALUES ($1,$2,$2,$3,$4,$5,$6) RETURNING *`,
+         (funcionario_id, fecha_inicio, fecha_fin, horas_solicitadas, motivo, saldo_anterior, saldo_restante, hora_inicio)
+       VALUES ($1,$2,$2,$3,$4,$5,$6,$7) RETURNING *`,
       [
         Number(funcionario_id), fecha_jornada, horasInt, motivo || null,
         saldo.saldo_disponible,
         saldo.saldo_disponible - horasInt,
+        horaInicio,
       ]
     );
     res.status(201).json(result.rows[0]);

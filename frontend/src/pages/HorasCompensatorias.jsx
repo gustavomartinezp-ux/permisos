@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { horasCompensatoriasApi, solicitudesCompensacionApi, funcionariosApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { descargarFormatoCompensatorio } from '../utils/formatosEscaneados';
+import { descargarFormatoCompensatorio } from '../utils/formatosDASCarta';
 import toast from 'react-hot-toast';
 
 const TIPO_DIA_BADGE = {

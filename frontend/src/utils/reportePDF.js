@@ -3,7 +3,7 @@ import autoTable from 'jspdf-autotable';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { construirFormatoAdministrativo, construirFormatoFeriado, construirFormatoTraspaso } from './formatosDAS';
-import { construirFormatoCapacitacionDAS } from './formatosEscaneados';
+import { construirFormatoCapacitacionDAS } from './formatosDASCarta';
 
 const COLOR_PRIMARIO  = [30, 64, 175];   // brand blue
 const COLOR_GRIS      = [100, 116, 139];

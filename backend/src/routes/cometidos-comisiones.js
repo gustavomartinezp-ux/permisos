@@ -27,7 +27,7 @@ router.get('/', async (req, res) => {
       if (req.usuario.rol === 'supervisor' && !tieneVisibilidadGlobal(req)) {
         if (req.usuario.sector) {
           params.push(req.usuario.sector);
-          where.push(`f.sector = $${params.length}`);
+          where.push(`$${params.length} IN (f.sector, f.sector_2)`);
         } else if (req.usuario.area) {
           params.push(req.usuario.area);
           where.push(`f.area = $${params.length}`);
@@ -165,7 +165,7 @@ router.patch('/:id/aprobar-jefatura', requierePermiso('solicitudes.pre_aprobar',
   }
   try {
     const check = await pool.query(
-      `SELECT cc.id, cc.funcionario_id, f.sector, f.area
+      `SELECT cc.id, cc.funcionario_id, f.sector, f.sector_2, f.area
        FROM cometidos_comisiones cc JOIN funcionarios f ON f.id = cc.funcionario_id
        WHERE cc.id = $1 AND cc.estado = 'pendiente'`,
       [req.params.id]
@@ -179,7 +179,7 @@ router.patch('/:id/aprobar-jefatura', requierePermiso('solicitudes.pre_aprobar',
 
     if (!tieneVisibilidadGlobal(req)) {
       const scope = req.usuario.scopeEfectivo || { sector: req.usuario.sector, area: req.usuario.area };
-      if (scope.sector && sol.sector !== scope.sector) {
+      if (scope.sector && sol.sector !== scope.sector && sol.sector_2 !== scope.sector) {
         return res.status(403).json({ error: 'No puede aprobar solicitudes de otro sector' });
       }
       if (!scope.sector && scope.area && sol.area !== scope.area) {

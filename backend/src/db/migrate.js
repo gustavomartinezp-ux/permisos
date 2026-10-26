@@ -364,6 +364,12 @@ const migrations = [
     `,
   },
   {
+    // Segundo sector del funcionario (atiende en 2 sectores): lo ven los
+    // supervisores de ambos.
+    id: 'funcionarios_sector_2_v1',
+    sql: `ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS sector_2 VARCHAR(20);`,
+  },
+  {
     // Segundo contrato del mismo funcionario (ej. 22 h Indefinido + 22 h Plazo
     // Fijo). Es informativo: el funcionario mantiene un único saldo y cuenta.
     id: 'funcionarios_contrato_2_v1',

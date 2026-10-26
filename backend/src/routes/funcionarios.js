@@ -9,6 +9,9 @@ const { EMAIL_REGEX, hashPasswordDefault } = require('../utils/credenciales');
 const router = express.Router();
 const SEXOS = ['Femenino', 'Masculino'];
 const TIPOS_CONTRATO = ['Indefinido', 'Plazo Fijo', 'Honorarios', 'Suplencia'];
+const { SECTORES_VALIDOS } = require('../config/catalogos');
+// Segundo sector: debe ser válido y distinto del principal
+const sector2Valido = (s2, s1) => (SECTORES_VALIDOS.includes(s2) && s2 !== s1 ? s2 : null);
 
 // Segundo contrato (opcional): tipo + horas (+ término si es a plazo). La suma
 // de horas de ambos contratos no puede superar 44 semanales.
@@ -65,7 +68,7 @@ router.get('/', async (req, res) => {
     // visibilidad global (ADMIN_TI/RRHH_ADMIN/AUDITOR) por encima.
     if (req.usuario.rol === 'supervisor' && !tieneVisibilidadGlobal(req)) {
       if (req.usuario.sector) {
-        whereParts.push(`f.sector = $2`);
+        whereParts.push(`$2 IN (f.sector, f.sector_2)`);
         queryParams.push(req.usuario.sector);
       } else if (req.usuario.area) {
         whereParts.push(`f.area = $2`);
@@ -86,7 +89,7 @@ router.get('/', async (req, res) => {
       `SELECT
          f.id, f.rut, f.nombres, f.apellidos, f.cargo, f.fecha_ingreso, f.activo, f.sector, f.area,
          f.tipo_contrato, f.horas_contrato, f.reemplaza_a, f.grupo_contractual, f.sexo,
-         f.tipo_contrato_2, f.horas_contrato_2,
+         f.tipo_contrato_2, f.horas_contrato_2, f.sector_2,
          f.convenio_honorarios, f.prestacion, f.fecha_termino_contrato,
          s.nombre AS servicio,
          d.nombre AS dispositivo, d.id AS dispositivo_id,
@@ -141,11 +144,11 @@ router.get('/:id', async (req, res) => {
     // Supervisor solo puede ver funcionarios de su sector/área o su propio perfil
     if (req.usuario.rol === 'supervisor' && req.usuario.funcionario_id != id && !tieneVisibilidadGlobal(req)) {
       const check = await pool.query(
-        'SELECT sector, area FROM funcionarios WHERE id = $1 AND activo = true', [id]
+        'SELECT sector, sector_2, area FROM funcionarios WHERE id = $1 AND activo = true', [id]
       );
       if (check.rows.length > 0) {
         const f = check.rows[0];
-        const inSector = req.usuario.sector && f.sector === req.usuario.sector;
+        const inSector = req.usuario.sector && [f.sector, f.sector_2].includes(req.usuario.sector);
         const inArea   = req.usuario.area   && f.area   === req.usuario.area;
         if (!inSector && !inArea) {
           return res.status(403).json({ error: 'Acceso denegado: funcionario fuera de su ámbito' });
@@ -276,8 +279,8 @@ router.post('/', requierePermiso('funcionarios.crear'), [
           fecha_nacimiento, telefono, direccion_particular, numero_reloj,
           convenio_honorarios, prestacion, fecha_termino_contrato,
           escalafon, categoria, nivel, sexo,
-          tipo_contrato_2, horas_contrato_2, fecha_termino_contrato_2)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26) RETURNING *`,
+          tipo_contrato_2, horas_contrato_2, fecha_termino_contrato_2, sector_2)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27) RETURNING *`,
       [
         rut, nombres, apellidos, cargo,
         servicio_id || null, fecha_ingreso || null,
@@ -290,6 +293,7 @@ router.post('/', requierePermiso('funcionarios.crear'), [
         escalafon || null, categoria || null, nivel || null,
         SEXOS.includes(sexo) ? sexo : null,
         ...contrato2.valores,
+        sector2Valido(req.body.sector_2, sector),
       ]
     );
 
@@ -423,6 +427,9 @@ router.post('/bulk', requierePermiso('funcionarios.crear'), async (req, res) => 
           : { rows: [] };
 
         const TIPOS_CONTRATO = ['Indefinido', 'Plazo Fijo', 'Honorarios', 'Suplencia'];
+const { SECTORES_VALIDOS } = require('../config/catalogos');
+// Segundo sector: debe ser válido y distinto del principal
+const sector2Valido = (s2, s1) => (SECTORES_VALIDOS.includes(s2) && s2 !== s1 ? s2 : null);
         const tipoContrato = TIPOS_CONTRATO.includes(f.tipo_contrato) ? f.tipo_contrato : null;
         const horasContrato = f.horas_contrato ? parseInt(f.horas_contrato) || null : null;
 
@@ -568,7 +575,8 @@ router.put('/:id', async (req, res, next) => {
                sexo = COALESCE($24, sexo),
                tipo_contrato_2          = CASE WHEN $28 THEN tipo_contrato_2 ELSE $25 END,
                horas_contrato_2         = CASE WHEN $28 THEN horas_contrato_2 ELSE $26::int END,
-               fecha_termino_contrato_2 = CASE WHEN $28 THEN fecha_termino_contrato_2 ELSE $27::date END
+               fecha_termino_contrato_2 = CASE WHEN $28 THEN fecha_termino_contrato_2 ELSE $27::date END,
+               sector_2 = CASE WHEN $29 THEN sector_2 ELSE $30 END
            WHERE id=$23 RETURNING *`,
           [
             nombres, apellidos, cargo,
@@ -596,6 +604,8 @@ router.put('/:id', async (req, res, next) => {
             ...contrato2.valores,
             // Sin el campo en el cuerpo (página antigua en caché): conservar el 2° contrato
             !('tipo_contrato_2' in req.body),
+            !('sector_2' in req.body),
+            sector2Valido(req.body.sector_2, sector),
           ]
         );
 

@@ -246,6 +246,11 @@ function FuncionarioCard({ funcionario, index, onSolicitar, grupo, puedeEditar, 
                   { Verde: 'bg-green-100 text-green-700', Azul: 'bg-blue-100 text-blue-700', Amarillo: 'bg-yellow-100 text-yellow-700', Rojo: 'bg-red-100 text-red-700', Lila: 'bg-purple-100 text-purple-700', SAR: 'bg-cyan-100 text-cyan-700' }[funcionario.sector] || 'bg-dark-100 text-dark-600'
                 }`}>{funcionario.sector}</span>
               )}
+              {funcionario.sector_2 && (
+                <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${
+                  { Verde: 'bg-green-100 text-green-700', Azul: 'bg-blue-100 text-blue-700', Amarillo: 'bg-yellow-100 text-yellow-700', Rojo: 'bg-red-100 text-red-700', Lila: 'bg-purple-100 text-purple-700', SAR: 'bg-cyan-100 text-cyan-700' }[funcionario.sector_2] || 'bg-dark-100 text-dark-600'
+                }`}>{funcionario.sector_2}</span>
+              )}
               {funcionario.tipo_contrato && (
                 <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${cfg.badge}`}>
                   {funcionario.tipo_contrato}

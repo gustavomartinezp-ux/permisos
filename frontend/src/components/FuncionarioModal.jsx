@@ -109,7 +109,7 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
     telefono: '', direccion_particular: '', numero_reloj: '',
     tipo_contrato: tipoContratoInicial,
     horas_contrato: '', dispositivo_id: '', reemplaza_a: '',
-    tipo_contrato_2: '', horas_contrato_2: '',
+    tipo_contrato_2: '', horas_contrato_2: '', sector_2: '',
     sector: '', area: '', activo: true,
     convenio_honorarios: '', prestacion: '',
     escalafon: '', categoria: '', nivel: '',
@@ -618,7 +618,7 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
                     <div className="flex gap-2 flex-wrap">
                       <button
                         type="button"
-                        onClick={() => set('sector', '')}
+                        onClick={() => setForm(f => ({ ...f, sector: '', sector_2: '' }))}
                         className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
                           !form.sector ? 'bg-dark-800 text-white border-dark-800' : 'bg-white text-dark-500 border-dark-200 hover:border-dark-400'
                         }`}
@@ -629,7 +629,7 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
                         <button
                           key={s}
                           type="button"
-                          onClick={() => set('sector', s)}
+                          onClick={() => setForm(f => ({ ...f, sector: s, sector_2: f.sector_2 === s ? '' : f.sector_2 }))}
                           className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
                             form.sector === s
                               ? `${SECTOR_COLORS[s]} border-transparent`
@@ -641,6 +641,38 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
                       ))}
                     </div>
                   </div>
+                  {form.sector && (
+                    <div className="col-span-2">
+                      <label className="block text-xs font-medium text-dark-700 mb-1.5">
+                        <MapPin size={12} className="inline mr-1" />Segundo sector <span className="text-dark-400 font-normal">(opcional — si trabaja en 2 sectores)</span>
+                      </label>
+                      <div className="flex gap-2 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => set('sector_2', '')}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                            !form.sector_2 ? 'bg-dark-800 text-white border-dark-800' : 'bg-white text-dark-500 border-dark-200 hover:border-dark-400'
+                          }`}
+                        >
+                          Ninguno
+                        </button>
+                        {SECTORES.filter(s => s !== form.sector).map(s => (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => set('sector_2', s)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                              form.sector_2 === s
+                                ? `${SECTOR_COLORS[s]} border-transparent`
+                                : 'bg-white text-dark-500 border-dark-200 hover:border-dark-400'
+                            }`}
+                          >
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div className="col-span-2">
                     <label className="block text-xs font-medium text-dark-700 mb-1.5">
                       <MapPin size={12} className="inline mr-1" />Área funcional

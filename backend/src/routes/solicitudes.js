@@ -72,7 +72,7 @@ router.get('/', async (req, res) => {
       // Supervisor solo ve su sector o su área
       if (req.usuario.rol === 'supervisor' && !tieneVisibilidadGlobal(req)) {
         if (req.usuario.sector) {
-          whereClause += ` AND f.sector = $${paramIdx++}`;
+          whereClause += ` AND $${paramIdx++} IN (f.sector, f.sector_2)`;
           params.push(req.usuario.sector);
         } else if (req.usuario.area) {
           whereClause += ` AND f.area = $${paramIdx++}`;
@@ -478,7 +478,7 @@ router.patch('/:id/pre-aprobar', requierePermiso('solicitudes.pre_aprobar'), asy
 
   try {
     const check = await pool.query(
-      `SELECT sol.id, sol.funcionario_id, f.sector, f.area
+      `SELECT sol.id, sol.funcionario_id, f.sector, f.sector_2, f.area
        FROM solicitudes sol
        JOIN funcionarios f ON sol.funcionario_id = f.id
        WHERE sol.id = $1 AND sol.estado = 'pendiente'`,
@@ -500,7 +500,7 @@ router.patch('/:id/pre-aprobar', requierePermiso('solicitudes.pre_aprobar'), asy
     // global (admin, ADMIN_TI/RRHH_ADMIN/AUDITOR vía RBAC) no se acotan a su sector.
     if (!tieneVisibilidadGlobal(req)) {
       const scope = req.usuario.scopeEfectivo || { sector: req.usuario.sector, area: req.usuario.area };
-      if (scope.sector && solCheck.sector !== scope.sector) {
+      if (scope.sector && solCheck.sector !== scope.sector && solCheck.sector_2 !== scope.sector) {
         return res.status(403).json({ error: 'No puede pre-aprobar solicitudes de otro sector' });
       }
       if (!scope.sector && scope.area && solCheck.area !== scope.area) {
@@ -685,7 +685,7 @@ router.patch('/:id/rechazar', requierePermiso('solicitudes.pre_aprobar', 'solici
     await client.query('BEGIN');
 
     const solicitud = await client.query(
-      `SELECT sol.*, tp.es_feriado_legal, tp.es_especial, tp.nombre AS tipo_nombre, f.sector, f.area
+      `SELECT sol.*, tp.es_feriado_legal, tp.es_especial, tp.nombre AS tipo_nombre, f.sector, f.sector_2, f.area
        FROM solicitudes sol
        JOIN tipos_permisos tp ON sol.tipo_permiso_id = tp.id
        JOIN funcionarios f ON sol.funcionario_id = f.id
@@ -710,7 +710,7 @@ router.patch('/:id/rechazar', requierePermiso('solicitudes.pre_aprobar', 'solici
     // Fuera de visibilidad global, solo puede rechazar solicitudes de su propio sector/área.
     if (!tieneVisibilidadGlobal(req)) {
       const scope = req.usuario.scopeEfectivo || { sector: req.usuario.sector, area: req.usuario.area };
-      if (scope.sector && sol.sector !== scope.sector) {
+      if (scope.sector && sol.sector !== scope.sector && sol.sector_2 !== scope.sector) {
         await client.query('ROLLBACK');
         return res.status(403).json({ error: 'No puede rechazar solicitudes de otro sector' });
       }

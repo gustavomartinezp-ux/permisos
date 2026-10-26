@@ -122,12 +122,12 @@ async function generarReportePermisos(filtros, formato, usuarioId) {
   if (fecha_fin)       { params.push(fecha_fin);    where.push(`s.fecha_fin <= $${params.length}`); }
   if (tipo_permiso_id) { params.push(parseInt(tipo_permiso_id)); where.push(`s.tipo_permiso_id = $${params.length}`); }
   if (estado)          { params.push(estado);       where.push(`s.estado = $${params.length}`); }
-  if (sector)          { params.push(sector);       where.push(`f.sector = $${params.length}`); }
+  if (sector)          { params.push(sector);       where.push(`$${params.length} IN (f.sector, f.sector_2)`); }
 
   const { rows: usuarioRows } = await pool.query('SELECT rol, sector, area, email FROM usuarios WHERE id = $1', [usuarioId]);
   const u = usuarioRows[0] || {};
   if (u.rol === 'supervisor' && !(await tieneVisibilidadGlobalPorUsuarioId(usuarioId))) {
-    if (u.sector) { params.push(u.sector); where.push(`f.sector = $${params.length}`); }
+    if (u.sector) { params.push(u.sector); where.push(`$${params.length} IN (f.sector, f.sector_2)`); }
     else if (u.area) { params.push(u.area); where.push(`f.area = $${params.length}`); }
   }
 
@@ -210,7 +210,7 @@ async function generarReporteAusentismo(filtros, formato, usuarioId) {
   const u = await scopeSupervisor(usuarioId);
   const params = [];
   const sw = u.sector
-    ? (params.push(u.sector), `AND f.sector = $${params.length}`)
+    ? (params.push(u.sector), `AND $${params.length} IN (f.sector, f.sector_2)`)
     : u.area
     ? (params.push(u.area), `AND f.area = $${params.length}`)
     : '';
@@ -269,7 +269,7 @@ async function generarReporteBalanceSaldos(filtros, formato, usuarioId) {
   const anio = parseInt(filtros.anio) || new Date().getFullYear();
   const params = [anio];
   const sw = u.sector
-    ? (params.push(u.sector), `AND f.sector = $${params.length}`)
+    ? (params.push(u.sector), `AND $${params.length} IN (f.sector, f.sector_2)`)
     : u.area
     ? (params.push(u.area), `AND f.area = $${params.length}`)
     : '';
@@ -326,7 +326,7 @@ async function generarReporteFuncionarios(filtros, formato, usuarioId) {
   const u = await scopeSupervisor(usuarioId);
   const params = [];
   const sw = u.sector
-    ? (params.push(u.sector), `AND f.sector = $${params.length}`)
+    ? (params.push(u.sector), `AND $${params.length} IN (f.sector, f.sector_2)`)
     : u.area
     ? (params.push(u.area), `AND f.area = $${params.length}`)
     : '';
@@ -380,7 +380,7 @@ async function generarReporteEstadisticas(filtros, formato, usuarioId) {
   const anio = parseInt(filtros.anio) || new Date().getFullYear();
   const params = [anio];
   const sw = u.sector
-    ? (params.push(u.sector), `AND f.sector = $${params.length}`)
+    ? (params.push(u.sector), `AND $${params.length} IN (f.sector, f.sector_2)`)
     : u.area
     ? (params.push(u.area), `AND f.area = $${params.length}`)
     : '';
@@ -390,7 +390,7 @@ async function generarReporteEstadisticas(filtros, formato, usuarioId) {
     pool.query(
       `SELECT COUNT(*) FILTER (WHERE f.activo=TRUE) AS activos,
               COUNT(*) FILTER (WHERE f.activo=FALSE) AS inactivos
-       FROM funcionarios f ${u.sector || u.area ? `WHERE ${u.sector ? 'f.sector' : 'f.area'} = $1` : ''}`,
+       FROM funcionarios f ${u.sector ? 'WHERE $1 IN (f.sector, f.sector_2)' : u.area ? 'WHERE f.area = $1' : ''}`,
       u.sector || u.area ? [u.sector || u.area] : []
     ),
     pool.query(

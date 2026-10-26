@@ -32,8 +32,9 @@ router.get('/estadisticas', async (req, res) => {
       else if (AREAS_VALIDAS.includes(req.usuario.area)) { fp = req.usuario.area;   ff = 'f.area'; }
     }
     const joinF  = fp ? 'JOIN funcionarios f ON s.funcionario_id=f.id' : '';
-    const andFp  = fp ? `AND ${ff} = $2` : '';
-    const andFp1 = fp ? `AND ${ff} = $1` : '';
+    const condFp = (ph) => ff === 'f.sector' ? `${ph} IN (f.sector, f.sector_2)` : `${ff} = ${ph}`;
+    const andFp  = fp ? `AND ${condFp('$2')}` : '';
+    const andFp1 = fp ? `AND ${condFp('$1')}` : '';
     const pAnio  = fp ? [anio, fp] : [anio];
     const pHoy   = fp ? [hoy, fp]  : [hoy];
     const pFp    = fp ? [fp] : [];
@@ -115,10 +116,10 @@ router.get('/permisos', async (req, res) => {
     if (fecha_fin)       { params.push(fecha_fin);               where.push(`s.fecha_fin <= $${params.length}`); }
     if (tipo_permiso_id) { params.push(parseInt(tipo_permiso_id)); where.push(`s.tipo_permiso_id = $${params.length}`); }
     if (estado)          { params.push(estado);                  where.push(`s.estado = $${params.length}`); }
-    if (sector)          { params.push(sector);                  where.push(`f.sector = $${params.length}`); }
+    if (sector)          { params.push(sector);                  where.push(`$${params.length} IN (f.sector, f.sector_2)`); }
 
     if (req.usuario.rol === 'supervisor' && !tieneVisibilidadGlobal(req)) {
-      if (req.usuario.sector) { params.push(req.usuario.sector); where.push(`f.sector = $${params.length}`); }
+      if (req.usuario.sector) { params.push(req.usuario.sector); where.push(`$${params.length} IN (f.sector, f.sector_2)`); }
       else if (req.usuario.area) { params.push(req.usuario.area); where.push(`f.area = $${params.length}`); }
     }
 
@@ -173,7 +174,7 @@ router.get('/ausentismo', async (req, res) => {
     }
     const params = [];
     const sw = sector
-      ? (params.push(sector), `AND f.sector = $${params.length}`)
+      ? (params.push(sector), `AND $${params.length} IN (f.sector, f.sector_2)`)
       : area
       ? (params.push(area), `AND f.area = $${params.length}`)
       : '';
@@ -342,7 +343,7 @@ router.get('/exportar/funcionarios', requierePermiso('reportes.ver_globales', 'a
 
       const row = ws.addRow([
         f.id, f.rut, f.apellidos, f.nombres, f.sexo || '', f.cargo,
-        f.sector, f.area, f.servicio_nombre, f.dispositivo_nombre,
+        [f.sector, f.sector_2].filter(Boolean).join(' / '), f.area, f.servicio_nombre, f.dispositivo_nombre,
         f.tipo_contrato, f.horas_contrato,
         f.tipo_contrato_2 ? `${f.tipo_contrato_2} ${f.horas_contrato_2 || ''} h`.trim() : '',
         f.fecha_ingreso ? new Date(f.fecha_ingreso).toLocaleDateString('es-CL') : '',
@@ -523,10 +524,10 @@ router.get('/exportar/permisos', async (req, res) => {
     if (fecha_inicio) { params.push(fecha_inicio); where.push(`s.fecha_inicio >= $${params.length}`); }
     if (fecha_fin)    { params.push(fecha_fin);    where.push(`s.fecha_fin <= $${params.length}`); }
     if (estado)       { params.push(estado);       where.push(`s.estado = $${params.length}`); }
-    if (sector)       { params.push(sector);       where.push(`f.sector = $${params.length}`); }
+    if (sector)       { params.push(sector);       where.push(`$${params.length} IN (f.sector, f.sector_2)`); }
 
     if (req.usuario.rol === 'supervisor' && !tieneVisibilidadGlobal(req)) {
-      if (req.usuario.sector) { params.push(req.usuario.sector); where.push(`f.sector = $${params.length}`); }
+      if (req.usuario.sector) { params.push(req.usuario.sector); where.push(`$${params.length} IN (f.sector, f.sector_2)`); }
     }
 
     const { rows } = await pool.query(

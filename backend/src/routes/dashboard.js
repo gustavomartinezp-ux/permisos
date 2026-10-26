@@ -25,8 +25,10 @@ router.get('/stats', async (req, res) => {
     const filterField = SECTORES_VALIDOS.includes(sectorFiltro) ? 'f.sector' : 'f.area';
 
     // Condición parametrizada según posición del placeholder en cada query
-    const fCond1 = filterParam ? `AND ${filterField} = $1` : '';  // sin otros params
-    const fCond2 = filterParam ? `AND ${filterField} = $2` : '';  // anio ocupa $1
+    // Sector: el funcionario puede pertenecer a 2 sectores (sector / sector_2)
+    const condF  = (ph) => filterField === 'f.sector' ? `${ph} IN (f.sector, f.sector_2)` : `${filterField} = ${ph}`;
+    const fCond1 = filterParam ? `AND ${condF('$1')}` : '';  // sin otros params
+    const fCond2 = filterParam ? `AND ${condF('$2')}` : '';  // anio ocupa $1
     const pFilt  = filterParam ? [filterParam] : [];
     const pAnio  = filterParam ? [anio, filterParam] : [anio];
 

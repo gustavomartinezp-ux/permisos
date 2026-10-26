@@ -66,7 +66,7 @@ router.get('/', async (req, res) => {
       }
       if (req.usuario.sector) {
         params.push(req.usuario.sector);
-        condiciones.push(`f.sector = $${params.length}`);
+        condiciones.push(`$${params.length} IN (f.sector, f.sector_2)`);
       } else if (req.usuario.area) {
         params.push(req.usuario.area);
         condiciones.push(`f.area = $${params.length}`);
@@ -207,9 +207,9 @@ router.patch('/:id/aprobar', puedeGestionarCompensacion, async (req, res) => {
 
     // Supervisor solo puede aprobar solicitudes de funcionarios bajo su cargo
     if (req.usuario.rol === 'supervisor' && !tieneVisibilidadGlobal(req)) {
-      const funcCheck = await client.query('SELECT sector, area FROM funcionarios WHERE id = $1', [s.funcionario_id]);
+      const funcCheck = await client.query('SELECT sector, sector_2, area FROM funcionarios WHERE id = $1', [s.funcionario_id]);
       const f = funcCheck.rows[0];
-      const inSector = req.usuario.sector && f?.sector === req.usuario.sector;
+      const inSector = req.usuario.sector && [f?.sector, f?.sector_2].includes(req.usuario.sector);
       const inArea   = req.usuario.area   && f?.area   === req.usuario.area;
       if (!inSector && !inArea) {
         await client.query('ROLLBACK');
@@ -258,7 +258,7 @@ router.patch('/:id/rechazar', puedeGestionarCompensacion, async (req, res) => {
     // Verificar existencia y scope antes de rechazar
     if (req.usuario.rol === 'supervisor' && !tieneVisibilidadGlobal(req)) {
       const solCheck = await pool.query(
-        `SELECT sc.funcionario_id, f.sector, f.area
+        `SELECT sc.funcionario_id, f.sector, f.sector_2, f.area
          FROM solicitudes_compensacion sc
          JOIN funcionarios f ON sc.funcionario_id = f.id
          WHERE sc.id = $1 AND sc.estado = 'pendiente'`,
@@ -273,7 +273,7 @@ router.patch('/:id/rechazar', puedeGestionarCompensacion, async (req, res) => {
         return res.status(403).json({ error: 'No puede rechazar su propia solicitud de horas compensatorias. Solo el Administrador puede hacerlo.' });
       }
 
-      const inSector = req.usuario.sector && s.sector === req.usuario.sector;
+      const inSector = req.usuario.sector && [s.sector, s.sector_2].includes(req.usuario.sector);
       const inArea   = req.usuario.area   && s.area   === req.usuario.area;
       if (!inSector && !inArea) {
         return res.status(403).json({ error: 'Solo puede gestionar solicitudes de funcionarios bajo su cargo directo' });

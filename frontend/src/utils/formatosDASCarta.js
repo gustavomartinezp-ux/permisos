@@ -2,6 +2,7 @@ import { jsPDF } from 'jspdf';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { LOGO_TALCAHUANO_PNG } from './logoTalcahuano';
+import { TEXTOS_SUSPENSION, LINEAS_SUSPENSION, LOGO_TALCAHUANO_AZUL_PNG } from './plantillaSuspension';
 
 // ═════════════════════════════════════════════════════════════════════════════
 // Formatos oficiales DAS en tamaño carta, reconstruidos desde los documentos
@@ -307,4 +308,131 @@ export function descargarFormatoCompensatorio(sol, funcionario) {
   const doc = construirFormatoCompensatorio(sol, funcionario, folio);
   const ap = (funcionario.apellidos || 'funcionario').toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
   doc.save(`${folio}_${ap}.pdf`);
+}
+
+// ─── Solicitud de Suspensión de Ejecución de Contrato (honorarios) ──────────
+// El personal a honorarios no tiene feriado ni permisos de la Ley 19.378: su
+// contrato prevé "suspensión de la ejecución" por las letras 10b a 10i. Cada
+// tipo de permiso del sistema se imputa a su letra.
+const LETRA_POR_TIPO = {
+  ESP_CONYUGE: '10b', ESP_HIJO_GESTACION: '10c', ESP_FALLECIMIENTO_HIJO: '10d',
+  ESP_FAMILIAR_DIRECTO: '10e', ESP_NACIMIENTO: '10f', ESP_MATRIMONIO: '10g',
+  ADMIN: '10h', FERIADO: '10i',
+};
+const DESCRIPCION_LETRA = {
+  '10b': 'Fallecimiento cónyuge o conviviente civil', '10c': 'Muerte de hijo en gestación',
+  '10d': 'Muerte de un hijo', '10e': 'Fallecimiento hermano, madre o padre',
+  '10f': 'Nacimiento de un hijo', '10g': 'Matrimonio civil / Unión civil',
+  '10h': 'Motivos particulares del prestador', '10i': '15 días hábiles',
+};
+// Filas de la tabla [y1, y2] donde van "Desde" / "Hasta"
+const FILAS_SUSPENSION = {
+  '10b': [305.8, 332.4], '10c': [332.4, 357.4], '10d': [357.4, 372.8], '10e': [372.8, 399.8],
+  '10f': [399.8, 432.4], '10g': [432.4, 470.4],
+  '10h-6': [484.5, 506.9], '10h-4': [506.9, 529.5], '10h-2': [529.5, 552.0],
+  '10i': [552.0, 652.5],
+};
+
+export function letraSuspension(solicitud) {
+  const cod = solicitud.tipo_especial || solicitud.tipo_codigo || solicitud.codigo;
+  if (LETRA_POR_TIPO[cod]) return LETRA_POR_TIPO[cod];
+  const n = (solicitud.tipo_nombre || '').toLowerCase();
+  if (n.includes('feriado')) return '10i';
+  if (n.includes('administrativ')) return '10h';
+  return null;
+}
+
+// Meses de contrato continuo (desde la fecha de ingreso) para la fila de 10h
+function mesesDeContrato(fechaIngreso, alDia) {
+  if (!fechaIngreso) return null;
+  const [a, m, d] = String(fechaIngreso).substring(0, 10).split('-').map(Number);
+  const [ra, rm, rd] = String(alDia || format(new Date(), 'yyyy-MM-dd')).substring(0, 10).split('-').map(Number);
+  return (ra - a) * 12 + (rm - m) - (rd < d ? 1 : 0);
+}
+
+export function construirFormatoSuspension(solicitud, funcionario, saldoInfo = {}, folio) {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: [612, 936] });
+  const f = funcionario;
+  if (folio) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(140, 140, 140);
+    doc.text(folio, 576, 20, { align: 'right' });
+  }
+  doc.addImage(LOGO_TALCAHUANO_AZUL_PNG, 'PNG', 194.25, 23.5, 223.5, 36);
+
+  // Textos fijos: misma posición y ancho que en el original. Calibri se
+  // reemplaza por Helvetica al 90 % (tamaño visual equivalente) y cada línea se
+  // reparte entre sus palabras hasta el ancho original (como el justificado).
+  doc.setTextColor(...NEGRO);
+  for (const [texto, x, y, size, negrita, ancho] of TEXTOS_SUSPENSION) {
+    doc.setFont('helvetica', negrita ? 'bold' : 'normal');
+    let s = size * 0.9;
+    doc.setFontSize(s);
+    if (doc.getTextWidth(texto) > ancho) { s *= ancho / doc.getTextWidth(texto); doc.setFontSize(s); }
+    // Pie (dirección municipal) y títulos: centrados sobre su ancho original
+    if (y > 870 || size >= 18) { doc.text(texto, x + ancho / 2, y, { align: 'center' }); continue; }
+    const palabras = texto.split(/\s+/);
+    const anchos = palabras.map((p) => doc.getTextWidth(p));
+    const hueco = (ancho - anchos.reduce((t, w) => t + w, 0)) / Math.max(palabras.length - 1, 1);
+    if (palabras.length < 2 || hueco > s * 1.2 || (palabras.length <= 3 && hueco > s * 0.5)) { doc.text(texto, x, y); continue; }
+    let cx = x;
+    palabras.forEach((p, i) => { doc.text(p, cx, y); cx += anchos[i] + hueco; });
+  }
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(11.04 * 0.9);
+  doc.text(':', 158.06, 283.49);
+  doc.text('(Ej: 10b - 10g ó 10h)', 573.9, 283.49, { align: 'right' });
+
+  doc.setDrawColor(0, 0, 0);
+  doc.setLineWidth(0.48);
+  for (const [tipo, a, b, c] of LINEAS_SUSPENSION) {
+    if (tipo === 'h') doc.line(a, b, c, b);
+    else doc.line(a, b, a, c);
+  }
+
+  // Datos del prestador
+  campo(doc, nombreCompleto(f), 165, 575, 151.7);
+  campo(doc, f.rut, 165, 398, 178.7);
+  campo(doc, numero(horasTotales(f) || ''), 448, 481, 178.7, { centrar: true });
+  campo(doc, f.cargo || f.escalafon || '', 165, 575, 205.6);
+  campo(doc, f.convenio_honorarios || f.prestacion || '', 165, 575, 232.6);
+  campo(doc, f.dispositivo || f.cesfam || '', 165, 575, 259.6);
+
+  const letra = letraSuspension(solicitud);
+  if (letra) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10.5);
+    doc.setTextColor(...TINTA);
+    doc.text(`${letra} — ${DESCRIPCION_LETRA[letra]}`, 168, 283.49);
+
+    let fila = letra;
+    if (letra === '10h') {
+      const meses = mesesDeContrato(f.fecha_ingreso, solicitud.fecha_inicio);
+      fila = meses === null || meses > 11 ? '10h-6' : meses > 6 ? '10h-4' : '10h-2';
+    }
+    const [y1, y2] = FILAS_SUSPENSION[fila];
+    const yc = (y1 + y2) / 2 + 3.5;
+    campo(doc, fechaCorta(solicitud.fecha_inicio), 434.4, 507.2, yc + 2.5, { centrar: true, size: 9.5 });
+    campo(doc, fechaCorta(solicitud.fecha_fin), 507.2, 579.1, yc + 2.5, { centrar: true, size: 9.5 });
+
+    // Saldos solo para 10h y 10i
+    if (letra === '10h' || letra === '10i') {
+      const ys = (677.5 + 722.1) / 2 + 6;
+      campo(doc, numero(saldoInfo.total_dias), 434.4, 487.7, ys, { centrar: true, size: 11 });
+      campo(doc, numero(solicitud.dias_solicitados), 487.7, 534.5, ys, { centrar: true, size: 11 });
+      campo(doc, numero(saldoInfo.saldo_pendiente), 534.5, 579.1, ys, { centrar: true, size: 11 });
+    }
+  }
+
+  // Fecha de solicitud
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(12 * 0.9);
+  doc.setTextColor(...NEGRO);
+  const rotFecha = 'FECHA SOLICITUD, EN TALCAHUANO A';
+  doc.text(rotFecha, 36, 855.6);
+  const xf = 36 + doc.getTextWidth(rotFecha) + 4;
+  linea(doc, xf, xf + 120, 857.5, 0.6);
+  campo(doc, fechaLarga(solicitud.fecha_solicitud || solicitud.created_at), xf, xf + 120, 857.5, { centrar: true });
+  return doc;
 }

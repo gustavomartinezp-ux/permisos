@@ -29,7 +29,7 @@ const ESTADO_BADGE = {
   reintegrado:  'bg-purple-100 text-purple-700',
 };
 
-const SECTORES = ['Verde','Azul','Amarillo','Rojo','Lila'];
+const SECTORES = ['Verde','Azul','Amarillo','Rojo','Lila','Celeste'];
 
 // ─── Descarga autenticada ──────────────────────────────────────────────────────
 async function descargarArchivo(endpoint, filename, setDescargando) {

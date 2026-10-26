@@ -252,11 +252,11 @@ const TABS = [
   { id: 'usuarios',     label: 'Supervisores',        icon: Users },
 ];
 
-const SECTORES = ['Verde', 'Azul', 'Amarillo', 'Rojo', 'Lila', 'SAR'];
+const SECTORES = ['Verde', 'Azul', 'Amarillo', 'Rojo', 'Lila', 'Celeste', 'SAR'];
 const SECTOR_COLORS = {
   Verde: 'bg-green-100 text-green-700', Azul: 'bg-blue-100 text-blue-700',
   Amarillo: 'bg-yellow-100 text-yellow-700', Rojo: 'bg-red-100 text-red-700',
-  Lila: 'bg-purple-100 text-purple-700', SAR: 'bg-cyan-100 text-cyan-700',
+  Lila: 'bg-purple-100 text-purple-700', Celeste: 'bg-sky-100 text-sky-700', SAR: 'bg-cyan-100 text-cyan-700',
 };
 const AREAS_SUPERVISOR = [
   'Técnica', 'Administrativa', 'Salud Familiar', 'SOME', 'Estadística', 'Servicios Generales', 'Dental',

@@ -476,6 +476,11 @@ export default function FuncionarioDetalle() {
                 <span className="text-sm text-dark-500 flex items-center gap-1">
                   <Building2 size={13} />
                   {funcionario.dispositivo}
+                  {funcionario.dispositivo_2 && (
+                    <> {funcionario.horas_dispositivo_2 && funcionario.horas_contrato
+                      ? `(${Number(funcionario.horas_contrato) + Number(funcionario.tipo_contrato_2 ? funcionario.horas_contrato_2 || 0 : 0) - Number(funcionario.horas_dispositivo_2)} h)` : ''}
+                      {' + '}{funcionario.dispositivo_2}{funcionario.horas_dispositivo_2 ? ` (${funcionario.horas_dispositivo_2} h)` : ''}</>
+                  )}
                 </span>
               )}
               {funcionario.fecha_ingreso && (
@@ -490,14 +495,14 @@ export default function FuncionarioDetalle() {
               {funcionario.sexo && <p className="text-xs text-dark-400">· {funcionario.sexo}</p>}
               {funcionario.sector && (
                 <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                  { Verde: 'bg-green-100 text-green-700', Azul: 'bg-blue-100 text-blue-700', Amarillo: 'bg-yellow-100 text-yellow-700', Rojo: 'bg-red-100 text-red-700', Lila: 'bg-purple-100 text-purple-700', SAR: 'bg-cyan-100 text-cyan-700' }[funcionario.sector] || 'bg-dark-100 text-dark-600'
+                  { Verde: 'bg-green-100 text-green-700', Azul: 'bg-blue-100 text-blue-700', Amarillo: 'bg-yellow-100 text-yellow-700', Rojo: 'bg-red-100 text-red-700', Lila: 'bg-purple-100 text-purple-700', Celeste: 'bg-sky-100 text-sky-700', SAR: 'bg-cyan-100 text-cyan-700' }[funcionario.sector] || 'bg-dark-100 text-dark-600'
                 }`}>
                   Sector {funcionario.sector}
                 </span>
               )}
               {funcionario.sector_2 && (
                 <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                  { Verde: 'bg-green-100 text-green-700', Azul: 'bg-blue-100 text-blue-700', Amarillo: 'bg-yellow-100 text-yellow-700', Rojo: 'bg-red-100 text-red-700', Lila: 'bg-purple-100 text-purple-700', SAR: 'bg-cyan-100 text-cyan-700' }[funcionario.sector_2] || 'bg-dark-100 text-dark-600'
+                  { Verde: 'bg-green-100 text-green-700', Azul: 'bg-blue-100 text-blue-700', Amarillo: 'bg-yellow-100 text-yellow-700', Rojo: 'bg-red-100 text-red-700', Lila: 'bg-purple-100 text-purple-700', Celeste: 'bg-sky-100 text-sky-700', SAR: 'bg-cyan-100 text-cyan-700' }[funcionario.sector_2] || 'bg-dark-100 text-dark-600'
                 }`}>
                   Sector {funcionario.sector_2}
                 </span>

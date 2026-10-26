@@ -61,6 +61,7 @@ const SECTORES_COLORES = {
   'Amarillo': 'bg-yellow-100 text-yellow-700',
   'Rojo':     'bg-red-100 text-red-700',
   'Lila':     'bg-purple-100 text-purple-700',
+  'Celeste':  'bg-sky-100 text-sky-700',
 };
 
 const ESTADOS = [

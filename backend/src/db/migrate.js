@@ -364,6 +364,15 @@ const migrations = [
     `,
   },
   {
+    // Segundo dispositivo donde el funcionario cumple parte de su jornada
+    // (ej. 22 h CESFAM Los Cerros + 22 h Posta Tumbes)
+    id: 'funcionarios_dispositivo_2_v1',
+    sql: `
+      ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS dispositivo_id_2 INTEGER REFERENCES dispositivos(id);
+      ALTER TABLE funcionarios ADD COLUMN IF NOT EXISTS horas_dispositivo_2 INTEGER;
+    `,
+  },
+  {
     // Hora desde la que se toma el descanso compensatorio (formato DAS:
     // "a partir de las __ hrs."); la hora de término = inicio + horas.
     id: 'solicitudes_compensacion_hora_inicio_v1',

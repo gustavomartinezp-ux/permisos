@@ -1,6 +1,6 @@
 'use strict';
 
-const SECTORES_VALIDOS = ['Verde', 'Azul', 'Amarillo', 'Rojo', 'Lila', 'SAR'];
+const SECTORES_VALIDOS = ['Verde', 'Azul', 'Amarillo', 'Rojo', 'Lila', 'Celeste', 'SAR'];
 
 const AREAS_VALIDAS = [
   'Técnica', 'Administrativa', 'Salud Familiar', 'SOME', 'Estadística', 'Servicios Generales', 'Dental',

@@ -10,6 +10,18 @@ const router = express.Router();
 const SEXOS = ['Femenino', 'Masculino'];
 const TIPOS_CONTRATO = ['Indefinido', 'Plazo Fijo', 'Honorarios', 'Suplencia'];
 const { SECTORES_VALIDOS } = require('../config/catalogos');
+// Segundo dispositivo (opcional): distinto del principal, con sus horas
+// semanales (menos que la jornada total, si se conoce).
+function normalizarDispositivo2(body) {
+  const id2 = parseInt(body.dispositivo_id_2, 10);
+  if (!id2) return { valores: [null, null] };
+  if (String(id2) === String(body.dispositivo_id)) return { error: 'El segundo dispositivo debe ser distinto del principal' };
+  const h2 = parseInt(body.horas_dispositivo_2, 10);
+  if (!(h2 >= 1 && h2 <= 44)) return { error: 'Indique las horas que cumple en el segundo dispositivo (entre 1 y 44)' };
+  const total = (parseInt(body.horas_contrato, 10) || 0) + (body.tipo_contrato_2 ? parseInt(body.horas_contrato_2, 10) || 0 : 0);
+  if (total && h2 >= total) return { error: `Las horas en el segundo dispositivo (${h2}) deben ser menos que la jornada total (${total})` };
+  return { valores: [id2, h2] };
+}
 // Segundo sector: debe ser válido y distinto del principal
 const sector2Valido = (s2, s1) => (SECTORES_VALIDOS.includes(s2) && s2 !== s1 ? s2 : null);
 
@@ -90,6 +102,8 @@ router.get('/', async (req, res) => {
          f.id, f.rut, f.nombres, f.apellidos, f.cargo, f.fecha_ingreso, f.activo, f.sector, f.area,
          f.tipo_contrato, f.horas_contrato, f.reemplaza_a, f.grupo_contractual, f.sexo,
          f.tipo_contrato_2, f.horas_contrato_2, f.sector_2,
+         f.dispositivo_id_2, f.horas_dispositivo_2,
+         (SELECT nombre FROM dispositivos WHERE id = f.dispositivo_id_2) AS dispositivo_2,
          f.convenio_honorarios, f.prestacion, f.fecha_termino_contrato,
          s.nombre AS servicio,
          d.nombre AS dispositivo, d.id AS dispositivo_id,
@@ -160,6 +174,7 @@ router.get('/:id', async (req, res) => {
       `SELECT f.*,
               s.nombre AS servicio,
               d.nombre AS dispositivo,
+              (SELECT nombre FROM dispositivos WHERE id = f.dispositivo_id_2) AS dispositivo_2,
               remp.nombres AS reemplaza_nombres,
               remp.apellidos AS reemplaza_apellidos,
               u.id AS usuario_id,
@@ -267,6 +282,8 @@ router.post('/', requierePermiso('funcionarios.crear'), [
   } = req.body;
   const contrato2 = normalizarContrato2(req.body);
   if (contrato2.error) return res.status(400).json({ error: contrato2.error });
+  const dispositivo2 = normalizarDispositivo2(req.body);
+  if (dispositivo2.error) return res.status(400).json({ error: dispositivo2.error });
   const client = await pool.connect();
 
   try {
@@ -279,8 +296,9 @@ router.post('/', requierePermiso('funcionarios.crear'), [
           fecha_nacimiento, telefono, direccion_particular, numero_reloj,
           convenio_honorarios, prestacion, fecha_termino_contrato,
           escalafon, categoria, nivel, sexo,
-          tipo_contrato_2, horas_contrato_2, fecha_termino_contrato_2, sector_2)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27) RETURNING *`,
+          tipo_contrato_2, horas_contrato_2, fecha_termino_contrato_2, sector_2,
+          dispositivo_id_2, horas_dispositivo_2)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29) RETURNING *`,
       [
         rut, nombres, apellidos, cargo,
         servicio_id || null, fecha_ingreso || null,
@@ -294,6 +312,7 @@ router.post('/', requierePermiso('funcionarios.crear'), [
         SEXOS.includes(sexo) ? sexo : null,
         ...contrato2.valores,
         sector2Valido(req.body.sector_2, sector),
+        ...dispositivo2.valores,
       ]
     );
 
@@ -428,6 +447,18 @@ router.post('/bulk', requierePermiso('funcionarios.crear'), async (req, res) => 
 
         const TIPOS_CONTRATO = ['Indefinido', 'Plazo Fijo', 'Honorarios', 'Suplencia'];
 const { SECTORES_VALIDOS } = require('../config/catalogos');
+// Segundo dispositivo (opcional): distinto del principal, con sus horas
+// semanales (menos que la jornada total, si se conoce).
+function normalizarDispositivo2(body) {
+  const id2 = parseInt(body.dispositivo_id_2, 10);
+  if (!id2) return { valores: [null, null] };
+  if (String(id2) === String(body.dispositivo_id)) return { error: 'El segundo dispositivo debe ser distinto del principal' };
+  const h2 = parseInt(body.horas_dispositivo_2, 10);
+  if (!(h2 >= 1 && h2 <= 44)) return { error: 'Indique las horas que cumple en el segundo dispositivo (entre 1 y 44)' };
+  const total = (parseInt(body.horas_contrato, 10) || 0) + (body.tipo_contrato_2 ? parseInt(body.horas_contrato_2, 10) || 0 : 0);
+  if (total && h2 >= total) return { error: `Las horas en el segundo dispositivo (${h2}) deben ser menos que la jornada total (${total})` };
+  return { valores: [id2, h2] };
+}
 // Segundo sector: debe ser válido y distinto del principal
 const sector2Valido = (s2, s1) => (SECTORES_VALIDOS.includes(s2) && s2 !== s1 ? s2 : null);
         const tipoContrato = TIPOS_CONTRATO.includes(f.tipo_contrato) ? f.tipo_contrato : null;
@@ -550,6 +581,8 @@ router.put('/:id', async (req, res, next) => {
   }
   const contrato2 = normalizarContrato2(req.body);
   if (!req.edicionBasica && contrato2.error) return res.status(400).json({ error: contrato2.error });
+  const dispositivo2 = normalizarDispositivo2(req.body);
+  if (!req.edicionBasica && dispositivo2.error) return res.status(400).json({ error: dispositivo2.error });
 
   const client = await pool.connect();
   try {
@@ -576,7 +609,9 @@ router.put('/:id', async (req, res, next) => {
                tipo_contrato_2          = CASE WHEN $28 THEN tipo_contrato_2 ELSE $25 END,
                horas_contrato_2         = CASE WHEN $28 THEN horas_contrato_2 ELSE $26::int END,
                fecha_termino_contrato_2 = CASE WHEN $28 THEN fecha_termino_contrato_2 ELSE $27::date END,
-               sector_2 = CASE WHEN $29 THEN sector_2 ELSE $30 END
+               sector_2 = CASE WHEN $29 THEN sector_2 ELSE $30 END,
+               dispositivo_id_2    = CASE WHEN $31 THEN dispositivo_id_2 ELSE $32::int END,
+               horas_dispositivo_2 = CASE WHEN $31 THEN horas_dispositivo_2 ELSE $33::int END
            WHERE id=$23 RETURNING *`,
           [
             nombres, apellidos, cargo,
@@ -606,6 +641,9 @@ router.put('/:id', async (req, res, next) => {
             !('tipo_contrato_2' in req.body),
             !('sector_2' in req.body),
             sector2Valido(req.body.sector_2, sector),
+            // Sin el campo en el cuerpo (página antigua en caché): conservar el 2° dispositivo
+            !('dispositivo_id_2' in req.body),
+            ...dispositivo2.valores,
           ]
         );
 

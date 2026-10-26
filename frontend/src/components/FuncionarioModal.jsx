@@ -7,13 +7,14 @@ import toast from 'react-hot-toast';
 
 const TIPOS_CONTRATO = ['Indefinido', 'Plazo Fijo', 'Honorarios', 'Suplencia'];
 const HORAS_OPCIONES = [44, 33, 28, 22, 11];
-const SECTORES = ['Verde', 'Azul', 'Amarillo', 'Rojo', 'Lila', 'SAR'];
+const SECTORES = ['Verde', 'Azul', 'Amarillo', 'Rojo', 'Lila', 'Celeste', 'SAR'];
 const SECTOR_COLORS = {
   'Verde':    'bg-green-100 text-green-700',
   'Azul':     'bg-blue-100 text-blue-700',
   'Amarillo': 'bg-yellow-100 text-yellow-700',
   'Rojo':     'bg-red-100 text-red-700',
   'Lila':     'bg-purple-100 text-purple-700',
+  'Celeste':  'bg-sky-100 text-sky-700',
   'SAR':      'bg-cyan-100 text-cyan-700',
 };
 const AREAS_FUNCIONALES = ['Técnica', 'Administrativa', 'Salud Familiar', 'SOME', 'Estadística', 'Servicios Generales', 'Dental'];
@@ -110,6 +111,7 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
     tipo_contrato: tipoContratoInicial,
     horas_contrato: '', dispositivo_id: '', reemplaza_a: '',
     tipo_contrato_2: '', horas_contrato_2: '', sector_2: '',
+    dispositivo_id_2: '', horas_dispositivo_2: '',
     sector: '', area: '', activo: true,
     convenio_honorarios: '', prestacion: '',
     escalafon: '', categoria: '', nivel: '',
@@ -158,6 +160,7 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
 
   const set = (key, val) => setForm(f => ({ ...f, [key]: val }));
   const [tieneContrato2, setTieneContrato2] = useState(!!funcEdit?.tipo_contrato_2);
+  const [tieneDispositivo2, setTieneDispositivo2] = useState(!!funcEdit?.dispositivo_id_2);
   const horasTotales = (parseInt(form.horas_contrato, 10) || 0) + (tieneContrato2 ? (parseInt(form.horas_contrato_2, 10) || 0) : 0);
 
   // "Otra cantidad" de horas: se lleva aparte del valor, porque al escribir el
@@ -611,6 +614,46 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
                       {dispositivos.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
                     </select>
                   </div>
+                  {/* Segundo dispositivo: parte de la jornada en otro establecimiento */}
+                  {form.dispositivo_id && (
+                    <div className="col-span-2">
+                      <label className="inline-flex items-center gap-2 text-xs font-medium text-dark-700 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={tieneDispositivo2}
+                          onChange={e => {
+                            setTieneDispositivo2(e.target.checked);
+                            if (!e.target.checked) setForm(f => ({ ...f, dispositivo_id_2: '', horas_dispositivo_2: '' }));
+                          }}
+                        />
+                        Trabaja también en otro dispositivo (ej. 22 h CESFAM Los Cerros + 22 h Posta Tumbes)
+                      </label>
+                    </div>
+                  )}
+                  {form.dispositivo_id && tieneDispositivo2 && (
+                    <div className="col-span-2 grid grid-cols-2 gap-3 p-3 bg-dark-50 border border-dark-200 rounded-xl">
+                      <div>
+                        <label className="block text-xs font-medium text-dark-700 mb-1.5">
+                          <Building2 size={12} className="inline mr-1" />Segundo dispositivo
+                        </label>
+                        <select value={form.dispositivo_id_2 || ''} onChange={e => set('dispositivo_id_2', e.target.value)} className="input-field">
+                          <option value="">Seleccionar…</option>
+                          {dispositivos.filter(d => String(d.id) !== String(form.dispositivo_id)).map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-dark-700 mb-1.5">Horas en el segundo dispositivo</label>
+                        <input type="number" min="1" max="44" step="1" value={form.horas_dispositivo_2 ?? ''} onChange={e => set('horas_dispositivo_2', e.target.value)} className="input-field" placeholder="Ej: 22" />
+                      </div>
+                      {horasTotales > 0 && form.horas_dispositivo_2 && (
+                        <p className={`col-span-2 text-xs ${Number(form.horas_dispositivo_2) >= horasTotales ? 'text-red-600 font-medium' : 'text-dark-500'}`}>
+                          {Number(form.horas_dispositivo_2) >= horasTotales
+                            ? `Las horas del segundo dispositivo deben ser menos que la jornada total (${horasTotales} h).`
+                            : `Dispositivo principal: ${horasTotales - Number(form.horas_dispositivo_2)} h · Segundo dispositivo: ${form.horas_dispositivo_2} h (total ${horasTotales} h).`}
+                        </p>
+                      )}
+                    </div>
+                  )}
                   <div className="col-span-2">
                     <label className="block text-xs font-medium text-dark-700 mb-1.5">
                       <MapPin size={12} className="inline mr-1" />Sector

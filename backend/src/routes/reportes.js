@@ -240,6 +240,7 @@ router.get('/exportar/funcionarios', requierePermiso('reportes.ver_globales', 'a
     const [{ rows: funcs }, { rows: saldos }, { rows: horas }] = await Promise.all([
       pool.query(
         `SELECT f.*, sv.nombre AS servicio_nombre, d.nombre AS dispositivo_nombre,
+                (SELECT nombre FROM dispositivos WHERE id = f.dispositivo_id_2) AS dispositivo_2_nombre,
                 u.email AS usuario_email, u.rol AS usuario_rol,
                 CONCAT(remp.nombres,' ',remp.apellidos) AS reemplaza_a_nombre
          FROM funcionarios f
@@ -343,7 +344,8 @@ router.get('/exportar/funcionarios', requierePermiso('reportes.ver_globales', 'a
 
       const row = ws.addRow([
         f.id, f.rut, f.apellidos, f.nombres, f.sexo || '', f.cargo,
-        [f.sector, f.sector_2].filter(Boolean).join(' / '), f.area, f.servicio_nombre, f.dispositivo_nombre,
+        [f.sector, f.sector_2].filter(Boolean).join(' / '), f.area, f.servicio_nombre,
+        f.dispositivo_2_nombre ? `${f.dispositivo_nombre || ''} / ${f.dispositivo_2_nombre} (${f.horas_dispositivo_2 || '?'} h)` : f.dispositivo_nombre,
         f.tipo_contrato, f.horas_contrato,
         f.tipo_contrato_2 ? `${f.tipo_contrato_2} ${f.horas_contrato_2 || ''} h`.trim() : '',
         f.fecha_ingreso ? new Date(f.fecha_ingreso).toLocaleDateString('es-CL') : '',

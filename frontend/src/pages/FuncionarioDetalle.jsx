@@ -542,6 +542,20 @@ export default function FuncionarioDetalle() {
                   )}
                 </>
               )}
+              {/* Convenios / programas de honorarios (pueden ser varios, separados por " / ") */}
+              {funcionario.convenio_honorarios && (
+                <span className="w-full flex flex-wrap items-center gap-1.5 mt-0.5">
+                  <Briefcase size={11} className="text-amber-600" />
+                  <span className="text-xs text-dark-500">
+                    {funcionario.convenio_honorarios.split(' / ').filter(Boolean).length > 1 ? 'Convenios:' : 'Convenio:'}
+                  </span>
+                  {funcionario.convenio_honorarios.split(' / ').map(c => c.trim()).filter(Boolean).map(c => (
+                    <span key={c} className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                      {c}
+                    </span>
+                  ))}
+                </span>
+              )}
               {funcionario.tipo_contrato === 'Suplencia' && funcionario.reemplaza_nombres && (
                 <span className="text-xs text-purple-600 font-medium">
                   Reemplaza a: {funcionario.reemplaza_nombres} {funcionario.reemplaza_apellidos}

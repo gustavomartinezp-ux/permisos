@@ -132,7 +132,11 @@ function CardHonorarios({ funcionario, cfg }) {
       {funcionario.convenio_honorarios && (
         <div className="flex items-start gap-1.5">
           <Briefcase size={12} className="text-amber-400 mt-0.5 flex-shrink-0" />
-          <span className="text-xs text-dark-600 truncate">{funcionario.convenio_honorarios}</span>
+          <div className="flex flex-wrap gap-1 min-w-0">
+            {funcionario.convenio_honorarios.split(' / ').map(c => c.trim()).filter(Boolean).map(c => (
+              <span key={c} className="text-xs px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 truncate max-w-full" title={c}>{c}</span>
+            ))}
+          </div>
         </div>
       )}
       {funcionario.prestacion && (

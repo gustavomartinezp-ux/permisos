@@ -396,7 +396,12 @@ export function construirFormatoSuspension(solicitud, funcionario, saldoInfo = {
   campo(doc, f.rut, 165, 398, 178.7);
   campo(doc, numero(horasTotales(f) || ''), 448, 481, 178.7, { centrar: true });
   campo(doc, f.cargo || f.escalafon || '', 165, 575, 205.6);
-  campo(doc, f.convenio_honorarios || f.prestacion || '', 165, 575, 232.6);
+  // Varios convenios ("A / B / C"): si no caben en la línea, se recorta con "…"
+  let programa = f.convenio_honorarios || f.prestacion || '';
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  while (programa.length > 4 && doc.getTextWidth(programa) > 404) programa = `${programa.slice(0, -2).trimEnd()}…`;
+  campo(doc, programa, 165, 575, 232.6);
   campo(doc, f.dispositivo || f.cesfam || '', 165, 575, 259.6);
 
   const letra = letraSuspension(solicitud);

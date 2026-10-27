@@ -364,6 +364,11 @@ const migrations = [
     `,
   },
   {
+    // Honorarios con varios convenios/programas: se guardan separados por " / "
+    id: 'funcionarios_convenio_texto_v1',
+    sql: `ALTER TABLE funcionarios ALTER COLUMN convenio_honorarios TYPE TEXT;`,
+  },
+  {
     // Segundo dispositivo donde el funcionario cumple parte de su jornada
     // (ej. 22 h CESFAM Los Cerros + 22 h Posta Tumbes)
     id: 'funcionarios_dispositivo_2_v1',

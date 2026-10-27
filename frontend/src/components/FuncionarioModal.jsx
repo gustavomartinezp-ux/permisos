@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, User, Mail, Calendar, Briefcase, AlertCircle, Info, Clock, Building2, MapPin, Shield, Phone, Hash, AlertTriangle, Award } from 'lucide-react';
+import { X, Plus, User, Mail, Calendar, Briefcase, AlertCircle, Info, Clock, Building2, MapPin, Shield, Phone, Hash, AlertTriangle, Award } from 'lucide-react';
 import { funcionariosApi, tiposPermisosApi, serviciosApi, dispositivosApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
@@ -161,6 +161,25 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
   const set = (key, val) => setForm(f => ({ ...f, [key]: val }));
   const [tieneContrato2, setTieneContrato2] = useState(!!funcEdit?.tipo_contrato_2);
   const [tieneDispositivo2, setTieneDispositivo2] = useState(!!funcEdit?.dispositivo_id_2);
+
+  // Convenios / programas de honorarios: varios, guardados como texto
+  // separado por " / " en convenio_honorarios (lo leen fichas, formatos y búsqueda)
+  const SEP_CONVENIO = ' / ';
+  const convenios = (form.convenio_honorarios || '').split(SEP_CONVENIO).map(c => c.trim()).filter(Boolean);
+  const [convenioNuevo, setConvenioNuevo] = useState('');
+  const setConvenios = (lista) => set('convenio_honorarios', lista.join(SEP_CONVENIO));
+  const agregarConvenio = (valor) => {
+    const v = (valor || '').trim();
+    if (!v) return;
+    if (!convenios.some(c => c.toLowerCase() === v.toLowerCase())) setConvenios([...convenios, v]);
+    setConvenioNuevo('');
+  };
+  const quitarConvenio = (c) => setConvenios(convenios.filter(x => x !== c));
+  const opcionesConvenio = useMemo(() => {
+    const usados = todosFunc.flatMap(f => (f.convenio_honorarios || '').split(SEP_CONVENIO)).map(c => c.trim()).filter(Boolean);
+    return [...new Set([...PROGRAMAS, 'Convenio Salud Pública', 'Convenio JUNAEB', 'Convenio FONASA', ...usados])]
+      .sort((a, b) => a.localeCompare(b, 'es'));
+  }, [todosFunc]);
   const horasTotales = (parseInt(form.horas_contrato, 10) || 0) + (tieneContrato2 ? (parseInt(form.horas_contrato_2, 10) || 0) : 0);
 
   // "Otra cantidad" de horas: se lleva aparte del valor, porque al escribir el
@@ -195,6 +214,10 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
     setCargando(true);
     try {
       const { tipo_supervisor, ...payload } = form;
+      // Un convenio escrito pero sin presionar "Agregar" también se guarda
+      if (convenioNuevo.trim() && !convenios.some(c => c.toLowerCase() === convenioNuevo.trim().toLowerCase())) {
+        payload.convenio_honorarios = [...convenios, convenioNuevo.trim()].join(SEP_CONVENIO);
+      }
       if (payload.rol_sistema !== 'supervisor') {
         payload.sector_supervisa = null;
         payload.area_supervisa = null;
@@ -570,19 +593,38 @@ export default function FuncionarioModal({ funcionario: funcEdit, onClose, onSuc
                   </p>
                   <div className="p-4 bg-amber-50 rounded-xl border border-amber-100 space-y-3">
                     <div>
-                      <label className="block text-xs font-medium text-dark-700 mb-1.5">Convenio / Programa</label>
-                      <select
-                        value={form.convenio_honorarios || ''}
-                        onChange={e => set('convenio_honorarios', e.target.value)}
-                        className="input-field text-sm"
-                      >
-                        <option value="">— Sin convenio —</option>
-                        {PROGRAMAS.map(p => <option key={p} value={p}>{p}</option>)}
-                        <option value="Convenio Salud Pública">Convenio Salud Pública</option>
-                        <option value="Convenio JUNAEB">Convenio JUNAEB</option>
-                        <option value="Convenio FONASA">Convenio FONASA</option>
-                        <option value="Otro">Otro</option>
-                      </select>
+                      <label className="block text-xs font-medium text-dark-700 mb-1.5">
+                        Convenios / Programas <span className="text-dark-400 font-normal">(puede agregar más de uno)</span>
+                      </label>
+                      {convenios.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mb-2">
+                          {convenios.map(c => (
+                            <span key={c} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-white border border-amber-200 text-xs text-amber-800">
+                              {c}
+                              <button type="button" onClick={() => quitarConvenio(c)} className="text-amber-500 hover:text-red-600" title="Quitar">
+                                <X size={12} />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        <input
+                          list="convenios-honorarios"
+                          value={convenioNuevo}
+                          onChange={e => setConvenioNuevo(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); agregarConvenio(convenioNuevo); } }}
+                          className="input-field text-sm flex-1"
+                          placeholder={convenios.length ? 'Agregar otro convenio o programa…' : 'Escriba o elija un convenio o programa…'}
+                        />
+                        <button type="button" onClick={() => agregarConvenio(convenioNuevo)} disabled={!convenioNuevo.trim()}
+                          className="btn-secondary text-xs px-3 disabled:opacity-40">
+                          <Plus size={14} /> Agregar
+                        </button>
+                      </div>
+                      <datalist id="convenios-honorarios">
+                        {opcionesConvenio.filter(o => !convenios.includes(o)).map(o => <option key={o} value={o} />)}
+                      </datalist>
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-dark-700 mb-1.5">Tipo de prestación</label>

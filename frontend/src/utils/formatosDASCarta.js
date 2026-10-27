@@ -499,9 +499,6 @@ export function construirMemorandumInterno(solicitud, funcionario, saldoInfo = {
     solicitud.motivo ? `Motivo: ${solicitud.motivo}.` : null,
     `Funcionario(a): ${nombreCompleto(f)}, RUT ${f.rut || '—'}, ${f.cargo || ''}${jornada ? `, jornada ${jornada} hrs.` : '.'}`,
     solicitud.reemplazante ? `En mi ausencia realizará mis funciones: ${solicitud.reemplazante}.` : null,
-    saldoInfo.total_dias !== undefined && saldoInfo.total_dias !== null
-      ? `Días disponibles: ${numero(saldoInfo.total_dias)} — días solicitados: ${numero(dias)} — saldo pendiente: ${numero(saldoInfo.saldo_pendiente)}.`
-      : null,
     'Sin otro particular, saluda atentamente a usted.',
   ].filter(Boolean);
 

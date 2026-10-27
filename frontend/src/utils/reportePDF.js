@@ -3,7 +3,7 @@ import autoTable from 'jspdf-autotable';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { construirFormatoAdministrativo, construirFormatoFeriado, construirFormatoTraspaso } from './formatosDAS';
-import { construirFormatoCapacitacionDAS, construirFormatoSuspension, letraSuspension } from './formatosDASCarta';
+import { construirFormatoCapacitacionDAS, construirFormatoSuspension, letraSuspension, construirMemorandumInterno, esMemorandumInterno } from './formatosDASCarta';
 
 const COLOR_PRIMARIO  = [30, 64, 175];   // brand blue
 const COLOR_GRIS      = [100, 116, 139];
@@ -843,6 +843,8 @@ function construirFormularioEspecial(solicitud, funcionario) {
 function construirFormularioOficial(solicitud, funcionario, saldoInfo = {}) {
   const tipo = detectarTipoFormulario(solicitud);
   const folio = codigoDoc(solicitud);
+  // Jornadas y Permiso de Estamento: Memorándum Interno del CESFAM
+  if (esMemorandumInterno(solicitud)) return construirMemorandumInterno(solicitud, funcionario, saldoInfo, folio);
   // Personal a honorarios: feriado, administrativo y permisos especiales van en
   // la "Solicitud de Suspensión de Ejecución de Contrato" (letras 10b a 10i)
   if (funcionario.tipo_contrato === 'Honorarios' && letraSuspension(solicitud)) {

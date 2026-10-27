@@ -436,3 +436,90 @@ export function construirFormatoSuspension(solicitud, funcionario, saldoInfo = {
   campo(doc, fechaLarga(solicitud.fecha_solicitud || solicitud.created_at), xf, xf + 120, 857.5, { centrar: true });
   return doc;
 }
+
+// ─── Memorándum Interno (Jornadas y Permiso de Estamento) ───────────────────
+// Reconstruido desde el formulario impreso del CESFAM: encabezado municipal,
+// tres casilleros, título, DE / A, 14 líneas de texto y firma del interesado.
+// Los casilleros llevan N° de solicitud, fecha y tipo de permiso; el cuerpo se
+// redacta con los datos de la solicitud y se escribe sobre las líneas.
+export function esMemorandumInterno(solicitud) {
+  const cod = solicitud.tipo_codigo || solicitud.codigo || '';
+  const n = (solicitud.tipo_nombre || '').toLowerCase();
+  return cod === 'JORNADAS' || cod === 'ESTAMENTO' || n.includes('jornada') || n.includes('estamento');
+}
+
+export function construirMemorandumInterno(solicitud, funcionario, saldoInfo = {}, folio) {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: CARTA });
+  const f = funcionario;
+  const IZQ = 54;
+  const DER = 558;
+
+  // Encabezado institucional (texto tal cual el formulario impreso)
+  const cx = 170;
+  rotulo(doc, 'I.MUNICIPALIDAD DE TALCAHUANO', cx, 54, { size: 8, align: 'center' });
+  rotulo(doc, 'DIDECCION DSE ADMINISTRACION DE SALUD', cx, 64, { size: 8, align: 'center' });
+  rotulo(doc, 'CESFAM  LOS CERROS', cx, 74, { estilo: 'bold', size: 8, align: 'center' });
+
+  // Tres casilleros: N° de solicitud, fecha y tipo
+  const bx = 300, by = 86, bw = 64, bh = 25;
+  doc.setDrawColor(...NEGRO);
+  doc.setLineWidth(0.9);
+  for (let i = 0; i < 3; i++) doc.rect(bx + i * bw, by, bw, bh);
+  const esEstamento = (solicitud.tipo_codigo || '') === 'ESTAMENTO' || (solicitud.tipo_nombre || '').toLowerCase().includes('estamento');
+  const casilleros = [
+    folio || (solicitud.id ? `N° ${solicitud.id}` : ''),
+    fechaCorta(solicitud.fecha_solicitud || solicitud.created_at),
+    esEstamento ? 'ESTAMENTO' : 'JORNADAS',
+  ];
+  casilleros.forEach((v, i) => campo(doc, v, bx + i * bw, bx + (i + 1) * bw, by + bh / 2 + 5.5, { centrar: true, size: 8.5 }));
+
+  rotulo(doc, 'MEMORANDUM INTERNO', 210, 196, { estilo: 'bold', size: 16, align: 'center' });
+
+  // DE / A
+  const de = [nombreCompleto(f), f.cargo].filter(Boolean).join(' — ');
+  const dispositivo = f.dispositivo || f.cesfam || 'CESFAM LOS CERROS';
+  rotulo(doc, 'DE:', IZQ, 238, { size: 10 });
+  llenar(doc, de, 112, DER, 240);
+  rotulo(doc, 'A:', IZQ, 263, { size: 10 });
+  llenar(doc, `DIRECCIÓN ${dispositivo}`.toUpperCase(), 112, DER, 265);
+
+  // Cuerpo
+  const dias = Number(solicitud.dias_solicitados);
+  const medio = solicitud.jornada_medio_dia || (esEstamento ? 'PM' : null);
+  const tipo = esEstamento ? 'Permiso de Estamento' : 'Jornadas';
+  const cantidad = dias === 0.5
+    ? `media jornada ${medio || ''}`.trim()
+    : `${numero(dias)} día${dias === 1 ? '' : 's'}`;
+  const periodo = solicitud.fecha_fin && String(solicitud.fecha_fin).substring(0, 10) !== String(solicitud.fecha_inicio).substring(0, 10)
+    ? `desde el ${fechaCorta(solicitud.fecha_inicio)} hasta el ${fechaCorta(solicitud.fecha_fin)}`
+    : `el día ${fechaCorta(solicitud.fecha_inicio)}`;
+  const jornada = horasTotales(f);
+  const parrafos = [
+    `Junto con saludar, por medio del presente solicito a usted autorizar ${cantidad} de ${tipo}, ${periodo}.`,
+    solicitud.motivo ? `Motivo: ${solicitud.motivo}.` : null,
+    `Funcionario(a): ${nombreCompleto(f)}, RUT ${f.rut || '—'}, ${f.cargo || ''}${jornada ? `, jornada ${jornada} hrs.` : '.'}`,
+    solicitud.reemplazante ? `En mi ausencia realizará mis funciones: ${solicitud.reemplazante}.` : null,
+    saldoInfo.total_dias !== undefined && saldoInfo.total_dias !== null
+      ? `Días disponibles: ${numero(saldoInfo.total_dias)} — días solicitados: ${numero(dias)} — saldo pendiente: ${numero(saldoInfo.saldo_pendiente)}.`
+      : null,
+    'Sin otro particular, saluda atentamente a usted.',
+  ].filter(Boolean);
+
+  const LINEAS = 14;
+  const y0 = 315;
+  const paso = 24.8;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  const renglones = [];
+  for (const p of parrafos) renglones.push(...doc.splitTextToSize(p, DER - IZQ - 8));
+  for (let i = 0; i < LINEAS; i++) {
+    const y = y0 + i * paso;
+    linea(doc, IZQ, DER, y);
+    if (renglones[i]) campo(doc, renglones[i], IZQ, DER + 400, y);
+  }
+
+  // Firma
+  linea(doc, 348, 540, 692, 0.8);
+  rotulo(doc, 'Firma Interesado', 444, 705, { estilo: 'bold', size: 10, align: 'center' });
+  return doc;
+}

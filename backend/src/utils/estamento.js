@@ -3,8 +3,8 @@
 // Reglas del Permiso de Estamento:
 //   1. Solo planta (Indefinido) y contrata (Plazo Fijo); no honorarios ni suplencias.
 //   2. Jornada de al menos 33 hrs (suma del contrato principal y el segundo).
-//   3. Se toma el mismo día del estamento o hasta 15 días corridos después
-//      (se cuentan aunque el día caiga en fin de semana o feriado).
+//   3. Se toma el día de la celebración del estamento o hasta 15 días corridos
+//      después (se cuentan aunque caigan en fin de semana o feriado).
 //   4. El funcionario debe tener su estamento registrado en la ficha.
 const HORAS_MINIMAS = 33;
 const DIAS_PLAZO = 15;
@@ -31,6 +31,17 @@ const DIAS_ESTAMENTO = {
   FONOAUDIOLOGO: '11-21', 'EDUCADORA DE PARVULOS': '11-21',
   'QUIMICO FARMACEUTICO': '12-01',
   MEDICO: '12-03',
+};
+
+// Fecha en que el CESFAM celebra el estamento cuando difiere del día oficial
+// (ej. día en sábado que se celebra el viernes o el lunes). Se carga por año
+// desde el calendario anual; sin entrada se usa el día oficial.
+const CELEBRACION_POR_ANIO = {
+  2026: {
+    'TERAPEUTA OCUPACIONAL': '04-06',
+    PODOLOGO: '07-27',
+    FONOAUDIOLOGO: '11-20', 'EDUCADORA DE PARVULOS': '11-20',
+  },
 };
 
 // Las fichas escriben el mismo estamento de varias formas (con/sin tilde,
@@ -78,19 +89,19 @@ function errorPermisoEstamento(funcionario, fechaInicio) {
   const estamento = normalizarEstamento(f.escalafon);
   if (!estamento) return 'Falta registrar el estamento del funcionario en su ficha';
 
-  const mmdd = DIAS_ESTAMENTO[estamento];
-  if (!mmdd) return null;
+  if (!DIAS_ESTAMENTO[estamento]) return null;
+  const celebracion = (a) => `${a}-${CELEBRACION_POR_ANIO[a]?.[estamento] || DIAS_ESTAMENTO[estamento]}`;
   const fecha = String(fechaInicio).substring(0, 10);
   const anio = Number(fecha.substring(0, 4));
-  // El plazo parte el mismo día del estamento aunque sea fin de semana o
-  // feriado, y puede cruzar el año (día del estamento a fines de diciembre).
+  // El plazo parte el día de la celebración aunque sea fin de semana o feriado,
+  // y puede cruzar el año (celebración a fines de diciembre).
   const dentro = [anio, anio - 1].some((a) => {
-    const dia = `${a}-${mmdd}`;
+    const dia = celebracion(a);
     return fecha >= dia && fecha <= sumarDias(dia, DIAS_PLAZO);
   });
   if (dentro) return null;
-  const [mm, dd] = mmdd.split('-');
+  const [, mm, dd] = celebracion(anio).split('-');
   return `El Permiso de Estamento de ${estamento} se toma el ${dd}/${mm} o hasta ${DIAS_PLAZO} días corridos después`;
 }
 
-module.exports = { errorPermisoEstamento, esPermisoEstamento, normalizarEstamento, DIAS_ESTAMENTO, HORAS_MINIMAS, DIAS_PLAZO };
+module.exports = { errorPermisoEstamento, esPermisoEstamento, normalizarEstamento, DIAS_ESTAMENTO, CELEBRACION_POR_ANIO, HORAS_MINIMAS, DIAS_PLAZO };

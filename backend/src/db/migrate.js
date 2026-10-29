@@ -422,6 +422,12 @@ const migrations = [
     sql: `ALTER TABLE saldos_funcionarios ADD COLUMN IF NOT EXISTS bloque_10_planilla BOOLEAN NOT NULL DEFAULT FALSE;`,
   },
   {
+    // Solicitudes de N,5 días: el medio día puede ser el primer día del rango
+    // (ej. sale a mediodía y luego días completos) o el último (por defecto).
+    id: 'solicitudes_medio_dia_inicio_v1',
+    sql: `ALTER TABLE solicitudes ADD COLUMN IF NOT EXISTS medio_dia_inicio BOOLEAN NOT NULL DEFAULT FALSE;`,
+  },
+  {
     // Sexo del funcionario. Se precarga una estimación según el primer nombre
     // (el dato no existía en el sistema ni en las planillas de RRHH); RRHH lo
     // corrige desde la ficha cuando corresponda.

@@ -24,6 +24,7 @@ export default function EditarSolicitudModal({ solicitud, onClose, onSuccess }) 
   const [tipoId, setTipoId] = useState(original.tipoId);
   const [medioDia, setMedioDia] = useState(original.dias === 0.5);
   const [jornada, setJornada] = useState(solicitud.jornada_medio_dia || 'AM');
+  const [medioDiaInicio, setMedioDiaInicio] = useState(!!solicitud.medio_dia_inicio);
   const [numDias, setNumDias] = useState(original.dias === 0.5 ? '' : String(original.dias));
   const [fechaInicio, setFechaInicio] = useState(original.inicio);
   const [motivo, setMotivo] = useState(solicitud.motivo || '');
@@ -49,13 +50,13 @@ export default function EditarSolicitudModal({ solicitud, onClose, onSuccess }) 
 
   const esSar = DISPOSITIVO_EXCEPCION_DIA_HABIL.test(solicitud.dispositivo || '');
   const cuentaCorridos = esSar && tipoRequiereDiaHabil(saldoSel);
-  // N,5 días: N+1 días hábiles con el último en media jornada
+  // N,5 días: N+1 días hábiles con el primero o el último en media jornada
   const numDiasValor = parseFloat(numDias) || 0;
-  const conMedioFinal = permiteMedioDia && !esMedioDia && numDiasValor % 1 === 0.5;
+  const conMedioDia = permiteMedioDia && !esMedioDia && numDiasValor % 1 === 0.5;
   const rango = !esMedioDia ? construirRango(fechaInicio, Math.ceil(numDiasValor), cuentaCorridos) : null;
   const inicioSol = esMedioDia ? fechaInicio : (rango?.inicio || '');
   const finSol = esMedioDia ? fechaInicio : (rango?.fin || '');
-  const dias = esMedioDia ? 0.5 : (rango ? rango.dias.length - (conMedioFinal ? 0.5 : 0) : 0);
+  const dias = esMedioDia ? 0.5 : (rango ? rango.dias.length - (conMedioDia ? 0.5 : 0) : 0);
 
   // Lo que hoy ocupa esta solicitud vuelve al saldo si se mantiene el mismo tipo
   const disponible = saldoSel
@@ -80,7 +81,8 @@ export default function EditarSolicitudModal({ solicitud, onClose, onSuccess }) 
         fecha_inicio: inicioSol,
         fecha_fin: finSol,
         dias_solicitados: dias,
-        jornada_medio_dia: esMedioDia || conMedioFinal ? jornada : null,
+        jornada_medio_dia: esMedioDia || conMedioDia ? jornada : null,
+        medio_dia_inicio: conMedioDia && medioDiaInicio,
         motivo,
         reemplazante,
         motivo_cambio: motivoCambio.trim(),
@@ -144,7 +146,7 @@ export default function EditarSolicitudModal({ solicitud, onClose, onSuccess }) 
               ))}
             </div>
           )}
-          {(esMedioDia || conMedioFinal) && !jornadaForzada && (
+          {(esMedioDia || conMedioDia) && !jornadaForzada && (
             <div className="flex gap-2">
               {['AM', 'PM'].map((j) => (
                 <button key={j} type="button" onClick={() => setJornada(j)}
@@ -186,10 +188,21 @@ export default function EditarSolicitudModal({ solicitud, onClose, onSuccess }) 
                 </p>
               )}
               <CalendarioPermiso dias={rango.dias} />
-              {conMedioFinal && (
-                <p className="text-xs text-dark-600">
-                  El último día (<strong>{formatoFecha(rango.fin)}</strong>) es medio día, jornada <strong>{jornada}</strong>.
-                </p>
+              {conMedioDia && (
+                <div className="pt-2 border-t border-dark-100 space-y-1.5">
+                  <p className="text-xs text-dark-600">¿Qué día es medio día? (jornada {jornada})</p>
+                  <div className="flex gap-2">
+                    {[[true, 'Primer día', rango.inicio], [false, 'Último día', rango.fin]].map(([v, label, f]) => (
+                      <button key={label} type="button"
+                        onClick={() => { setMedioDiaInicio(v); setJornada(v ? 'PM' : 'AM'); }}
+                        className={`flex-1 py-2 text-xs rounded-xl border font-medium transition-all ${
+                          medioDiaInicio === v ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-dark-600 border-dark-200 hover:border-brand-300'
+                        }`}>
+                        {label} · {formatoFecha(f)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
           )}

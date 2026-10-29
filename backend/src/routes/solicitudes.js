@@ -23,7 +23,7 @@ router.use(verificarToken, cargarPermisos);
 // Los días a descontar los determina el rango de fechas (hábiles; corridos en
 // SAR), no lo que envíe el cliente. Medio día (0,5) va en una sola fecha; en
 // los tipos que admiten medio día (Administrativo, Jornadas) también se puede
-// pedir N,5 días: el último día del rango es media jornada AM o PM.
+// pedir N,5 días: el primer o el último día del rango es media jornada AM o PM.
 // Devuelve el mensaje de error, o null si los días cuadran con las fechas.
 function errorDiasSolicitud(funcionario, tipo, inicio, fin, dias, jornada) {
   const n = Number(dias);
@@ -33,10 +33,13 @@ function errorDiasSolicitud(funcionario, tipo, inicio, fin, dias, jornada) {
     return delRango === n ? null : `El rango ${inicio} al ${fin} corresponde a ${delRango} día(s), no a ${n}`;
   }
   if (n % 1 !== 0.5 || !tipo.permite_medio_dia) return `${tipo.nombre} solo puede solicitarse por días completos`;
-  if (jornada !== 'AM' && jornada !== 'PM') return 'Indica si el medio día del último día es AM o PM';
+  if (jornada !== 'AM' && jornada !== 'PM') return 'Indica si el medio día es jornada AM o PM';
   return delRango - 0.5 === n ? null
-    : `El rango ${inicio} al ${fin} tiene ${delRango} día(s): con el último en media jornada son ${delRango - 0.5}, no ${n}`;
+    : `El rango ${inicio} al ${fin} tiene ${delRango} día(s): con uno en media jornada son ${delRango - 0.5}, no ${n}`;
 }
+
+// En N,5 días (N ≥ 1), ¿el medio día es el primer día del rango? (si no, el último)
+const medioDiaAlInicio = (dias, valor) => Number(dias) > 1 && Number(dias) % 1 !== 0 && (valor === true || valor === 'true');
 
 // La jornada AM/PM solo se guarda cuando la solicitud incluye un medio día
 const jornadaDeSolicitud = (dias, jornada) => (Number(dias) % 1 !== 0 ? (jornada || null) : null);
@@ -459,9 +462,10 @@ router.post('/', [
     const nuevaSolicitud = await client.query(
       `INSERT INTO solicitudes
          (funcionario_id, tipo_permiso_id, fecha_inicio, fecha_fin,
-          dias_solicitados, dias_arrastre, dias_periodo_actual, motivo, jornada_medio_dia, reemplazante)
-       VALUES ($1, $2, $3, $4, $5, 0, $5, $6, $7, $8) RETURNING *`,
-      [funcionario_id, tipo_permiso_id, fecha_inicio, fecha_fin, dias_solicitados, motivo, jornadaMedioDiaFinal, reemplazante]
+          dias_solicitados, dias_arrastre, dias_periodo_actual, motivo, jornada_medio_dia, reemplazante, medio_dia_inicio)
+       VALUES ($1, $2, $3, $4, $5, 0, $5, $6, $7, $8, $9) RETURNING *`,
+      [funcionario_id, tipo_permiso_id, fecha_inicio, fecha_fin, dias_solicitados, motivo, jornadaMedioDiaFinal, reemplazante,
+       medioDiaAlInicio(dias_solicitados, req.body.medio_dia_inicio)]
     );
 
     await registrarMovimiento(client, {
@@ -1004,14 +1008,16 @@ router.patch('/:id/editar', requierePermiso('solicitudes.aprobar'), async (req, 
            dias_arrastre = $5, dias_periodo_actual = $6, jornada_medio_dia = $7,
            motivo = $8, reemplazante = $9,
            observaciones = CONCAT_WS(' | ', NULLIF(observaciones, ''), $10::text),
-           saldo_periodo_antes = $12, saldo_periodo_despues = $13
+           saldo_periodo_antes = $12, saldo_periodo_despues = $13,
+           medio_dia_inicio = $14
        WHERE id = $11`,
       [tipo_permiso_id, fecha_inicio, fecha_fin, diasNuevos, fromArrastre, fromActual, jornadaFinal,
        motivo ?? sol.motivo, reemplazante, cambio, id,
        // Feriado de un solo período: saldo de ese período; mixto u otro tipo: total
        !tipoNuevo.es_feriado_legal || (fromArrastre > 0 && fromActual > 0) ? null : (fromActual > 0 ? actDisp : arrDisp),
        !tipoNuevo.es_feriado_legal || (fromArrastre > 0 && fromActual > 0) ? null
-         : Math.max((fromActual > 0 ? actDisp - fromActual : arrDisp - fromArrastre), 0)]
+         : Math.max((fromActual > 0 ? actDisp - fromActual : arrDisp - fromArrastre), 0),
+       medioDiaAlInicio(diasNuevos, req.body.medio_dia_inicio)]
     );
 
     // Bloque obligatorio de 10 días de feriado (si una aprobada entra o sale de feriado)

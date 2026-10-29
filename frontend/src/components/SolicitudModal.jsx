@@ -66,6 +66,8 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
   const [medioDia, setMedioDia]           = useState(false);
   const [numDias, setNumDias]             = useState('');
   const [jornadaMedioDia, setJornadaMedioDia] = useState('AM');
+  // En N,5 días: el medio día es el primer día del rango (si no, el último)
+  const [medioDiaInicio, setMedioDiaInicio]   = useState(false);
   const [cargando, setCargando]           = useState(false);
   const [error, setError]                 = useState('');
   const [solicitudCreada, setSolicitudCreada] = useState(null);
@@ -114,13 +116,13 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
   const permiteMedioDia = !esEspecial && saldoSel?.permite_medio_dia === true;
   const cuentaCorridos = esSectorTurno && tipoRequiereDiaHabil(saldoSel);
   // En tipos con medio día se pueden pedir N,5 días (ej. 3,5): se toman
-  // N+1 días hábiles y el último es media jornada AM o PM.
+  // N+1 días hábiles y el primero o el último es media jornada AM o PM.
   const numDiasValor = parseFloat(numDias) || 0;
-  const conMedioFinal = permiteMedioDia && !medioDia && numDiasValor % 1 === 0.5;
+  const conMedioDia = permiteMedioDia && !medioDia && numDiasValor % 1 === 0.5;
   const rango = !esEspecial && !medioDia
     ? construirRango(form.fecha_inicio, Math.ceil(numDiasValor), cuentaCorridos)
     : null;
-  const jornadaEnviada = medioDia || conMedioFinal ? jornadaMedioDia : null;
+  const jornadaEnviada = medioDia || conMedioDia ? jornadaMedioDia : null;
   // Fechas que se envían: el rango calculado (o la fecha única si es medio día)
   const fechaInicioSol = medioDia ? form.fecha_inicio : (rango?.inicio || '');
   const fechaFinSol    = medioDia ? form.fecha_inicio : (rango?.fin || '');
@@ -128,7 +130,7 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
     ? (tipoEspecialSel.dias_fijos || 0)
     : medioDia
       ? 0.5
-      : (rango ? rango.dias.length - (conMedioFinal ? 0.5 : 0) : 0);
+      : (rango ? rango.dias.length - (conMedioDia ? 0.5 : 0) : 0);
 
   // Saldo para tipos normales
   const arrastreDisp = saldoSel?.es_feriado_legal
@@ -247,6 +249,7 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
         motivo:            form.motivo,
         reemplazante:      form.reemplazante,
         jornada_medio_dia: jornadaEnviada || undefined,
+        medio_dia_inicio:  conMedioDia && medioDiaInicio,
       });
       // Formato oficial: "Nº TOTAL DÍAS" = saldo disponible antes de pedir,
       // "SALDO PENDIENTE" = lo que le queda (ej. 1,5 − 0,5 = 1).
@@ -723,11 +726,20 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
                       </p>
                     )}
                     <CalendarioPermiso dias={rango.dias} />
-                    {conMedioFinal && (
+                    {conMedioDia && (
                       <div className="pt-2 border-t border-dark-100 space-y-2">
-                        <p className="text-xs text-dark-600">
-                          El último día (<strong>{formatoFecha(rango.fin)}</strong>) es <strong>medio día</strong>:
-                        </p>
+                        <p className="text-xs text-dark-600">¿Qué día es <strong>medio día</strong>?</p>
+                        <div className="flex gap-2">
+                          {[[true, 'Primer día', rango.inicio], [false, 'Último día', rango.fin]].map(([v, label, f]) => (
+                            <button key={label} type="button"
+                              onClick={() => { setMedioDiaInicio(v); setJornadaMedioDia(v ? 'PM' : 'AM'); }}
+                              className={`flex-1 py-2 text-xs rounded-xl border font-medium transition-all ${
+                                medioDiaInicio === v ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-dark-600 border-dark-200 hover:border-brand-300'
+                              }`}>
+                              {label} · {formatoFecha(f)}
+                            </button>
+                          ))}
+                        </div>
                         <div className="flex gap-2">
                       <button type="button" onClick={() => setJornadaMedioDia('AM')}
                         className={`flex-1 py-2 text-sm rounded-xl border font-medium transition-all ${
@@ -743,7 +755,7 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
                       </button>
                         </div>
                         <p className="text-xs text-center text-dark-500 bg-dark-50 rounded-lg py-1.5 font-medium">
-                          {jornadaMedioDia === 'AM' ? 'Mañana' : 'Tarde'}: {getHorario(rango.fin, jornadaMedioDia)}
+                          {jornadaMedioDia === 'AM' ? 'Mañana' : 'Tarde'}: {getHorario(medioDiaInicio ? rango.inicio : rango.fin, jornadaMedioDia)}
                         </p>
                       </div>
                     )}

@@ -10,7 +10,7 @@ const HORAS_MINIMAS = 33;
 const DIAS_PLAZO = 15;
 
 // Día de cada estamento ('MM-DD'), según el calendario "Celebración Día
-// Estamentario" del CESFAM. Odontólogo no figura: se usa el día nacional (3/10).
+// Estamentario" del CESFAM; odontólogo (no figura en él) el 27/09.
 // Un estamento sin fecha aquí no valida la regla de los 15 días.
 const DIAS_ESTAMENTO = {
   AUXILIAR: '03-19', GUARDIA: '03-19', CHOFER: '03-19',        // auxiliares de servicio
@@ -24,7 +24,7 @@ const DIAS_ESTAMENTO = {
   ADMINISTRATIVO: '08-28',
   MATRONA: '09-01',
   'TECNOLOGO MEDICO': '10-02',
-  ODONTOLOGO: '10-03',
+  ODONTOLOGO: '09-27',
   'PROFESOR DE EDUCACION FISICA': '10-16',
   PSICOLOGO: '11-10',
   'ASISTENTE SOCIAL': '11-11',

@@ -63,7 +63,8 @@ export function AuthProvider({ children }) {
   }, []);
 
   const esAdmin        = usuario?.rol === 'admin';
-  const esSupervisor   = ['admin', 'supervisor'].includes(usuario?.rol);
+  // Incluye a quien es SUPERVISOR solo por subrogación vigente (rolesRBAC).
+  const esSupervisor   = ['admin', 'supervisor'].includes(usuario?.rol) || (usuario?.rolesRBAC || []).includes('SUPERVISOR');
   const esSupervisorPuro = usuario?.rol === 'supervisor' || (usuario?.rolesRBAC || []).includes('SUPERVISOR');
   const esFuncionario  = usuario?.rol === 'funcionario';
   // Autoservicio estricto: rol legacy funcionario Y sin ningún rol RBAC adicional

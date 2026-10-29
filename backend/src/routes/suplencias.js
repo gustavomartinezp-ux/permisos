@@ -9,7 +9,8 @@ router.use(verificarToken, cargarPermisos);
 
 // Lectura: admin/supervisor legacy, o SECRETARY/AUDITOR vía permiso nuevo.
 const puedeLeer = (req, res, next) => {
-  const legacyOk = ['admin', 'supervisor'].includes(req.usuario.rol);
+  const legacyOk = ['admin', 'supervisor'].includes(req.usuario.rol)
+    || (req.usuario.rolesRBAC || []).includes('SUPERVISOR'); // incluye al subrogante
   const permisoOk = (req.usuario.permisos || []).some((p) =>
     ['reportes.ver_operativos', 'reportes.ver_globales', 'auditoria.ver_todo'].includes(p)
   );

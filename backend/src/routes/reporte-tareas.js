@@ -8,7 +8,8 @@ const router = express.Router();
 router.use(verificarToken, cargarPermisos);
 
 const puedeGenerarReportes = (req, res, next) => {
-  const legacyOk = ['admin', 'supervisor'].includes(req.usuario.rol);
+  const legacyOk = ['admin', 'supervisor'].includes(req.usuario.rol)
+    || (req.usuario.rolesRBAC || []).includes('SUPERVISOR'); // incluye al subrogante
   const permisoOk = (req.usuario.permisos || []).some((p) =>
     ['reportes.ver_globales', 'reportes.ver_operativos', 'auditoria.ver_todo'].includes(p)
   );

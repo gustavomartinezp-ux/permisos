@@ -82,14 +82,11 @@ function errorPermisoEstamento(funcionario, fechaInicio) {
   if (!mmdd) return null;
   const fecha = String(fechaInicio).substring(0, 10);
   const anio = Number(fecha.substring(0, 4));
-  // El plazo puede cruzar el año (día del estamento a fines de diciembre). Si el
-  // día cae sábado o domingo se celebra desde el viernes anterior (ej. 21/11/2026
-  // sábado → viernes 20), así que la ventana parte ese viernes.
+  // El plazo parte el mismo día del estamento aunque sea fin de semana o
+  // feriado, y puede cruzar el año (día del estamento a fines de diciembre).
   const dentro = [anio, anio - 1].some((a) => {
     const dia = `${a}-${mmdd}`;
-    const dow = new Date(`${dia}T12:00:00Z`).getUTCDay();
-    const desde = dow === 6 ? sumarDias(dia, -1) : dow === 0 ? sumarDias(dia, -2) : dia;
-    return fecha >= desde && fecha <= sumarDias(dia, DIAS_PLAZO);
+    return fecha >= dia && fecha <= sumarDias(dia, DIAS_PLAZO);
   });
   if (dentro) return null;
   const [mm, dd] = mmdd.split('-');

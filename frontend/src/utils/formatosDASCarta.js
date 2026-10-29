@@ -3,6 +3,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { LOGO_TALCAHUANO_PNG } from './logoTalcahuano';
 import { TEXTOS_SUSPENSION, LINEAS_SUSPENSION, LOGO_TALCAHUANO_AZUL_PNG } from './plantillaSuspension';
+import { ENCABEZADO_COMPENSATORIO_PNG } from './encabezadoCompensatorio';
 
 // ═════════════════════════════════════════════════════════════════════════════
 // Formatos oficiales DAS en tamaño carta, reconstruidos desde los documentos
@@ -124,13 +125,6 @@ function llenar(doc, valor, x1, x2, y, opciones) {
   campo(doc, valor, x1, x2, y, opciones);
 }
 
-function checkmark(doc, x, y) {
-  doc.setDrawColor(...NEGRO);
-  doc.setLineWidth(0.9);
-  doc.line(x, y - 3, x + 2.5, y);
-  doc.line(x + 2.5, y, x + 7, y - 7);
-}
-
 // ─── Solicitud Permiso de Capacitación ───────────────────────────────────────
 export function construirFormatoCapacitacionDAS(solicitud, funcionario, saldoInfo = {}, folio) {
   const doc = lienzo(folio);
@@ -218,88 +212,107 @@ export function construirFormatoCapacitacionDAS(solicitud, funcionario, saldoInf
   return doc;
 }
 
-// ─── Solicitud de Descanso Compensatorio ─────────────────────────────────────
+// ─── Solicitud de Descanso Compensatorio (formato agosto 2026) ──────────────
+// Reconstruido desde el Word institucional: marco y textos en azul DAS, letra
+// Verdana negrita (aquí Helvetica negrita estirada al ancho original). El Word
+// mide 612 × 907,5 pt; se centra en hoja oficio (la que usa el formato de
+// suspensión) para imprimir sin escalar.
+const AZUL_DAS = [2, 103, 170];
+
+// Rótulo azul en negrita, repartido hasta el borde derecho del original
+function rotuloAzul(doc, texto, x, y, size, hasta) {
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(size);
+  doc.setTextColor(...AZUL_DAS);
+  const ancho = doc.getTextWidth(texto);
+  const charSpace = hasta && ancho < hasta - x ? (hasta - x - ancho) / Math.max(texto.length - 1, 1) : 0;
+  doc.text(texto, x, y, charSpace ? { charSpace } : undefined);
+}
+
 export function construirFormatoCompensatorio(sol, funcionario, folio) {
-  const doc = lienzo(folio);
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: [612, 936] });
   const f = funcionario;
-  const IZQ = 44;
-  const DER = 519;
-  const DOS_PUNTOS = 150;
-  const LINEA_INI = 146;
-  const R = { size: 9.5 };
+  const dy = 14; // centra el alto del Word (907,5 pt) en la hoja oficio
+  if (folio) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(140, 140, 140);
+    doc.text(folio, 590, 20, { align: 'right' });
+  }
 
-  doc.addImage(LOGO_TALCAHUANO_PNG, 'PNG', 175, 61, 236, 38);
+  // Marco con el encabezado interrumpiendo el borde superior
+  doc.setDrawColor(...AZUL_DAS);
+  doc.setLineWidth(1);
+  doc.line(21.7, 37.2 + dy, 101.9, 37.2 + dy);
+  doc.line(474, 37.2 + dy, 590.2, 37.2 + dy);
+  doc.line(21.7, 37.2 + dy, 21.7, 883.9 + dy);
+  doc.line(590.2, 37.2 + dy, 590.2, 883.9 + dy);
+  doc.line(21.7, 883.9 + dy, 590.2, 883.9 + dy);
+  doc.addImage(ENCABEZADO_COMPENSATORIO_PNG, 'PNG', 116, 24 + dy, 332, 38);
 
-  rotulo(doc, 'SOLICITUD DE DESCANSO COMPENSATORIO', 306, 158, { estilo: 'bold', size: 15, align: 'center' });
-
-  // Datos del funcionario: rótulo arriba, línea de llenado debajo
-  const tipos = tiposContrato(f);
-  const textoContrato = tipos.map((t, i) => {
-    const h = i === 0 ? f.horas_contrato : f.horas_contrato_2;
-    return tipos.length > 1 && h ? `${t} ${h} hrs` : t;
-  }).join(' + ');
-  const filas = [
-    ['NOMBRE COMPLETO', nombreCompleto(f)],
-    ['RUT', f.rut],
-    ['ESTAMENTO', f.escalafon || f.cargo || ''],
-    ['TIPO DE CONTRATO', textoContrato],
-    ['CESFAM', f.dispositivo || f.cesfam || ''],
+  // Textos fijos: [texto, x, y base, tamaño, borde derecho original]
+  const TEXTOS = [
+    ['SOLICITUD DE DESCANSO COMPENSATORIO', 81.9, 125.8, 18, 519.5],
+    ['NOMBRE COMPLETO:', 62.7, 166.3, 9.96, 177],
+    ['R.U.T:', 62.7, 193.1, 9.64, 94],
+    ['JORNADA:', 349.3, 196.1, 9.96, 406],
+    ['HRS.', 488.4, 196.1, 9.96, 515.2],
+    ['CARGO:', 62.7, 232.3, 9.96, 105],
+    ['TIPO CONTRATO: INDEFINIDO', 63.7, 263.7, 9.42, 219.6],
+    ['PLAZO FIJO', 296.6, 263.7, 9.64, 361],
+    ['REEMPLAZO', 424.7, 263.7, 9.96, 496],
+    ['CESFAM:', 63.7, 296, 9.96, 112],
+    ['VIENE A SOLICITAR :', 62.7, 328.1, 9.96, 182],
+    ['horas de descanso compensatorio, a partir de las', 222.7, 328.1, 9.96, 498.5],
+    ['hrs', 528.5, 328.1, 9.96, 544.3],
+    ['del', 62.7, 352, 9.96, 79],
+    ['y hasta las', 162.4, 352, 9.96, 222.5],
+    ['del', 285.2, 352, 9.96, 302],
+    ['del año en curso.', 365.7, 352, 9.96, 461.7],
+    ['FIRMA SOLICITANTE', 92.7, 627.8, 9.42, 197.5],
+    ['JEFE OFICINA O', 444.9, 627.7, 9.96, 528.1],
+    ['DIRECTOR', 459.5, 639.7, 9.96, 517.4],
+    ['TALCAHUANO:', 63.7, 756.9, 9.96, 143.5],
+    ['OBSERVACIÓN IMPORTANTE: ESTE FORMULARIO SE DEBE LLENAR EN TRIPLICADO.', 63.7, 807.5, 8.04, 416.7],
+    ['DEBE ADJUNTAR A REGISTRO DE RELOJ CONTROL DE LAS HORAS QUE DESEA COMPENSAR', 66, 826.7, 8.04, 449],
+    ['DAS TALCAHUANO, Bulnes 266, Teléfono 413835700', 200.3, 869.9, 7.61, 416.7],
   ];
-  filas.forEach(([rot, valor], i) => {
-    const y = 236 + i * 26;
-    rotulo(doc, rot, IZQ, y, R);
-    rotulo(doc, ':', DOS_PUNTOS, y, R);
-    if (rot === 'RUT') {
-      linea(doc, LINEA_INI, DER, y + 13);
-      campo(doc, valor, 158, 355, y + 11);
-      rotulo(doc, 'JORNADA', 363, y + 2, R);
-      campo(doc, numero(horasTotales(f) || ''), 410, 478, y + 4, { centrar: true });
-      rotulo(doc, 'HRS', 484, y + 2, R);
-    } else {
-      linea(doc, LINEA_INI, DER, y + 13);
-      campo(doc, valor, 158, DER, y + 11);
-    }
-  });
+  for (const [texto, x, y, size, hasta] of TEXTOS) rotuloAzul(doc, texto, x, y + dy, size, hasta);
+
+  // Líneas de llenado (azules, como el original) con el dato encima
+  const lineaAzul = (x1, x2, y, grosor = 1) => {
+    doc.setDrawColor(...AZUL_DAS);
+    doc.setLineWidth(grosor);
+    doc.line(x1, y + dy, x2, y + dy);
+  };
+  const dato = (valor, x1, x2, y, opciones) => { lineaAzul(x1, x2, y); campo(doc, valor, x1, x2, y + dy, opciones); };
+
+  dato(nombreCompleto(f), 177.4, 565.8, 167.6);
+  dato(f.rut, 94.3, 301.6, 194.3);
+  dato(numero(horasTotales(f) || ''), 406.6, 485, 197.3, { centrar: true });
+  dato(f.cargo || f.escalafon || '', 105.5, 563.8, 233.6);
+
+  // Tipo de contrato: X en la casilla que corresponde (Suplencia = Reemplazo)
+  const tipos = tiposContrato(f).map((t) => t.toLowerCase());
+  const marca = (c) => (tipos.some(c) ? 'X' : '');
+  dato(marca((t) => t.includes('indefinido') || t.includes('planta')), 223.2, 293.2, 265, { centrar: true });
+  dato(marca((t) => t.includes('plazo') || t.includes('contrata')), 364.4, 421.3, 265, { centrar: true });
+  dato(marca((t) => t.includes('suplencia') || t.includes('reemplazo')), 496.5, 565.9, 265, { centrar: true });
+
+  dato(f.dispositivo || f.cesfam || '', 112, 565.3, 297.2);
 
   // Solicitud
-  const yV = 401;
-  rotulo(doc, 'VIENE A SOLICITAR', IZQ, yV, R);
-  const X = 162;
-  llenar(doc, numero(sol.horas_solicitadas), X, 252, yV + 7, { centrar: true });
-  rotulo(doc, 'horas de descanso compensatorio, a partir de las', 253, yV + 6, { size: 10 });
   const inicio = hora(sol.hora_inicio);
-  llenar(doc, inicio, X, 198, yV + 26, { centrar: true, size: 9.5 });
-  rotulo(doc, 'hrs. del', 201, yV + 25, { size: 10 });
-  llenar(doc, diaMes(sol.fecha_inicio), 238, 328, yV + 26, { centrar: true });
-  rotulo(doc, 'y hasta las', 332, yV + 25, { size: 10 });
-  llenar(doc, sumarHoras(inicio, sol.horas_solicitadas), 385, 439, yV + 26, { centrar: true, size: 9.5 });
-  rotulo(doc, 'del', 456, yV + 25, { size: 10 });
-  rotulo(doc, ':', DOS_PUNTOS, yV + 46, R);
-  llenar(doc, diaMes(sol.fecha_fin || sol.fecha_inicio), X, 210, yV + 44, { centrar: true });
-  rotulo(doc, 'del año en curso.', 213, yV + 43, { size: 10 });
+  dato(numero(sol.horas_solicitadas), 182.4, 219.3, 329.3, { centrar: true });
+  dato(inicio, 498.9, 528.5, 329.3, { centrar: true, size: 9 });
+  dato(diaMes(sol.fecha_inicio), 79.1, 159, 353.2, { centrar: true });
+  dato(sumarHoras(inicio, sol.horas_solicitadas), 222.8, 281.8, 353.2, { centrar: true });
+  dato(diaMes(sol.fecha_fin || sol.fecha_inicio), 302.3, 365.7, 353.2, { centrar: true });
 
-  // Firmas
-  const yF = 580;
-  linea(doc, 89, 206, yF, 0.8);
-  rotulo(doc, 'FIRMA SOLICITANTE', (89 + 206) / 2, yF + 13, { ...R, align: 'center' });
-  linea(doc, 414, DER, yF, 0.8);
-  rotulo(doc, 'V°B° JEFE DIRECTO', (414 + DER) / 2, yF + 13, { ...R, align: 'center' });
-
-  // Fecha de solicitud y observaciones
-  rotulo(doc, 'FECHA SOLICITUD, TALCAHUANO', 41, 636, { size: 10 });
-  llenar(doc, fechaCorta(sol.fecha_solicitud || sol.created_at), 198, 297, 638, { centrar: true });
-  linea(doc, 39, 476, 646, 1.4);
-
-  rotulo(doc, 'OBSERVACION IMPORTANTE', 41, 664, { estilo: 'bold', size: 9.5 });
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9.5);
-  linea(doc, 41, 41 + doc.getTextWidth('OBSERVACION IMPORTANTE'), 666, 0.7);
-  checkmark(doc, 41, 679);
-  rotulo(doc, 'Este formulario se debe llenar en triplicado.', 56, 679, { size: 9.5 });
-  checkmark(doc, 41, 695);
-  rotulo(doc, 'Debe adjuntar a registro de reloj control de las horas que desea compensa', 56, 695, { size: 9.5 });
-
-  rotulo(doc, 'DAS TALCAHUANO, MANUEL BULNES 266, TERCER PISO, TALCAHUANO, FONO:413835700', 306, 771, { size: 9, align: 'center' });
+  // Firmas y fecha de solicitud
+  lineaAzul(63, 229.7, 593.8);
+  lineaAzul(397.9, 564.6, 593.8);
+  dato(fechaLarga(sol.fecha_solicitud || sol.created_at), 143.9, 315.6, 758.2);
   return doc;
 }
 

@@ -462,7 +462,7 @@ export function construirMemorandumInterno(solicitud, funcionario, saldoInfo = {
   // Encabezado institucional (texto tal cual el formulario impreso)
   const cx = 170;
   rotulo(doc, 'I.MUNICIPALIDAD DE TALCAHUANO', cx, 54, { size: 8, align: 'center' });
-  rotulo(doc, 'DIDECCION DSE ADMINISTRACION DE SALUD', cx, 64, { size: 8, align: 'center' });
+  rotulo(doc, 'DIRECCIÓN DE ADMINISTRACIÓN DE SALUD', cx, 64, { size: 8, align: 'center' });
   rotulo(doc, 'CESFAM  LOS CERROS', cx, 74, { estilo: 'bold', size: 8, align: 'center' });
 
   // Tres casilleros: N° de solicitud, fecha y tipo

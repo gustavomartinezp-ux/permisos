@@ -95,6 +95,25 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
   // Tipos con jornada forzada (ej: ESTAMENTO → PM obligatorio)
   const jornadaForzada = saldoSel?.jornada_forzada || null;
 
+  // Permiso de Estamento: requisitos y plazo (celebración + 15 días corridos)
+  const esEstamento = saldoSel?.codigo === 'ESTAMENTO';
+  const [infoEstamento, setInfoEstamento] = useState(null);
+  useEffect(() => {
+    if (!esEstamento || !funcionario) { setInfoEstamento(null); return; }
+    solicitudesApi.estamento(funcionario.id, new Date().getFullYear())
+      .then((r) => setInfoEstamento(r.data))
+      .catch(() => setInfoEstamento(null));
+  }, [esEstamento, funcionario]);
+  const hoyISO = toISO(new Date());
+  // Plazo vigente: el de este año si aún no termina; si no, el del próximo
+  const plazoEstamento = infoEstamento?.plazo && hoyISO > infoEstamento.plazo.hasta
+    ? infoEstamento.plazo_siguiente
+    : infoEstamento?.plazo;
+  const fueraDePlazoEstamento = !!(esEstamento && form.fecha_inicio && infoEstamento && !infoEstamento.error
+    && infoEstamento.plazo
+    && ![infoEstamento.plazo, infoEstamento.plazo_siguiente].some((p) => p && form.fecha_inicio >= p.desde && form.fecha_inicio <= p.hasta));
+  const fechaPlazo = (iso) => `${formatoFecha(iso)} ${iso.substring(0, 4)}`;
+
   // Auto-aplicar jornada forzada cuando el tipo lo exige
   useEffect(() => {
     if (jornadaForzada) {
@@ -593,6 +612,42 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
                 <p className="text-sky-700 text-xs mt-0.5">
                   Este permiso se registra como <strong>media jornada {jornadaForzada === 'PM' ? 'PM (desde las 13:00 hrs)' : 'AM (hasta las 13:00 hrs)'}</strong>. No puede modificarse.
                 </p>
+              </motion.div>
+            )}
+
+            {/* Permiso de Estamento: requisitos y plazo */}
+            {esEstamento && infoEstamento && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+                className={`rounded-xl border p-3 text-sm ${infoEstamento.error ? 'border-red-200 bg-red-50' : 'border-sky-200 bg-sky-50'}`}
+              >
+                {infoEstamento.error ? (
+                  <p className="text-red-700 text-xs flex items-start gap-1.5">
+                    <AlertCircle size={13} className="flex-shrink-0 mt-0.5" />
+                    <span>{infoEstamento.error}.</span>
+                  </p>
+                ) : (
+                  <>
+                    <p className="font-semibold text-sky-800 flex items-center gap-1.5">
+                      <Calendar size={13} />
+                      Plazo para {infoEstamento.estamento}
+                    </p>
+                    {plazoEstamento ? (
+                      <p className="text-sky-700 text-xs mt-0.5">
+                        Desde el <strong>{fechaPlazo(plazoEstamento.desde)}</strong> (día de la celebración) hasta el{' '}
+                        <strong>{fechaPlazo(plazoEstamento.hasta)}</strong> — {infoEstamento.dias_plazo} días corridos.
+                      </p>
+                    ) : (
+                      <p className="text-sky-700 text-xs mt-0.5">Este estamento no tiene fecha de celebración registrada.</p>
+                    )}
+                    {fueraDePlazoEstamento && (
+                      <p className="mt-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5 flex items-center gap-1.5">
+                        <AlertCircle size={12} className="flex-shrink-0" />
+                        La fecha elegida está fuera del plazo del estamento.
+                      </p>
+                    )}
+                  </>
+                )}
               </motion.div>
             )}
 

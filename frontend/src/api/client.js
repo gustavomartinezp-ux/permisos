@@ -110,6 +110,8 @@ export const solicitudesApi = {
   reintegrar: (id, observaciones) => api.patch(`/solicitudes/${id}/reintegrar`, { observaciones }),
   // Corrige tipo/fechas/días de una solicitud pendiente o aprobada, reajustando saldos
   editar: (id, data) => api.patch(`/solicitudes/${id}/editar`, data),
+  // Estamento, requisitos y plazo del Permiso de Estamento de un funcionario
+  estamento: (funcionarioId, anio) => api.get(`/solicitudes/estamento/${funcionarioId}`, { params: { anio } }),
 };
 
 export const saldosApi = {

@@ -2,7 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { pool } = require('../db');
 const { verificarToken } = require('../middleware/auth');
-const { errorPermisoEstamento, esPermisoEstamento } = require('../utils/estamento');
+const { errorPermisoEstamento, esPermisoEstamento, infoEstamento } = require('../utils/estamento');
 const { cargarPermisos, requierePermiso, noAutoAprobacion, esSoloAutoservicio, tieneVisibilidadGlobal, alcanceSupervisor, filtroAlcance, puedeActuarPorFuncionario } = require('../middleware/rbac');
 const {
   calcularDiasHabiles,
@@ -77,6 +77,27 @@ async function actualizarEstadoSolicitud(client, id, estado, usuarioId, observac
     [estado, usuarioId, observaciones || null, id]
   );
 }
+
+// Estamento, requisitos y plazo del Permiso de Estamento de un funcionario,
+// para mostrarlos en el formulario antes de enviar la solicitud.
+router.get('/estamento/:funcionario_id', async (req, res) => {
+  const funcionarioId = parseInt(req.params.funcionario_id);
+  if (esSoloAutoservicio(req) && req.usuario.funcionario_id != funcionarioId) {
+    return res.status(403).json({ error: 'Acceso denegado' });
+  }
+  try {
+    const { rows } = await pool.query(
+      `SELECT escalafon, tipo_contrato, tipo_contrato_2, horas_contrato, horas_contrato_2
+       FROM funcionarios WHERE id = $1`, [funcionarioId]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Funcionario no encontrado' });
+    const anio = parseInt(req.query.anio) || new Date().getFullYear();
+    res.json(infoEstamento(rows[0], anio));
+  } catch (err) {
+    console.error('[solicitudes] estamento:', err.message);
+    res.status(500).json({ error: 'Error al obtener el plazo del estamento' });
+  }
+});
 
 router.get('/', async (req, res) => {
   try {

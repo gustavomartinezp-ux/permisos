@@ -74,10 +74,8 @@ const sumarDias = (iso, dias) => {
   return d.toISOString().substring(0, 10);
 };
 
-// Devuelve el mensaje de error o null si la solicitud cumple las reglas.
-// funcionario: { escalafon, tipo_contrato, tipo_contrato_2, horas_contrato, horas_contrato_2 }
-function errorPermisoEstamento(funcionario, fechaInicio) {
-  const f = funcionario || {};
+// Requisitos del funcionario (contrato, jornada, estamento en ficha): mensaje o null.
+function errorRequisitosEstamento(f = {}) {
   const contratos = [f.tipo_contrato, f.tipo_contrato_2].filter(Boolean).map((c) => c.toLowerCase());
   if (!contratos.some((c) => c.includes('indefinido') || c.includes('plazo fijo'))) {
     return 'El Permiso de Estamento es solo para funcionarios de planta o contrata';
@@ -86,22 +84,45 @@ function errorPermisoEstamento(funcionario, fechaInicio) {
   if (horas < HORAS_MINIMAS) {
     return `El Permiso de Estamento requiere una jornada de al menos ${HORAS_MINIMAS} hrs (el funcionario tiene ${horas} hrs)`;
   }
-  const estamento = normalizarEstamento(f.escalafon);
-  if (!estamento) return 'Falta registrar el estamento del funcionario en su ficha';
+  if (!normalizarEstamento(f.escalafon)) return 'Falta registrar el estamento del funcionario en su ficha';
+  return null;
+}
 
+// Plazo del año indicado: desde la celebración hasta 15 días corridos después
+// (aunque caigan en fin de semana o feriado). null si el estamento no tiene fecha.
+function plazoEstamento(estamento, anio) {
   if (!DIAS_ESTAMENTO[estamento]) return null;
-  const celebracion = (a) => `${a}-${CELEBRACION_POR_ANIO[a]?.[estamento] || DIAS_ESTAMENTO[estamento]}`;
+  const desde = `${anio}-${CELEBRACION_POR_ANIO[anio]?.[estamento] || DIAS_ESTAMENTO[estamento]}`;
+  return { desde, hasta: sumarDias(desde, DIAS_PLAZO) };
+}
+
+// Devuelve el mensaje de error o null si la solicitud cumple las reglas.
+// funcionario: { escalafon, tipo_contrato, tipo_contrato_2, horas_contrato, horas_contrato_2 }
+function errorPermisoEstamento(funcionario, fechaInicio) {
+  const errorRequisitos = errorRequisitosEstamento(funcionario || {});
+  if (errorRequisitos) return errorRequisitos;
+  const estamento = normalizarEstamento(funcionario.escalafon);
   const fecha = String(fechaInicio).substring(0, 10);
   const anio = Number(fecha.substring(0, 4));
-  // El plazo parte el día de la celebración aunque sea fin de semana o feriado,
-  // y puede cruzar el año (celebración a fines de diciembre).
-  const dentro = [anio, anio - 1].some((a) => {
-    const dia = celebracion(a);
-    return fecha >= dia && fecha <= sumarDias(dia, DIAS_PLAZO);
-  });
+  const plazo = plazoEstamento(estamento, anio);
+  if (!plazo) return null;
+  // El plazo puede cruzar el año (celebración a fines de diciembre)
+  const dentro = [plazo, plazoEstamento(estamento, anio - 1)].some((p) => fecha >= p.desde && fecha <= p.hasta);
   if (dentro) return null;
-  const [, mm, dd] = celebracion(anio).split('-');
+  const [, mm, dd] = plazo.desde.split('-');
   return `El Permiso de Estamento de ${estamento} se toma el ${dd}/${mm} o hasta ${DIAS_PLAZO} días corridos después`;
 }
 
-module.exports = { errorPermisoEstamento, esPermisoEstamento, normalizarEstamento, DIAS_ESTAMENTO, CELEBRACION_POR_ANIO, HORAS_MINIMAS, DIAS_PLAZO };
+// Resumen para el formulario: estamento, requisitos y plazos del año y el siguiente.
+function infoEstamento(funcionario, anio) {
+  const estamento = normalizarEstamento(funcionario?.escalafon) || null;
+  return {
+    estamento,
+    error: errorRequisitosEstamento(funcionario || {}),
+    plazo: estamento ? plazoEstamento(estamento, anio) : null,
+    plazo_siguiente: estamento ? plazoEstamento(estamento, anio + 1) : null,
+    dias_plazo: DIAS_PLAZO,
+  };
+}
+
+module.exports = { errorPermisoEstamento, infoEstamento, esPermisoEstamento, normalizarEstamento, DIAS_ESTAMENTO, CELEBRACION_POR_ANIO, HORAS_MINIMAS, DIAS_PLAZO };

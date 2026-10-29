@@ -128,7 +128,52 @@ const tieneVisibilidadGlobalPorUsuarioId = async (usuarioId) => {
   return (row.roles || []).some((r) => ROLES_VISIBILIDAD_GLOBAL.includes(r));
 };
 
+// Alcance (sector/área) al que se acota un supervisor: el propio o, si está
+// subrogando, el del titular (scopeEfectivo). null = no se acota (visibilidad
+// global o no es supervisor). Incluye a quien es SUPERVISOR solo por subrogación.
+const alcanceSupervisor = (req) => {
+  const esSupervisor = req.usuario.rol === 'supervisor' || (req.usuario.rolesRBAC || []).includes('SUPERVISOR');
+  if (!esSupervisor || tieneVisibilidadGlobal(req)) return null;
+  return req.usuario.scopeEfectivo || { sector: req.usuario.sector || null, area: req.usuario.area || null };
+};
+
+// Condición SQL del alcance (el sector manda sobre el área; el funcionario puede
+// estar en sector o sector_2). Agrega el valor a params; null si no hay filtro.
+const filtroAlcance = (alcance, params, alias = 'f') => {
+  if (alcance?.sector) { params.push(alcance.sector); return `$${params.length} IN (${alias}.sector, ${alias}.sector_2)`; }
+  if (alcance?.area)   { params.push(alcance.area);   return `${alias}.area = $${params.length}`; }
+  return null;
+};
+
+// true si el funcionario { sector, sector_2, area } cae dentro del alcance.
+const dentroDeAlcance = (alcance, f) => {
+  const inSector = !!alcance.sector && [f?.sector, f?.sector_2].includes(alcance.sector);
+  const inArea   = !!alcance.area   && f?.area === alcance.area;
+  return inSector || inArea;
+};
+
+// Variante sin request (worker de reportería), con la subrogación vigente incluida.
+const alcanceSupervisorPorUsuarioId = async (usuarioId) => {
+  const [{ rows }, datos] = await Promise.all([
+    pool.query('SELECT rol, sector, area FROM usuarios WHERE id = $1', [usuarioId]),
+    resolverPermisos(usuarioId),
+  ]);
+  const u = rows[0];
+  if (!u) return null;
+  const { sub } = datos;
+  return alcanceSupervisor({
+    usuario: {
+      rol: u.rol,
+      rolesRBAC: datos.roles,
+      scopeEfectivo: sub
+        ? { sector: sub.sector || null, area: sub.area || null }
+        : { sector: u.sector || null, area: u.area || null },
+    },
+  });
+};
+
 module.exports = {
   cargarPermisos, invalidarPermisos, requierePermiso, noAutoAprobacion, esSoloAutoservicio,
   tieneVisibilidadGlobal, tieneVisibilidadGlobalPorUsuarioId,
+  alcanceSupervisor, filtroAlcance, dentroDeAlcance, alcanceSupervisorPorUsuarioId,
 };

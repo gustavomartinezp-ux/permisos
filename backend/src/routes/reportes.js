@@ -3,7 +3,7 @@ const express = require('express');
 const ExcelJS = require('exceljs');
 const { pool } = require('../db');
 const { verificarToken, adminOSupervisor } = require('../middleware/auth');
-const { cargarPermisos, requierePermiso, tieneVisibilidadGlobal } = require('../middleware/rbac');
+const { cargarPermisos, requierePermiso, alcanceSupervisor, filtroAlcance } = require('../middleware/rbac');
 const { SECTORES_VALIDOS, AREAS_VALIDAS } = require('../config/catalogos');
 
 const router = express.Router();
@@ -11,7 +11,8 @@ const router = express.Router();
 // Acceso: admin/supervisor legacy, o cualquiera con permiso de reportes/auditoría nuevo
 // (RRHH_ADMIN, SECRETARY, AUDITOR).
 router.use(verificarToken, cargarPermisos, (req, res, next) => {
-  const legacyOk = ['admin', 'supervisor'].includes(req.usuario.rol);
+  const legacyOk = ['admin', 'supervisor'].includes(req.usuario.rol)
+    || (req.usuario.rolesRBAC || []).includes('SUPERVISOR'); // incluye al subrogante
   const permisoOk = (req.usuario.permisos || []).some((p) =>
     ['reportes.ver_globales', 'reportes.ver_operativos', 'auditoria.ver_todo'].includes(p)
   );
@@ -27,9 +28,10 @@ router.get('/estadisticas', async (req, res) => {
     // Filtro por sector/área para supervisor
     let fp = null; // filterParam
     let ff = null; // filterField
-    if (req.usuario.rol === 'supervisor' && !tieneVisibilidadGlobal(req)) {
-      if (SECTORES_VALIDOS.includes(req.usuario.sector)) { fp = req.usuario.sector; ff = 'f.sector'; }
-      else if (AREAS_VALIDAS.includes(req.usuario.area)) { fp = req.usuario.area;   ff = 'f.area'; }
+    const alcance = alcanceSupervisor(req);
+    if (alcance) {
+      if (SECTORES_VALIDOS.includes(alcance.sector)) { fp = alcance.sector; ff = 'f.sector'; }
+      else if (AREAS_VALIDAS.includes(alcance.area)) { fp = alcance.area;   ff = 'f.area'; }
     }
     const joinF  = fp ? 'JOIN funcionarios f ON s.funcionario_id=f.id' : '';
     const condFp = (ph) => ff === 'f.sector' ? `${ph} IN (f.sector, f.sector_2)` : `${ff} = ${ph}`;
@@ -118,10 +120,8 @@ router.get('/permisos', async (req, res) => {
     if (estado)          { params.push(estado);                  where.push(`s.estado = $${params.length}`); }
     if (sector)          { params.push(sector);                  where.push(`$${params.length} IN (f.sector, f.sector_2)`); }
 
-    if (req.usuario.rol === 'supervisor' && !tieneVisibilidadGlobal(req)) {
-      if (req.usuario.sector) { params.push(req.usuario.sector); where.push(`$${params.length} IN (f.sector, f.sector_2)`); }
-      else if (req.usuario.area) { params.push(req.usuario.area); where.push(`f.area = $${params.length}`); }
-    }
+    const condAlcance = filtroAlcance(alcanceSupervisor(req), params);
+    if (condAlcance) where.push(condAlcance);
 
     const whereStr = where.join(' AND ');
     const countRes = await pool.query(
@@ -167,9 +167,10 @@ router.get('/ausentismo', async (req, res) => {
     let sector = req.query.sector || null;
     let area   = null;
     // Supervisor: forzar su propio sector/área, ignorar query param
-    if (req.usuario.rol === 'supervisor' && !tieneVisibilidadGlobal(req)) {
-      if (SECTORES_VALIDOS.includes(req.usuario.sector)) { sector = req.usuario.sector; area = null; }
-      else if (AREAS_VALIDAS.includes(req.usuario.area)) { sector = null; area = req.usuario.area; }
+    const alcance = alcanceSupervisor(req);
+    if (alcance) {
+      if (SECTORES_VALIDOS.includes(alcance.sector)) { sector = alcance.sector; area = null; }
+      else if (AREAS_VALIDAS.includes(alcance.area)) { sector = null; area = alcance.area; }
       else { sector = null; }
     }
     const params = [];
@@ -528,9 +529,8 @@ router.get('/exportar/permisos', async (req, res) => {
     if (estado)       { params.push(estado);       where.push(`s.estado = $${params.length}`); }
     if (sector)       { params.push(sector);       where.push(`$${params.length} IN (f.sector, f.sector_2)`); }
 
-    if (req.usuario.rol === 'supervisor' && !tieneVisibilidadGlobal(req)) {
-      if (req.usuario.sector) { params.push(req.usuario.sector); where.push(`$${params.length} IN (f.sector, f.sector_2)`); }
-    }
+    const condAlcance = filtroAlcance(alcanceSupervisor(req), params);
+    if (condAlcance) where.push(condAlcance);
 
     const { rows } = await pool.query(
       `SELECT f.rut, f.apellidos||' '||f.nombres AS funcionario, f.cargo, f.sector,

@@ -2,7 +2,7 @@ const { pool } = require('../db');
 const { generarExcelEjecutivo } = require('../reportes/excelEjecutivo');
 const { generarPdfEjecutivo } = require('../reportes/pdfEjecutivo');
 const { SECTORES_VALIDOS, AREAS_VALIDAS } = require('../config/catalogos');
-const { tieneVisibilidadGlobalPorUsuarioId } = require('../middleware/rbac');
+const { alcanceSupervisorPorUsuarioId, filtroAlcance } = require('../middleware/rbac');
 
 // Genera el archivo (PDF o Excel) a partir de un paquete ya armado de
 // kpis/columnas/filas — evita repetir el switch formato==='excel' en cada
@@ -29,9 +29,10 @@ async function scopeSupervisor(usuarioId) {
   const { rows } = await pool.query('SELECT rol, sector, area, email FROM usuarios WHERE id = $1', [usuarioId]);
   const u = rows[0] || {};
   let sector = null, area = null;
-  if (u.rol === 'supervisor' && !(await tieneVisibilidadGlobalPorUsuarioId(usuarioId))) {
-    if (SECTORES_VALIDOS.includes(u.sector)) sector = u.sector;
-    else if (AREAS_VALIDAS.includes(u.area)) area = u.area;
+  const alcance = await alcanceSupervisorPorUsuarioId(usuarioId);
+  if (alcance) {
+    if (SECTORES_VALIDOS.includes(alcance.sector)) sector = alcance.sector;
+    else if (AREAS_VALIDAS.includes(alcance.area)) area = alcance.area;
   }
   return { ...u, sector, area };
 }
@@ -126,10 +127,8 @@ async function generarReportePermisos(filtros, formato, usuarioId) {
 
   const { rows: usuarioRows } = await pool.query('SELECT rol, sector, area, email FROM usuarios WHERE id = $1', [usuarioId]);
   const u = usuarioRows[0] || {};
-  if (u.rol === 'supervisor' && !(await tieneVisibilidadGlobalPorUsuarioId(usuarioId))) {
-    if (u.sector) { params.push(u.sector); where.push(`$${params.length} IN (f.sector, f.sector_2)`); }
-    else if (u.area) { params.push(u.area); where.push(`f.area = $${params.length}`); }
-  }
+  const condAlcance = filtroAlcance(await alcanceSupervisorPorUsuarioId(usuarioId), params);
+  if (condAlcance) where.push(condAlcance);
 
   const { rows } = await pool.query(
     `SELECT s.id, s.fecha_inicio, s.fecha_fin, s.dias_solicitados, s.estado,

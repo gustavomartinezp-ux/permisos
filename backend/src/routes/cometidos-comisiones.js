@@ -3,7 +3,7 @@
 const express = require('express');
 const { pool } = require('../db');
 const { verificarToken } = require('../middleware/auth');
-const { cargarPermisos, requierePermiso, noAutoAprobacion, esSoloAutoservicio, tieneVisibilidadGlobal } = require('../middleware/rbac');
+const { cargarPermisos, requierePermiso, noAutoAprobacion, esSoloAutoservicio, tieneVisibilidadGlobal, alcanceSupervisor, filtroAlcance } = require('../middleware/rbac');
 const { diasCorridos, validarLimiteComision } = require('../utils/cometidosComisiones');
 
 const router = express.Router();
@@ -24,15 +24,8 @@ router.get('/', async (req, res) => {
         params.push(funcionario_id);
         where.push(`cc.funcionario_id = $${params.length}`);
       }
-      if (req.usuario.rol === 'supervisor' && !tieneVisibilidadGlobal(req)) {
-        if (req.usuario.sector) {
-          params.push(req.usuario.sector);
-          where.push(`$${params.length} IN (f.sector, f.sector_2)`);
-        } else if (req.usuario.area) {
-          params.push(req.usuario.area);
-          where.push(`f.area = $${params.length}`);
-        }
-      }
+      const cond = filtroAlcance(alcanceSupervisor(req), params);
+      if (cond) where.push(cond);
     }
     if (estado) { params.push(estado); where.push(`cc.estado = $${params.length}`); }
     if (tipo)   { params.push(tipo);   where.push(`cc.tipo = $${params.length}`); }

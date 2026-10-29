@@ -3,7 +3,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { pool } = require('../db');
 const { verificarToken } = require('../middleware/auth');
-const { cargarPermisos, requierePermiso, esSoloAutoservicio, tieneVisibilidadGlobal } = require('../middleware/rbac');
+const { cargarPermisos, requierePermiso, esSoloAutoservicio, alcanceSupervisor, filtroAlcance, dentroDeAlcance } = require('../middleware/rbac');
 const { FERIADOS_CHILE } = require('../utils/feriadoLegal');
 
 const router = express.Router();
@@ -78,14 +78,11 @@ router.get('/', async (req, res) => {
     if (esSoloAutoservicio(req)) {
       whereClause += ` AND hc.funcionario_id = $${params.length + 1}`;
       params.push(req.usuario.funcionario_id);
-    } else if (req.usuario.rol === 'supervisor' && !tieneVisibilidadGlobal(req)) {
+    } else if (alcanceSupervisor(req)) {
       // Supervisor solo ve horas de funcionarios de su sector/área
-      if (req.usuario.sector) {
-        whereClause += ` AND $${params.length + 1} IN (f.sector, f.sector_2)`;
-        params.push(req.usuario.sector);
-      } else if (req.usuario.area) {
-        whereClause += ` AND f.area = $${params.length + 1}`;
-        params.push(req.usuario.area);
+      const cond = filtroAlcance(alcanceSupervisor(req), params);
+      if (cond) {
+        whereClause += ` AND ${cond}`;
       } else if (req.usuario.funcionario_id) {
         whereClause += ` AND hc.funcionario_id = $${params.length + 1}`;
         params.push(req.usuario.funcionario_id);
@@ -123,13 +120,11 @@ router.get('/funcionario/:id', async (req, res) => {
     return res.status(403).json({ error: 'Acceso denegado' });
   }
   // Supervisor solo puede ver funcionarios de su sector/área o su propio perfil
-  if (req.usuario.rol === 'supervisor' && req.usuario.funcionario_id != id && !tieneVisibilidadGlobal(req)) {
+  const alcance = alcanceSupervisor(req);
+  if (alcance && req.usuario.funcionario_id != id) {
     const check = await pool.query('SELECT sector, sector_2, area FROM funcionarios WHERE id = $1', [id]);
     if (check.rows.length > 0) {
-      const f = check.rows[0];
-      const inSector = req.usuario.sector && [f.sector, f.sector_2].includes(req.usuario.sector);
-      const inArea   = req.usuario.area   && f.area   === req.usuario.area;
-      if (!inSector && !inArea) {
+      if (!dentroDeAlcance(alcance, check.rows[0])) {
         return res.status(403).json({ error: 'Acceso denegado' });
       }
     }

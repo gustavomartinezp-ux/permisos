@@ -1,7 +1,7 @@
 const express = require('express');
 const { pool } = require('../db');
 const { verificarToken } = require('../middleware/auth');
-const { cargarPermisos, esSoloAutoservicio, tieneVisibilidadGlobal } = require('../middleware/rbac');
+const { cargarPermisos, esSoloAutoservicio, alcanceSupervisor } = require('../middleware/rbac');
 const { SECTORES_VALIDOS, AREAS_VALIDAS } = require('../config/catalogos');
 
 const router = express.Router();
@@ -12,9 +12,9 @@ router.get('/stats', async (req, res) => {
     return res.status(403).json({ error: 'Acceso denegado' });
   }
   const anio = req.query.anio || new Date().getFullYear();
-  const esSupervisor = req.usuario.rol === 'supervisor' && !tieneVisibilidadGlobal(req);
-  const sectorFiltro = esSupervisor && req.usuario.sector ? req.usuario.sector : null;
-  const areaFiltro   = esSupervisor && !req.usuario.sector && req.usuario.area ? req.usuario.area : null;
+  const alcance = alcanceSupervisor(req);
+  const sectorFiltro = alcance?.sector || null;
+  const areaFiltro   = !sectorFiltro && alcance?.area ? alcance.area : null;
 
   try {
     // Validar el valor del filtro contra los catálogos antes de usarlo en SQL
@@ -127,7 +127,7 @@ router.get('/stats', async (req, res) => {
     let solicitudesPendientes;
     let estadoAccion;
 
-    if (esSupervisor) {
+    if (alcance) {
       estadoAccion = 'pendiente';
       solicitudesPendientes = await pool.query(
         `SELECT sol.*, f.nombres, f.apellidos, f.cargo, f.sector,
@@ -165,7 +165,7 @@ router.get('/stats', async (req, res) => {
     }
 
     // Contar pendientes directos para admin
-    const directasAdmin = !esSupervisor
+    const directasAdmin = !alcance
       ? await pool.query(
           `SELECT COUNT(*) FROM solicitudes sol
            WHERE sol.estado = 'pendiente'

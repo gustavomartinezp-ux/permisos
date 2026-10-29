@@ -2,7 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { pool } = require('../db');
 const { verificarToken } = require('../middleware/auth');
-const { cargarPermisos, requierePermiso, noAutoAprobacion, esSoloAutoservicio, tieneVisibilidadGlobal } = require('../middleware/rbac');
+const { cargarPermisos, requierePermiso, noAutoAprobacion, esSoloAutoservicio, tieneVisibilidadGlobal, alcanceSupervisor, filtroAlcance } = require('../middleware/rbac');
 const {
   calcularDiasHabiles,
   calcularDistribucion,
@@ -93,16 +93,9 @@ router.get('/', async (req, res) => {
         whereClause += ` AND sol.funcionario_id = $${paramIdx++}`;
         params.push(funcionario_id);
       }
-      // Supervisor solo ve su sector o su área
-      if (req.usuario.rol === 'supervisor' && !tieneVisibilidadGlobal(req)) {
-        if (req.usuario.sector) {
-          whereClause += ` AND $${paramIdx++} IN (f.sector, f.sector_2)`;
-          params.push(req.usuario.sector);
-        } else if (req.usuario.area) {
-          whereClause += ` AND f.area = $${paramIdx++}`;
-          params.push(req.usuario.area);
-        }
-      }
+      // Supervisor (o subrogante) solo ve su sector o su área
+      const cond = filtroAlcance(alcanceSupervisor(req), params);
+      if (cond) { whereClause += ` AND ${cond}`; paramIdx = params.length + 1; }
     }
 
     if (estado) {

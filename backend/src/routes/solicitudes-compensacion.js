@@ -2,7 +2,7 @@
 const express = require('express');
 const { pool } = require('../db');
 const { verificarToken } = require('../middleware/auth');
-const { cargarPermisos, requierePermiso, esSoloAutoservicio, tieneVisibilidadGlobal } = require('../middleware/rbac');
+const { cargarPermisos, requierePermiso, esSoloAutoservicio, alcanceSupervisor, filtroAlcance, dentroDeAlcance } = require('../middleware/rbac');
 const { calcularSaldo } = require('./horas-compensatorias');
 
 const router = express.Router();
@@ -14,6 +14,7 @@ router.use(verificarToken, cargarPermisos);
 // dispara el logout forzado del interceptor global de axios ante cualquier 403.
 const puedeGestionarCompensacion = (req, res, next) => {
   if (['admin', 'supervisor'].includes(req.usuario.rol)) return next();
+  if ((req.usuario.rolesRBAC || []).includes('SUPERVISOR')) return next(); // subrogante
   if ((req.usuario.permisos || []).includes('saldos.ajustar')) return next();
   return res.status(403).json({ error: 'No tienes permiso para gestionar solicitudes de horas compensatorias' });
 };
@@ -57,20 +58,15 @@ router.get('/', async (req, res) => {
     if (esSoloAutoservicio(req)) {
       where += ` AND sc.funcionario_id = $${params.length + 1}`;
       params.push(req.usuario.funcionario_id);
-    } else if (req.usuario.rol === 'supervisor' && !tieneVisibilidadGlobal(req)) {
+    } else if (alcanceSupervisor(req)) {
       // Supervisor ve sus propias solicitudes + las de su sector/área
       const condiciones = [];
       if (req.usuario.funcionario_id) {
         params.push(req.usuario.funcionario_id);
         condiciones.push(`sc.funcionario_id = $${params.length}`);
       }
-      if (req.usuario.sector) {
-        params.push(req.usuario.sector);
-        condiciones.push(`$${params.length} IN (f.sector, f.sector_2)`);
-      } else if (req.usuario.area) {
-        params.push(req.usuario.area);
-        condiciones.push(`f.area = $${params.length}`);
-      }
+      const cond = filtroAlcance(alcanceSupervisor(req), params);
+      if (cond) condiciones.push(cond);
       if (condiciones.length > 0) {
         where += ` AND (${condiciones.join(' OR ')})`;
       } else {
@@ -206,18 +202,16 @@ router.patch('/:id/aprobar', puedeGestionarCompensacion, async (req, res) => {
     const s = sol.rows[0];
 
     // Supervisor no puede aprobar su propia solicitud de horas compensatorias
-    if (req.usuario.rol === 'supervisor' && req.usuario.funcionario_id && s.funcionario_id == req.usuario.funcionario_id) {
+    if (alcanceSupervisor(req) && req.usuario.funcionario_id && s.funcionario_id == req.usuario.funcionario_id) {
       await client.query('ROLLBACK');
       return res.status(403).json({ error: 'No puede aprobar su propia solicitud de horas compensatorias. Debe ser procesada por el Administrador.' });
     }
 
     // Supervisor solo puede aprobar solicitudes de funcionarios bajo su cargo
-    if (req.usuario.rol === 'supervisor' && !tieneVisibilidadGlobal(req)) {
+    const alcance = alcanceSupervisor(req);
+    if (alcance) {
       const funcCheck = await client.query('SELECT sector, sector_2, area FROM funcionarios WHERE id = $1', [s.funcionario_id]);
-      const f = funcCheck.rows[0];
-      const inSector = req.usuario.sector && [f?.sector, f?.sector_2].includes(req.usuario.sector);
-      const inArea   = req.usuario.area   && f?.area   === req.usuario.area;
-      if (!inSector && !inArea) {
+      if (!dentroDeAlcance(alcance, funcCheck.rows[0])) {
         await client.query('ROLLBACK');
         return res.status(403).json({ error: 'Solo puede aprobar solicitudes de funcionarios bajo su cargo directo' });
       }
@@ -262,7 +256,8 @@ router.patch('/:id/rechazar', puedeGestionarCompensacion, async (req, res) => {
   const { observaciones } = req.body;
   try {
     // Verificar existencia y scope antes de rechazar
-    if (req.usuario.rol === 'supervisor' && !tieneVisibilidadGlobal(req)) {
+    const alcance = alcanceSupervisor(req);
+    if (alcance) {
       const solCheck = await pool.query(
         `SELECT sc.funcionario_id, f.sector, f.sector_2, f.area
          FROM solicitudes_compensacion sc
@@ -279,9 +274,7 @@ router.patch('/:id/rechazar', puedeGestionarCompensacion, async (req, res) => {
         return res.status(403).json({ error: 'No puede rechazar su propia solicitud de horas compensatorias. Solo el Administrador puede hacerlo.' });
       }
 
-      const inSector = req.usuario.sector && [s.sector, s.sector_2].includes(req.usuario.sector);
-      const inArea   = req.usuario.area   && s.area   === req.usuario.area;
-      if (!inSector && !inArea) {
+      if (!dentroDeAlcance(alcance, s)) {
         return res.status(403).json({ error: 'Solo puede gestionar solicitudes de funcionarios bajo su cargo directo' });
       }
     }

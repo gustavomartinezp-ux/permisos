@@ -9,9 +9,29 @@
 const HORAS_MINIMAS = 33;
 const DIAS_PLAZO = 15;
 
-// Día de cada estamento ('MM-DD'). Un estamento sin fecha aquí aún no valida
-// la regla de los 15 días.
-const DIAS_ESTAMENTO = {};
+// Día de cada estamento ('MM-DD'), según el calendario "Celebración Día
+// Estamentario" del CESFAM. Odontólogo no figura: se usa el día nacional (3/10).
+// Un estamento sin fecha aquí no valida la regla de los 15 días.
+const DIAS_ESTAMENTO = {
+  AUXILIAR: '03-19', GUARDIA: '03-19', CHOFER: '03-19',        // auxiliares de servicio
+  TENS: '03-26', 'TENS DENTAL': '03-26', 'TENS PODOLOGIA': '03-26',
+  'TERAPEUTA OCUPACIONAL': '04-04',
+  NUTRICIONISTA: '05-06', KINESIOLOGO: '05-06',
+  ENFERMERA: '05-12',
+  'INGENIERO EN ADMINISTRACION': '05-14', 'INGENIERO INFORMATICO': '05-14',
+  'INGENIERO EN INFORMATICA BIOMEDICA': '05-14',
+  PODOLOGO: '07-25',
+  ADMINISTRATIVO: '08-28',
+  MATRONA: '09-01',
+  'TECNOLOGO MEDICO': '10-02',
+  ODONTOLOGO: '10-03',
+  'PROFESOR DE EDUCACION FISICA': '10-16',
+  PSICOLOGO: '11-10',
+  'ASISTENTE SOCIAL': '11-11',
+  FONOAUDIOLOGO: '11-21', 'EDUCADORA DE PARVULOS': '11-21',
+  'QUIMICO FARMACEUTICO': '12-01',
+  MEDICO: '12-03',
+};
 
 // Las fichas escriben el mismo estamento de varias formas (con/sin tilde,
 // abreviado, masculino/femenino): se normaliza a una sola clave.
@@ -25,6 +45,8 @@ const ALIAS = {
   'ING INFORMATICO': 'INGENIERO INFORMATICO',
   'TERAPEUTA OCUPACIONA': 'TERAPEUTA OCUPACIONAL',
   'PROF.ED.FISICA': 'PROFESOR DE EDUCACION FISICA',
+  'TRABAJADOR SOCIAL': 'ASISTENTE SOCIAL',
+  'TRABAJADORA SOCIAL': 'ASISTENTE SOCIAL',
 };
 
 const normalizarEstamento = (texto) => {
@@ -60,10 +82,14 @@ function errorPermisoEstamento(funcionario, fechaInicio) {
   if (!mmdd) return null;
   const fecha = String(fechaInicio).substring(0, 10);
   const anio = Number(fecha.substring(0, 4));
-  // El plazo puede cruzar el año (día del estamento a fines de diciembre)
+  // El plazo puede cruzar el año (día del estamento a fines de diciembre). Si el
+  // día cae sábado o domingo se celebra desde el viernes anterior (ej. 21/11/2026
+  // sábado → viernes 20), así que la ventana parte ese viernes.
   const dentro = [anio, anio - 1].some((a) => {
     const dia = `${a}-${mmdd}`;
-    return fecha >= dia && fecha <= sumarDias(dia, DIAS_PLAZO);
+    const dow = new Date(`${dia}T12:00:00Z`).getUTCDay();
+    const desde = dow === 6 ? sumarDias(dia, -1) : dow === 0 ? sumarDias(dia, -2) : dia;
+    return fecha >= desde && fecha <= sumarDias(dia, DIAS_PLAZO);
   });
   if (dentro) return null;
   const [mm, dd] = mmdd.split('-');

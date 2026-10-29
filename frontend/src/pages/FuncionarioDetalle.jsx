@@ -14,6 +14,7 @@ import { generarReporteFuncionario, imprimirReporteFuncionario } from '../utils/
 import { useAuth } from '../context/AuthContext';
 import { NOMBRE_ROL, COLOR_ROL, ORDEN_ROL } from '../config/roles';
 import SaldosLista from '../components/SaldosLista';
+import PlazoEstamento from '../components/PlazoEstamento';
 import TimelineMovimientos from '../components/TimelineMovimientos';
 import EstadoBadge from '../components/EstadoBadge';
 import SolicitudModal from '../components/SolicitudModal';
@@ -913,6 +914,9 @@ export default function FuncionarioDetalle() {
             </div>
           ) : (
             <SaldosLista saldos={funcionario.saldos} />
+          )}
+          {funcionario.saldos?.some((s) => s.codigo === 'ESTAMENTO') && (
+            <PlazoEstamento funcionarioId={funcionario.id} />
           )}
         </div>
       )}

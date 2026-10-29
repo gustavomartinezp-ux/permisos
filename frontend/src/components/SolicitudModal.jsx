@@ -113,9 +113,14 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
   const esSectorTurno = DISPOSITIVO_EXCEPCION_DIA_HABIL.test(funcionario?.dispositivo || '');
   const permiteMedioDia = !esEspecial && saldoSel?.permite_medio_dia === true;
   const cuentaCorridos = esSectorTurno && tipoRequiereDiaHabil(saldoSel);
+  // En tipos con medio día se pueden pedir N,5 días (ej. 3,5): se toman
+  // N+1 días hábiles y el último es media jornada AM o PM.
+  const numDiasValor = parseFloat(numDias) || 0;
+  const conMedioFinal = permiteMedioDia && !medioDia && numDiasValor % 1 === 0.5;
   const rango = !esEspecial && !medioDia
-    ? construirRango(form.fecha_inicio, parseInt(numDias, 10) || 0, cuentaCorridos)
+    ? construirRango(form.fecha_inicio, Math.ceil(numDiasValor), cuentaCorridos)
     : null;
+  const jornadaEnviada = medioDia || conMedioFinal ? jornadaMedioDia : null;
   // Fechas que se envían: el rango calculado (o la fecha única si es medio día)
   const fechaInicioSol = medioDia ? form.fecha_inicio : (rango?.inicio || '');
   const fechaFinSol    = medioDia ? form.fecha_inicio : (rango?.fin || '');
@@ -123,7 +128,7 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
     ? (tipoEspecialSel.dias_fijos || 0)
     : medioDia
       ? 0.5
-      : (rango ? rango.dias.length : 0);
+      : (rango ? rango.dias.length - (conMedioFinal ? 0.5 : 0) : 0);
 
   // Saldo para tipos normales
   const arrastreDisp = saldoSel?.es_feriado_legal
@@ -241,7 +246,7 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
         dias_solicitados:  diasSolicitados,
         motivo:            form.motivo,
         reemplazante:      form.reemplazante,
-        jornada_medio_dia: medioDia ? jornadaMedioDia : undefined,
+        jornada_medio_dia: jornadaEnviada || undefined,
       });
       // Formato oficial: "Nº TOTAL DÍAS" = saldo disponible antes de pedir,
       // "SALDO PENDIENTE" = lo que le queda (ej. 1,5 − 0,5 = 1).
@@ -266,7 +271,7 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
         setSolicitudCreada({
           dividida: true,
           tipo_nombre: saldoSel?.tipo_nombre,
-          jornada_medio_dia: medioDia ? jornadaMedioDia : null,
+          jornada_medio_dia: jornadaEnviada,
           _saldoInfo: saldoInfo,
           // Cada tramo descuenta del saldo que dejó el anterior
           tramos: [
@@ -283,7 +288,7 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
           ...data,
           tipo_nombre:       saldoSel?.tipo_nombre,
           es_feriado_legal:  saldoSel?.es_feriado_legal || false,
-          jornada_medio_dia: medioDia ? jornadaMedioDia : null,
+          jornada_medio_dia: jornadaEnviada,
           _saldoInfo: saldoInfo,
         });
       }
@@ -675,14 +680,16 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
                         Número de días
                       </label>
                       <input
-                        type="number"
-                        min="1"
-                        step="1"
-                        max={Math.max(Math.floor(totalDisp), 1)}
+                        type="text"
+                        inputMode={permiteMedioDia ? 'decimal' : 'numeric'}
                         value={numDias}
-                        onChange={(e) => setNumDias(e.target.value.replace(/[^0-9]/g, ''))}
+                        onChange={(e) => {
+                          // Solo enteros, o N,5 en tipos que admiten medio día
+                          const v = e.target.value.replace(',', '.');
+                          if (permiteMedioDia ? /^\d{0,3}(\.5?)?$/.test(v) : /^\d{0,3}$/.test(v)) setNumDias(v);
+                        }}
                         className="input-field"
-                        placeholder={`Hasta ${Math.floor(totalDisp)}`}
+                        placeholder={permiteMedioDia ? `Hasta ${totalDisp} (ej. 3,5)` : `Hasta ${Math.floor(totalDisp)}`}
                         required
                       />
                     </div>
@@ -716,6 +723,30 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
                       </p>
                     )}
                     <CalendarioPermiso dias={rango.dias} />
+                    {conMedioFinal && (
+                      <div className="pt-2 border-t border-dark-100 space-y-2">
+                        <p className="text-xs text-dark-600">
+                          El último día (<strong>{formatoFecha(rango.fin)}</strong>) es <strong>medio día</strong>:
+                        </p>
+                        <div className="flex gap-2">
+                      <button type="button" onClick={() => setJornadaMedioDia('AM')}
+                        className={`flex-1 py-2 text-sm rounded-xl border font-medium transition-all ${
+                          jornadaMedioDia === 'AM' ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-dark-600 border-dark-200 hover:border-amber-300'
+                        }`}>
+                        Jornada AM
+                      </button>
+                      <button type="button" onClick={() => setJornadaMedioDia('PM')}
+                        className={`flex-1 py-2 text-sm rounded-xl border font-medium transition-all ${
+                          jornadaMedioDia === 'PM' ? 'bg-indigo-500 text-white border-indigo-500' : 'bg-white text-dark-600 border-dark-200 hover:border-indigo-300'
+                        }`}>
+                        Jornada PM
+                      </button>
+                        </div>
+                        <p className="text-xs text-center text-dark-500 bg-dark-50 rounded-lg py-1.5 font-medium">
+                          {jornadaMedioDia === 'AM' ? 'Mañana' : 'Tarde'}: {getHorario(rango.fin, jornadaMedioDia)}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

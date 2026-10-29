@@ -20,6 +20,27 @@ const {
 const router = express.Router();
 router.use(verificarToken, cargarPermisos);
 
+// Los días a descontar los determina el rango de fechas (hábiles; corridos en
+// SAR), no lo que envíe el cliente. Medio día (0,5) va en una sola fecha; en
+// los tipos que admiten medio día (Administrativo, Jornadas) también se puede
+// pedir N,5 días: el último día del rango es media jornada AM o PM.
+// Devuelve el mensaje de error, o null si los días cuadran con las fechas.
+function errorDiasSolicitud(funcionario, tipo, inicio, fin, dias, jornada) {
+  const n = Number(dias);
+  if (n === 0.5) return String(inicio) === String(fin) ? null : 'Medio día debe solicitarse en una sola fecha';
+  const delRango = diasDelRango(funcionario, tipo, inicio, fin);
+  if (n % 1 === 0) {
+    return delRango === n ? null : `El rango ${inicio} al ${fin} corresponde a ${delRango} día(s), no a ${n}`;
+  }
+  if (n % 1 !== 0.5 || !tipo.permite_medio_dia) return `${tipo.nombre} solo puede solicitarse por días completos`;
+  if (jornada !== 'AM' && jornada !== 'PM') return 'Indica si el medio día del último día es AM o PM';
+  return delRango - 0.5 === n ? null
+    : `El rango ${inicio} al ${fin} tiene ${delRango} día(s): con el último en media jornada son ${delRango - 0.5}, no ${n}`;
+}
+
+// La jornada AM/PM solo se guarda cuando la solicitud incluye un medio día
+const jornadaDeSolicitud = (dias, jornada) => (Number(dias) % 1 !== 0 ? (jornada || null) : null);
+
 // Saldo del período imputado (antes → después) para el formato oficial.
 async function guardarSaldoPeriodo(client, solicitudId, disponibleAntes, dias) {
   const r = await client.query(
@@ -214,7 +235,7 @@ router.post('/', [
       });
     }
     // Forzar jornada_medio_dia en backend si el tipo lo exige
-    const jornadaMedioDiaFinal = jornadaForzada || jornada_medio_dia || null;
+    const jornadaMedioDiaFinal = jornadaForzada || jornadaDeSolicitud(dias_solicitados, jornada_medio_dia);
 
     // ── Lógica permiso especial (sin saldo, fecha_fin calculada en backend) ──
     if (esEspecial) {
@@ -255,16 +276,10 @@ router.post('/', [
 
     // Los días a descontar los determina el rango de fechas (hábiles; corridos
     // en SAR), no lo que envíe el cliente: así el saldo nunca se descuadra.
-    const diasEsperados = Number(dias_solicitados) === 0.5
-      ? (String(fecha_inicio) === String(fecha_fin) ? 0.5 : null)
-      : diasDelRango(funcionario, tipo, fecha_inicio, fecha_fin);
-    if (diasEsperados === null || diasEsperados !== Number(dias_solicitados)) {
+    const errorDias = errorDiasSolicitud(funcionario, tipo, fecha_inicio, fecha_fin, dias_solicitados, jornadaMedioDiaFinal);
+    if (errorDias) {
       await client.query('ROLLBACK');
-      return res.status(400).json({
-        error: diasEsperados === null
-          ? 'Medio día debe solicitarse en una sola fecha'
-          : `El rango ${fecha_inicio} al ${fecha_fin} corresponde a ${diasEsperados} día(s), no a ${dias_solicitados}`,
-      });
+      return res.status(400).json({ error: errorDias });
     }
 
     // Verificar solapamiento de fechas (aplica a tipos normales y feriado legal)
@@ -878,21 +893,15 @@ router.patch('/:id/editar', requierePermiso('solicitudes.aprobar'), async (req, 
       await client.query('ROLLBACK');
       return res.status(400).json({ error: validacion.error });
     }
-    const jornadaFinal = tipoNuevo.jornada_forzada || (Number(dias_solicitados) === 0.5 ? (jornada_medio_dia || null) : null);
+    const jornadaFinal = tipoNuevo.jornada_forzada || jornadaDeSolicitud(dias_solicitados, jornada_medio_dia);
     if (tipoNuevo.jornada_forzada && Number(dias_solicitados) !== 0.5) {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: `${tipoNuevo.nombre} solo puede ser media jornada ${tipoNuevo.jornada_forzada}` });
     }
-    const diasEsperados = Number(dias_solicitados) === 0.5
-      ? (String(fecha_inicio) === String(fecha_fin) ? 0.5 : null)
-      : diasDelRango(funcionario, tipoNuevo, fecha_inicio, fecha_fin);
-    if (diasEsperados === null || diasEsperados !== Number(dias_solicitados)) {
+    const errorDias = errorDiasSolicitud(funcionario, tipoNuevo, fecha_inicio, fecha_fin, dias_solicitados, jornadaFinal);
+    if (errorDias) {
       await client.query('ROLLBACK');
-      return res.status(400).json({
-        error: diasEsperados === null
-          ? 'Medio día debe solicitarse en una sola fecha'
-          : `El rango ${fecha_inicio} al ${fecha_fin} corresponde a ${diasEsperados} día(s), no a ${dias_solicitados}`,
-      });
+      return res.status(400).json({ error: errorDias });
     }
     if (await verificarSolapamiento(client, sol.funcionario_id, fecha_inicio, fecha_fin, id)) {
       await client.query('ROLLBACK');

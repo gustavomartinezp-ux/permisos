@@ -285,7 +285,9 @@ export default function Solicitudes() {
                   </p>
                   {sol.jornada_medio_dia && (
                     <p className={`text-xs font-medium mt-0.5 ${sol.jornada_medio_dia === 'AM' ? 'text-amber-600' : 'text-indigo-600'}`}>
-                      Medio día {sol.jornada_medio_dia} · {getHorarioJornada(sol.fecha_inicio, sol.jornada_medio_dia)}
+                      {Number(sol.dias_solicitados) > 0.5
+                        ? <>Último día medio día {sol.jornada_medio_dia} · {getHorarioJornada(String(sol.fecha_fin).substring(0, 10), sol.jornada_medio_dia)}</>
+                        : <>Medio día {sol.jornada_medio_dia} · {getHorarioJornada(sol.fecha_inicio, sol.jornada_medio_dia)}</>}
                     </p>
                   )}
                   {sol.motivo && (

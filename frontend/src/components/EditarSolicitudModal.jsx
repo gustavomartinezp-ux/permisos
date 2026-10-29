@@ -49,10 +49,13 @@ export default function EditarSolicitudModal({ solicitud, onClose, onSuccess }) 
 
   const esSar = DISPOSITIVO_EXCEPCION_DIA_HABIL.test(solicitud.dispositivo || '');
   const cuentaCorridos = esSar && tipoRequiereDiaHabil(saldoSel);
-  const rango = !esMedioDia ? construirRango(fechaInicio, parseInt(numDias, 10) || 0, cuentaCorridos) : null;
+  // N,5 días: N+1 días hábiles con el último en media jornada
+  const numDiasValor = parseFloat(numDias) || 0;
+  const conMedioFinal = permiteMedioDia && !esMedioDia && numDiasValor % 1 === 0.5;
+  const rango = !esMedioDia ? construirRango(fechaInicio, Math.ceil(numDiasValor), cuentaCorridos) : null;
   const inicioSol = esMedioDia ? fechaInicio : (rango?.inicio || '');
   const finSol = esMedioDia ? fechaInicio : (rango?.fin || '');
-  const dias = esMedioDia ? 0.5 : (rango ? rango.dias.length : 0);
+  const dias = esMedioDia ? 0.5 : (rango ? rango.dias.length - (conMedioFinal ? 0.5 : 0) : 0);
 
   // Lo que hoy ocupa esta solicitud vuelve al saldo si se mantiene el mismo tipo
   const disponible = saldoSel
@@ -77,7 +80,7 @@ export default function EditarSolicitudModal({ solicitud, onClose, onSuccess }) 
         fecha_inicio: inicioSol,
         fecha_fin: finSol,
         dias_solicitados: dias,
-        jornada_medio_dia: esMedioDia ? jornada : null,
+        jornada_medio_dia: esMedioDia || conMedioFinal ? jornada : null,
         motivo,
         reemplazante,
         motivo_cambio: motivoCambio.trim(),
@@ -141,7 +144,7 @@ export default function EditarSolicitudModal({ solicitud, onClose, onSuccess }) 
               ))}
             </div>
           )}
-          {esMedioDia && !jornadaForzada && (
+          {(esMedioDia || conMedioFinal) && !jornadaForzada && (
             <div className="flex gap-2">
               {['AM', 'PM'].map((j) => (
                 <button key={j} type="button" onClick={() => setJornada(j)}
@@ -156,9 +159,13 @@ export default function EditarSolicitudModal({ solicitud, onClose, onSuccess }) 
             {!esMedioDia && (
               <div>
                 <label className="block text-sm font-medium text-dark-700 mb-1.5"><Scale size={14} className="inline mr-1" />Número de días</label>
-                <input type="number" min="1" step="1" value={numDias}
-                  onChange={(e) => setNumDias(e.target.value.replace(/[^0-9]/g, ''))}
-                  className="input-field" required />
+                <input type="text" inputMode={permiteMedioDia ? 'decimal' : 'numeric'} value={numDias}
+                  onChange={(e) => {
+                    // Solo enteros, o N,5 en tipos que admiten medio día
+                    const v = e.target.value.replace(',', '.');
+                    if (permiteMedioDia ? /^\d{0,3}(\.5?)?$/.test(v) : /^\d{0,3}$/.test(v)) setNumDias(v);
+                  }}
+                  className="input-field" placeholder={permiteMedioDia ? 'ej. 3,5' : ''} required />
               </div>
             )}
             <div>
@@ -179,6 +186,11 @@ export default function EditarSolicitudModal({ solicitud, onClose, onSuccess }) 
                 </p>
               )}
               <CalendarioPermiso dias={rango.dias} />
+              {conMedioFinal && (
+                <p className="text-xs text-dark-600">
+                  El último día (<strong>{formatoFecha(rango.fin)}</strong>) es medio día, jornada <strong>{jornada}</strong>.
+                </p>
+              )}
             </div>
           )}
 

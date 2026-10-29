@@ -215,8 +215,8 @@ export function construirFormatoCapacitacionDAS(solicitud, funcionario, saldoInf
 // ─── Solicitud de Descanso Compensatorio (formato agosto 2026) ──────────────
 // Reconstruido desde el Word institucional: marco y textos en azul DAS, letra
 // Verdana negrita (aquí Helvetica negrita estirada al ancho original). El Word
-// mide 612 × 907,5 pt; se centra en hoja oficio (la que usa el formato de
-// suspensión) para imprimir sin escalar.
+// mide 612 × 907,5 pt; para hoja carta se acortan los dos espacios en blanco
+// (antes de las firmas y antes de "TALCAHUANO:") sin achicar letra ni anchos.
 const AZUL_DAS = [2, 103, 170];
 
 // Rótulo azul en negrita, repartido hasta el borde derecho del original
@@ -230,9 +230,10 @@ function rotuloAzul(doc, texto, x, y, size, hasta) {
 }
 
 export function construirFormatoCompensatorio(sol, funcionario, folio) {
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: [612, 936] });
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: CARTA });
   const f = funcionario;
-  const dy = 14; // centra el alto del Word (907,5 pt) en la hoja oficio
+  // y del Word → y en carta: firmas suben 70 pt y el bloque final 116 pt
+  const Y = (y) => (y <= 400 ? y : y <= 700 ? y - 70 : y - 116);
   if (folio) {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7);
@@ -243,12 +244,12 @@ export function construirFormatoCompensatorio(sol, funcionario, folio) {
   // Marco con el encabezado interrumpiendo el borde superior
   doc.setDrawColor(...AZUL_DAS);
   doc.setLineWidth(1);
-  doc.line(21.7, 37.2 + dy, 101.9, 37.2 + dy);
-  doc.line(474, 37.2 + dy, 590.2, 37.2 + dy);
-  doc.line(21.7, 37.2 + dy, 21.7, 883.9 + dy);
-  doc.line(590.2, 37.2 + dy, 590.2, 883.9 + dy);
-  doc.line(21.7, 883.9 + dy, 590.2, 883.9 + dy);
-  doc.addImage(ENCABEZADO_COMPENSATORIO_PNG, 'PNG', 116, 24 + dy, 332, 38);
+  doc.line(21.7, Y(37.2), 101.9, Y(37.2));
+  doc.line(474, Y(37.2), 590.2, Y(37.2));
+  doc.line(21.7, Y(37.2), 21.7, Y(883.9));
+  doc.line(590.2, Y(37.2), 590.2, Y(883.9));
+  doc.line(21.7, Y(883.9), 590.2, Y(883.9));
+  doc.addImage(ENCABEZADO_COMPENSATORIO_PNG, 'PNG', 116, Y(24), 332, 38);
 
   // Textos fijos: [texto, x, y base, tamaño, borde derecho original]
   const TEXTOS = [
@@ -277,15 +278,15 @@ export function construirFormatoCompensatorio(sol, funcionario, folio) {
     ['DEBE ADJUNTAR A REGISTRO DE RELOJ CONTROL DE LAS HORAS QUE DESEA COMPENSAR', 66, 826.7, 8.04, 449],
     ['DAS TALCAHUANO, Bulnes 266, Teléfono 413835700', 200.3, 869.9, 7.61, 416.7],
   ];
-  for (const [texto, x, y, size, hasta] of TEXTOS) rotuloAzul(doc, texto, x, y + dy, size, hasta);
+  for (const [texto, x, y, size, hasta] of TEXTOS) rotuloAzul(doc, texto, x, Y(y), size, hasta);
 
   // Líneas de llenado (azules, como el original) con el dato encima
   const lineaAzul = (x1, x2, y, grosor = 1) => {
     doc.setDrawColor(...AZUL_DAS);
     doc.setLineWidth(grosor);
-    doc.line(x1, y + dy, x2, y + dy);
+    doc.line(x1, Y(y), x2, Y(y));
   };
-  const dato = (valor, x1, x2, y, opciones) => { lineaAzul(x1, x2, y); campo(doc, valor, x1, x2, y + dy, opciones); };
+  const dato = (valor, x1, x2, y, opciones) => { lineaAzul(x1, x2, y); campo(doc, valor, x1, x2, Y(y), opciones); };
 
   dato(nombreCompleto(f), 177.4, 565.8, 167.6);
   dato(f.rut, 94.3, 301.6, 194.3);

@@ -2,6 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { pool } = require('../db');
 const { verificarToken } = require('../middleware/auth');
+const { errorPermisoEstamento, esPermisoEstamento } = require('../utils/estamento');
 const { cargarPermisos, requierePermiso, noAutoAprobacion, esSoloAutoservicio, tieneVisibilidadGlobal, alcanceSupervisor, filtroAlcance, puedeActuarPorFuncionario } = require('../middleware/rbac');
 const {
   calcularDiasHabiles,
@@ -191,7 +192,8 @@ router.post('/', [
 
     // Verificar que el funcionario esté activo
     const funcResult = await client.query(
-      `SELECT f.activo, f.sector, d.nombre AS dispositivo
+      `SELECT f.activo, f.sector, d.nombre AS dispositivo,
+              f.escalafon, f.tipo_contrato, f.tipo_contrato_2, f.horas_contrato, f.horas_contrato_2
        FROM funcionarios f
        LEFT JOIN dispositivos d ON f.dispositivo_id = d.id
        WHERE f.id = $1`, [funcionario_id]
@@ -232,6 +234,13 @@ router.post('/', [
       return res.status(400).json({
         error: `Este tipo de permiso solo puede solicitarse como ${label} según normativa institucional`,
       });
+    }
+    if (esPermisoEstamento(tipo)) {
+      const errorEstamento = errorPermisoEstamento(funcionario, fecha_inicio);
+      if (errorEstamento) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: errorEstamento });
+      }
     }
     // Forzar jornada_medio_dia en backend si el tipo lo exige
     const jornadaMedioDiaFinal = jornadaForzada || jornadaDeSolicitud(dias_solicitados, jornada_medio_dia);
@@ -860,7 +869,8 @@ router.patch('/:id/editar', requierePermiso('solicitudes.aprobar'), async (req, 
 
     const actual = await client.query(
       `SELECT sol.*, tp.nombre AS tipo_nombre, tp.es_especial, tp.es_feriado_legal,
-              d.nombre AS dispositivo
+              d.nombre AS dispositivo,
+              f.escalafon, f.tipo_contrato, f.tipo_contrato_2, f.horas_contrato, f.horas_contrato_2
        FROM solicitudes sol
        JOIN tipos_permisos tp ON tp.id = sol.tipo_permiso_id
        JOIN funcionarios f ON f.id = sol.funcionario_id
@@ -897,6 +907,13 @@ router.patch('/:id/editar', requierePermiso('solicitudes.aprobar'), async (req, 
     if (tipoNuevo.jornada_forzada && Number(dias_solicitados) !== 0.5) {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: `${tipoNuevo.nombre} solo puede ser media jornada ${tipoNuevo.jornada_forzada}` });
+    }
+    if (esPermisoEstamento(tipoNuevo)) {
+      const errorEstamento = errorPermisoEstamento(sol, fecha_inicio);
+      if (errorEstamento) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: errorEstamento });
+      }
     }
     const errorDias = errorDiasSolicitud(funcionario, tipoNuevo, fecha_inicio, fecha_fin, dias_solicitados, jornadaFinal);
     if (errorDias) {

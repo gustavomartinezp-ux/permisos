@@ -3,6 +3,7 @@ import autoTable from 'jspdf-autotable';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { construirFormatoAdministrativo, construirFormatoFeriado, construirFormatoTraspaso } from './formatosDAS';
+import { estamparFirma, cargarFirmas } from './firmasPDF';
 import { construirFormatoCapacitacionDAS, construirFormatoSuspension, letraSuspension, construirMemorandumInterno, esMemorandumInterno } from './formatosDASCarta';
 
 const COLOR_PRIMARIO  = [30, 64, 175];   // brand blue
@@ -683,7 +684,7 @@ function encabezadoInstitucional(doc, titulo, direccion, ancho, margen) {
 }
 
 // Sección de firmas común a los tres formularios
-function seccionFirmas(doc, ancho, margen, y) {
+function seccionFirmas(doc, ancho, margen, y, firmas = {}) {
   const w = 52;
   const x1 = margen + 4;
   const x2 = (ancho - w) / 2;
@@ -701,6 +702,12 @@ function seccionFirmas(doc, ancho, margen, y) {
   doc.text('FIRMA SOLICITANTE', x1 + w / 2, y + 5, { align: 'center' });
   doc.text('DIRECTOR(A) ESTABLECIMIENTO', x3 + w / 2, y + 5, { align: 'center' });
   doc.text('V°B° JEFE DIRECTO', x2 + w / 2, y + 23, { align: 'center' });
+
+  // Documento en mm: la firma se dimensiona en puntos (k = mm por punto)
+  const k = 25.4 / 72;
+  estamparFirma(doc, firmas.solicitante, x1, x1 + w, y, k);
+  estamparFirma(doc, firmas.direccion, x3, x3 + w, y, k);
+  estamparFirma(doc, firmas.jefe, x2, x2 + w, y + 18, k);
 
   return y + 32;
 }
@@ -820,7 +827,7 @@ function construirFormularioEspecial(solicitud, funcionario) {
   doc.line(margen, y, derecho, y);
   y += 14;
 
-  y = seccionFirmas(doc, ancho, margen, y);
+  y = seccionFirmas(doc, ancho, margen, y, solicitud._firmas);
   y += 10;
 
   const fechaHoy = format(new Date(), "d 'de' MMMM 'de' yyyy", { locale: es });
@@ -856,23 +863,35 @@ function construirFormularioOficial(solicitud, funcionario, saldoInfo = {}) {
   return construirFormatoAdministrativo(solicitud, funcionario, saldoInfo, folio);
 }
 
-export function descargarFormularioOficial(solicitud, funcionario, saldoInfo = {}) {
-  const doc  = construirFormularioOficial(solicitud, funcionario, saldoInfo);
+// Con las firmas electrónicas de la solicitud (solicitante, jefatura, Dirección)
+async function formularioFirmado(solicitud, funcionario, saldoInfo) {
+  const firmas = await cargarFirmas(solicitud);
+  return construirFormularioOficial({ ...solicitud, _firmas: firmas }, funcionario, saldoInfo);
+}
+
+export async function descargarFormularioOficial(solicitud, funcionario, saldoInfo = {}) {
+  const doc  = await formularioFirmado(solicitud, funcionario, saldoInfo);
   const code = codigoDoc(solicitud);
   const ap   = (funcionario.apellidos || 'funcionario').toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
   doc.save(`${code}_${ap}.pdf`);
 }
 
-export function imprimirFormularioOficial(solicitud, funcionario, saldoInfo = {}) {
-  const doc = construirFormularioOficial(solicitud, funcionario, saldoInfo);
+export async function imprimirFormularioOficial(solicitud, funcionario, saldoInfo = {}) {
+  // La ventana se abre antes de esperar las firmas: abierta después de un
+  // await, el navegador la bloquea como ventana emergente
+  const ventana = window.open('', '_blank');
+  const doc = await formularioFirmado(solicitud, funcionario, saldoInfo);
   doc.autoPrint();
-  window.open(doc.output('bloburl'), '_blank');
+  const url = doc.output('bloburl');
+  if (ventana) ventana.location.href = url;
+  else window.open(url, '_blank');
 }
 
 // Formato de traspaso (postergación y acumulación) de una solicitud de feriado legal
-export function descargarFormatoTraspaso(solicitud, funcionario, saldoInfo = {}) {
+export async function descargarFormatoTraspaso(solicitud, funcionario, saldoInfo = {}) {
   const folio = `TRA-${codigoDoc(solicitud).slice(4)}`;
-  const doc = construirFormatoTraspaso(solicitud, funcionario, saldoInfo, folio);
+  const firmas = await cargarFirmas(solicitud);
+  const doc = construirFormatoTraspaso({ ...solicitud, _firmas: firmas }, funcionario, saldoInfo, folio);
   const ap  = (funcionario.apellidos || 'funcionario').toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
   doc.save(`${folio}_${ap}.pdf`);
 }

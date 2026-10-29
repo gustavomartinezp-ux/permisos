@@ -4,6 +4,7 @@ import { es } from 'date-fns/locale';
 import { LOGO_TALCAHUANO_PNG } from './logoTalcahuano';
 import { TEXTOS_SUSPENSION, LINEAS_SUSPENSION, LOGO_TALCAHUANO_AZUL_PNG } from './plantillaSuspension';
 import { ENCABEZADO_COMPENSATORIO_PNG } from './encabezadoCompensatorio';
+import { estamparFirma, cargarFirmas } from './firmasPDF';
 
 // ═════════════════════════════════════════════════════════════════════════════
 // Formatos oficiales DAS en tamaño carta, reconstruidos desde los documentos
@@ -206,6 +207,12 @@ export function construirFormatoCapacitacionDAS(solicitud, funcionario, saldoInf
   rotulo(doc, 'FIRMA SOLICITANTE', (IZQ + 3 + 216) / 2, yF + 13, { ...T, estilo: 'bold', size: 10.5, align: 'center' });
   linea(doc, 390, DER, yF, 0.8);
   rotulo(doc, 'V° B° JEFE DIRECTO', (390 + DER) / 2, yF + 13, { ...T, estilo: 'bold', size: 10.5, align: 'center' });
+  linea(doc, 235, 371, yF + 74, 0.8);
+  rotulo(doc, 'DIRECCIÓN', 303, yF + 87, { ...T, estilo: 'bold', size: 10.5, align: 'center' });
+  const firmas = solicitud._firmas || {};
+  estamparFirma(doc, firmas.solicitante, IZQ + 3, 216, yF);
+  estamparFirma(doc, firmas.jefe, 390, DER, yF);
+  estamparFirma(doc, firmas.direccion, 235, 371, yF + 74);
 
   const finCiudad = rotulo(doc, 'TALCAHUANO,', IZQ + 5, 716, { ...T, estilo: 'bold', size: 10.5 });
   campo(doc, fechaLarga(solicitud.fecha_solicitud || solicitud.created_at), finCiudad + 2, 420, 718.5);
@@ -313,13 +320,17 @@ export function construirFormatoCompensatorio(sol, funcionario, folio) {
   // Firmas y fecha de solicitud
   lineaAzul(63, 229.7, 593.8);
   lineaAzul(397.9, 564.6, 593.8);
+  const firmas = sol._firmas || {};
+  estamparFirma(doc, firmas.solicitante, 63, 229.7, Y(593.8));
+  estamparFirma(doc, firmas.direccion, 397.9, 564.6, Y(593.8));
   dato(fechaLarga(sol.fecha_solicitud || sol.created_at), 143.9, 315.6, 758.2);
   return doc;
 }
 
-export function descargarFormatoCompensatorio(sol, funcionario) {
+export async function descargarFormatoCompensatorio(sol, funcionario) {
   const folio = `COMP-${String(sol.id || '').padStart(5, '0')}`;
-  const doc = construirFormatoCompensatorio(sol, funcionario, folio);
+  const firmas = await cargarFirmas(sol, { compensacion: true });
+  const doc = construirFormatoCompensatorio({ ...sol, _firmas: firmas }, funcionario, folio);
   const ap = (funcionario.apellidos || 'funcionario').toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
   doc.save(`${folio}_${ap}.pdf`);
 }
@@ -444,6 +455,12 @@ export function construirFormatoSuspension(solicitud, funcionario, saldoInfo = {
     }
   }
 
+  // Firmas: solicitante, referente (jefatura que pre-aprueba) y director
+  const firmas = solicitud._firmas || {};
+  estamparFirma(doc, firmas.solicitante, 71.3, 162.14, 769.4);
+  estamparFirma(doc, firmas.jefe, 258.17, 368.47, 769.4);
+  estamparFirma(doc, firmas.direccion, 438.19, 540.69, 769.4);
+
   // Fecha de solicitud
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(12 * 0.9);
@@ -534,8 +551,16 @@ export function construirMemorandumInterno(solicitud, funcionario, saldoInfo = {
     if (renglones[i]) campo(doc, renglones[i], IZQ, DER + 400, y);
   }
 
-  // Firma
+  // Firmas: interesado, V°B° de la jefatura directa y Dirección
   linea(doc, 348, 540, 692, 0.8);
   rotulo(doc, 'Firma Interesado', 444, 705, { estilo: 'bold', size: 10, align: 'center' });
+  linea(doc, 72, 264, 692, 0.8);
+  rotulo(doc, 'V° B° Jefe Directo', 168, 705, { estilo: 'bold', size: 10, align: 'center' });
+  linea(doc, 210, 402, 762, 0.8);
+  rotulo(doc, 'Dirección', 306, 775, { estilo: 'bold', size: 10, align: 'center' });
+  const firmas = solicitud._firmas || {};
+  estamparFirma(doc, firmas.solicitante, 348, 540, 692);
+  estamparFirma(doc, firmas.jefe, 72, 264, 692);
+  estamparFirma(doc, firmas.direccion, 210, 402, 762);
   return doc;
 }

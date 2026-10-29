@@ -3,6 +3,7 @@ const { body, validationResult } = require('express-validator');
 const { pool } = require('../db');
 const { verificarToken } = require('../middleware/auth');
 const { errorPermisoEstamento, esPermisoEstamento, infoEstamento } = require('../utils/estamento');
+const { firmaActivaDeUsuario, firmarComoSolicitante, puedeVerDocumentosDe, etapa } = require('../utils/firmas');
 const { cargarPermisos, requierePermiso, noAutoAprobacion, esSoloAutoservicio, tieneVisibilidadGlobal, alcanceSupervisor, filtroAlcance, puedeActuarPorFuncionario } = require('../middleware/rbac');
 const {
   calcularDiasHabiles,
@@ -72,9 +73,10 @@ async function registrarMovimiento(client, {
 async function actualizarEstadoSolicitud(client, id, estado, usuarioId, observaciones) {
   await client.query(
     `UPDATE solicitudes
-     SET estado = $1, aprobado_por = $2, fecha_resolucion = NOW(), observaciones = $3
+     SET estado = $1, aprobado_por = $2, fecha_resolucion = NOW(), observaciones = $3,
+         firma_direccion_id = CASE WHEN $5 THEN ${firmaActivaDeUsuario(2)} ELSE firma_direccion_id END
      WHERE id = $4`,
-    [estado, usuarioId, observaciones || null, id]
+    [estado, usuarioId, observaciones || null, id, estado === 'aprobado']
   );
 }
 
@@ -96,6 +98,66 @@ router.get('/estamento/:funcionario_id', async (req, res) => {
   } catch (err) {
     console.error('[solicitudes] estamento:', err.message);
     res.status(500).json({ error: 'Error al obtener el plazo del estamento' });
+  }
+});
+
+// Firmas a estampar en el formulario: solicitante, jefatura (pre-aprobación) y
+// Dirección (aprobación final). Sin pre-aprobación firma solo Dirección.
+router.get('/:id/firmas', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT sol.estado, sol.firma_solicitante_en, sol.fecha_pre_aprobacion,
+              sol.fecha_resolucion AT TIME ZONE 'UTC' AS fecha_resolucion, -- columna sin zona, guardada en UTC
+              sol.pre_aprobado_por, sol.aprobado_por,
+              f.id, f.sector, f.sector_2, f.area, f.nombres || ' ' || f.apellidos AS solicitante,
+              fs.imagen AS img_solicitante, fj.imagen AS img_jefe, fd.imagen AS img_direccion,
+              pj.nombres || ' ' || pj.apellidos AS jefe, pd.nombres || ' ' || pd.apellidos AS direccion
+       FROM solicitudes sol
+       JOIN funcionarios f ON f.id = sol.funcionario_id
+       LEFT JOIN firmas fs ON fs.id = sol.firma_solicitante_id
+       LEFT JOIN firmas fj ON fj.id = sol.firma_jefe_id
+       LEFT JOIN firmas fd ON fd.id = sol.firma_direccion_id
+       LEFT JOIN usuarios uj ON uj.id = sol.pre_aprobado_por
+       LEFT JOIN funcionarios pj ON pj.id = uj.funcionario_id
+       LEFT JOIN usuarios ud ON ud.id = sol.aprobado_por
+       LEFT JOIN funcionarios pd ON pd.id = ud.funcionario_id
+       WHERE sol.id = $1`,
+      [parseInt(req.params.id)]
+    );
+    const s = rows[0];
+    if (!s) return res.status(404).json({ error: 'Solicitud no encontrada' });
+    if (!puedeVerDocumentosDe(req, s)) return res.status(403).json({ error: 'Acceso denegado' });
+    const vigente = ['pendiente', 'pre_aprobado', 'aprobado'].includes(s.estado);
+    res.json({
+      solicitante: etapa(vigente && s.firma_solicitante_en, s.solicitante, s.firma_solicitante_en, s.img_solicitante),
+      jefe: etapa(['pre_aprobado', 'aprobado'].includes(s.estado) && s.pre_aprobado_por, s.jefe, s.fecha_pre_aprobacion, s.img_jefe),
+      direccion: etapa(s.estado === 'aprobado' && s.aprobado_por, s.direccion, s.fecha_resolucion, s.img_direccion),
+    });
+  } catch (err) {
+    console.error('[solicitudes] firmas:', err.message);
+    res.status(500).json({ error: 'Error al obtener las firmas' });
+  }
+});
+
+// El funcionario firma su propia solicitud (ingresada por otra persona o antes
+// de registrar su firma). Reemplaza la firma del solicitante por la vigente.
+router.patch('/:id/firmar', async (req, res) => {
+  if (!req.usuario.funcionario_id) return res.status(400).json({ error: 'Su cuenta no está vinculada a un funcionario' });
+  try {
+    const { rows } = await pool.query(
+      `UPDATE solicitudes
+       SET firma_solicitante_en = NOW(),
+           firma_solicitante_id = (SELECT id FROM firmas WHERE funcionario_id = $2 AND activa)
+       WHERE id = $1 AND funcionario_id = $2 AND estado IN ('pendiente', 'pre_aprobado', 'aprobado')
+         AND EXISTS (SELECT 1 FROM firmas WHERE funcionario_id = $2 AND activa)
+       RETURNING id`,
+      [parseInt(req.params.id), req.usuario.funcionario_id]
+    );
+    if (!rows[0]) return res.status(400).json({ error: 'Registre su firma en "Mi firma" y firme solo sus solicitudes vigentes' });
+    res.json({ mensaje: 'Solicitud firmada' });
+  } catch (err) {
+    console.error('[solicitudes] firmar:', err.message);
+    res.status(500).json({ error: 'Error al firmar la solicitud' });
   }
 });
 
@@ -294,6 +356,7 @@ router.post('/', [
         usuarioId: req.usuario.id,
       });
 
+      await firmarComoSolicitante(client, 'solicitudes', req, [nuevaSolicitud.rows[0].id]);
       await client.query('COMMIT');
       return res.status(201).json({
         ...nuevaSolicitud.rows[0],
@@ -426,6 +489,7 @@ router.post('/', [
         const arrConSaldo = await guardarSaldoPeriodo(client, solArrastre.rows[0].id, arrastreDisponible, fromArrastre);
         const actConSaldo = await guardarSaldoPeriodo(client, solActual.rows[0].id, actualDisponible, fromActual);
 
+        await firmarComoSolicitante(client, 'solicitudes', req, [solArrastre.rows[0].id, solActual.rows[0].id]);
         await client.query('COMMIT');
         return res.status(201).json({
           dividida: true,
@@ -459,6 +523,7 @@ router.post('/', [
         ? await guardarSaldoPeriodo(client, nuevaSolicitud.rows[0].id, actualDisponible, fromActual)
         : await guardarSaldoPeriodo(client, nuevaSolicitud.rows[0].id, arrastreDisponible, fromArrastre);
 
+      await firmarComoSolicitante(client, 'solicitudes', req, [nuevaSolicitud.rows[0].id]);
       await client.query('COMMIT');
       return res.status(201).json({
         ...conSaldo,
@@ -504,6 +569,7 @@ router.post('/', [
       usuarioId: req.usuario.id,
     });
 
+    await firmarComoSolicitante(client, 'solicitudes', req, [nuevaSolicitud.rows[0].id]);
     await client.query('COMMIT');
     res.status(201).json(nuevaSolicitud.rows[0]);
   } catch (err) {
@@ -560,7 +626,8 @@ router.patch('/:id/pre-aprobar', requierePermiso('solicitudes.pre_aprobar'), asy
        SET estado = 'pre_aprobado',
            pre_aprobado_por = $1,
            fecha_pre_aprobacion = NOW(),
-           observaciones_supervisor = $2
+           observaciones_supervisor = $2,
+           firma_jefe_id = ${firmaActivaDeUsuario(1)}
        WHERE id = $3`,
       [req.usuario.id, observaciones || null, id]
     );

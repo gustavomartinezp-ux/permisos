@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { FileText, CheckCircle2, XCircle, Search, ShieldCheck, RotateCcw, Download, Printer, ArrowLeftRight, Pencil } from 'lucide-react';
+import { FileText, CheckCircle2, XCircle, Search, ShieldCheck, RotateCcw, Download, Printer, ArrowLeftRight, Pencil, PenLine } from 'lucide-react';
 import { solicitudesApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { descargarFormularioOficial, imprimirFormularioOficial, descargarFormatoTraspaso } from '../utils/reportePDF';
@@ -114,6 +114,20 @@ export default function Solicitudes() {
       cargar();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Error al pre-aprobar');
+    } finally {
+      setProcesando(null);
+    }
+  };
+
+  // El funcionario estampa su firma registrada en su propia solicitud
+  const firmar = async (id) => {
+    setProcesando(id);
+    try {
+      await solicitudesApi.firmar(id);
+      toast.success('Solicitud firmada');
+      cargar();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al firmar');
     } finally {
       setProcesando(null);
     }
@@ -331,6 +345,18 @@ export default function Solicitudes() {
                   >
                     <Printer size={15} />
                   </button>
+                  {/* Solicitud propia sin la imagen de la firma (ingresada por otra persona o antes de registrarla) */}
+                  {!sol.firma_solicitante_id && ['pendiente', 'pre_aprobado', 'aprobado'].includes(sol.estado)
+                    && String(sol.funcionario_id) === String(usuario?.funcionario_id) && (
+                    <button
+                      onClick={() => firmar(sol.id)}
+                      disabled={procesando === sol.id}
+                      className="p-2 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
+                      title="Firmar con mi firma registrada"
+                    >
+                      <PenLine size={15} />
+                    </button>
+                  )}
                   {/* Feriado legal: formato de traspaso (postergación por buen servicio y acumulación) */}
                   {sol.es_feriado_legal && (
                     <button

@@ -4,7 +4,7 @@ import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import {
   Plus, X, Clock, CheckCircle2, XCircle, AlertCircle,
-  Trash2, Calendar, Users, TrendingUp, Hourglass, ChevronDown, ChevronUp, FileDown,
+  Trash2, Calendar, Users, TrendingUp, Hourglass, ChevronDown, ChevronUp, FileDown, PenLine,
 } from 'lucide-react';
 import { horasCompensatoriasApi, solicitudesCompensacionApi, funcionariosApi } from '../api/client';
 import { useAuth } from '../context/AuthContext';
@@ -505,6 +505,20 @@ export default function HorasCompensatorias() {
     }
   };
 
+  // El funcionario estampa su firma registrada en su propia solicitud
+  const firmarSolicitud = async (id) => {
+    setProcesando(id);
+    try {
+      await solicitudesCompensacionApi.firmar(id);
+      toast.success('Solicitud firmada');
+      cargar();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Error al firmar');
+    } finally {
+      setProcesando(null);
+    }
+  };
+
   const cancelarSolicitud = async (id) => {
     setProcesando(id);
     try {
@@ -795,6 +809,14 @@ export default function HorasCompensatorias() {
                     className="p-1.5 rounded-lg hover:bg-dark-100 text-dark-400 hover:text-dark-700 transition-colors"
                     title="Descargar formato de descanso compensatorio">
                     <FileDown size={15} />
+                  </button>
+                )}
+                {!sol.firma_solicitante_id && ['pendiente', 'aprobado'].includes(sol.estado)
+                  && String(sol.funcionario_id) === String(usuario?.funcionario_id) && (
+                  <button onClick={() => firmarSolicitud(sol.id)} disabled={procesando === sol.id}
+                    className="p-1.5 rounded-lg hover:bg-emerald-50 text-dark-400 hover:text-emerald-700 transition-colors"
+                    title="Firmar con mi firma registrada">
+                    <PenLine size={15} />
                   </button>
                 )}
                 {sol.estado === 'pendiente' && (

@@ -4,6 +4,7 @@ const { pool } = require('../db');
 const { verificarToken } = require('../middleware/auth');
 const { cargarPermisos, requierePermiso, esSoloAutoservicio, alcanceSupervisor, filtroAlcance, dentroDeAlcance, puedeActuarPorFuncionario } = require('../middleware/rbac');
 const { calcularSaldo } = require('./horas-compensatorias');
+const { firmaActivaDeUsuario, firmarComoSolicitante, puedeVerDocumentosDe, etapa } = require('../utils/firmas');
 
 const router = express.Router();
 router.use(verificarToken, cargarPermisos);
@@ -178,10 +179,63 @@ router.post('/', async (req, res) => {
         horaInicio,
       ]
     );
+    await firmarComoSolicitante(pool, 'solicitudes_compensacion', req, [result.rows[0].id]);
     res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Error al registrar solicitud' });
+  }
+});
+
+// ─── GET /:id/firmas — solicitante y jefatura o Dirección que aprobó ─────────
+router.get('/:id/firmas', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT sc.estado, sc.firma_solicitante_en, sc.fecha_resolucion, sc.aprobado_por,
+              f.id, f.sector, f.sector_2, f.area, f.nombres || ' ' || f.apellidos AS solicitante,
+              fs.imagen AS img_solicitante, fd.imagen AS img_direccion,
+              pd.nombres || ' ' || pd.apellidos AS direccion
+       FROM solicitudes_compensacion sc
+       JOIN funcionarios f ON f.id = sc.funcionario_id
+       LEFT JOIN firmas fs ON fs.id = sc.firma_solicitante_id
+       LEFT JOIN firmas fd ON fd.id = sc.firma_direccion_id
+       LEFT JOIN usuarios ud ON ud.id = sc.aprobado_por
+       LEFT JOIN funcionarios pd ON pd.id = ud.funcionario_id
+       WHERE sc.id = $1`,
+      [parseInt(req.params.id)]
+    );
+    const s = rows[0];
+    if (!s) return res.status(404).json({ error: 'Solicitud no encontrada' });
+    if (!puedeVerDocumentosDe(req, s)) return res.status(403).json({ error: 'Acceso denegado' });
+    res.json({
+      solicitante: etapa(['pendiente', 'aprobado'].includes(s.estado) && s.firma_solicitante_en, s.solicitante, s.firma_solicitante_en, s.img_solicitante),
+      jefe: null,
+      direccion: etapa(s.estado === 'aprobado' && s.aprobado_por, s.direccion, s.fecha_resolucion, s.img_direccion),
+    });
+  } catch (err) {
+    console.error('[compensacion] firmas:', err.message);
+    res.status(500).json({ error: 'Error al obtener las firmas' });
+  }
+});
+
+// ─── PATCH /:id/firmar — el funcionario firma su propia solicitud ────────────
+router.patch('/:id/firmar', async (req, res) => {
+  if (!req.usuario.funcionario_id) return res.status(400).json({ error: 'Su cuenta no está vinculada a un funcionario' });
+  try {
+    const { rows } = await pool.query(
+      `UPDATE solicitudes_compensacion
+       SET firma_solicitante_en = NOW(),
+           firma_solicitante_id = (SELECT id FROM firmas WHERE funcionario_id = $2 AND activa)
+       WHERE id = $1 AND funcionario_id = $2 AND estado IN ('pendiente', 'aprobado')
+         AND EXISTS (SELECT 1 FROM firmas WHERE funcionario_id = $2 AND activa)
+       RETURNING id`,
+      [parseInt(req.params.id), req.usuario.funcionario_id]
+    );
+    if (!rows[0]) return res.status(400).json({ error: 'Registre su firma en "Mi firma" y firme solo sus solicitudes vigentes' });
+    res.json({ mensaje: 'Solicitud firmada' });
+  } catch (err) {
+    console.error('[compensacion] firmar:', err.message);
+    res.status(500).json({ error: 'Error al firmar la solicitud' });
   }
 });
 
@@ -234,7 +288,8 @@ router.patch('/:id/aprobar', puedeGestionarCompensacion, async (req, res) => {
     await client.query(
       `UPDATE solicitudes_compensacion
        SET estado = 'aprobado', aprobado_por = $1, fecha_resolucion = NOW(),
-           observaciones = $2, saldo_restante = $3
+           observaciones = $2, saldo_restante = $3,
+           firma_direccion_id = ${firmaActivaDeUsuario(1)}
        WHERE id = $4`,
       [req.usuario.id, observaciones || null, saldoRestante, req.params.id]
     );

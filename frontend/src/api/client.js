@@ -112,6 +112,16 @@ export const solicitudesApi = {
   editar: (id, data) => api.patch(`/solicitudes/${id}/editar`, data),
   // Estamento, requisitos y plazo del Permiso de Estamento de un funcionario
   estamento: (funcionarioId, anio) => api.get(`/solicitudes/estamento/${funcionarioId}`, { params: { anio } }),
+  // Firmas a estampar en el formulario y firma del solicitante en su propia solicitud
+  firmas: (id) => api.get(`/solicitudes/${id}/firmas`),
+  firmar: (id) => api.patch(`/solicitudes/${id}/firmar`),
+};
+
+// Firma electrónica del funcionario (solo la propia)
+export const firmasApi = {
+  mia: () => api.get('/firmas/mia'),
+  guardar: (imagen) => api.put('/firmas/mia', { imagen }),
+  eliminar: () => api.delete('/firmas/mia'),
 };
 
 export const saldosApi = {
@@ -158,6 +168,8 @@ export const solicitudesCompensacionApi = {
   aprobar:   (id, observaciones) => api.patch(`/solicitudes-compensacion/${id}/aprobar`, { observaciones }),
   rechazar:  (id, observaciones) => api.patch(`/solicitudes-compensacion/${id}/rechazar`, { observaciones }),
   cancelar:  (id) => api.patch(`/solicitudes-compensacion/${id}/cancelar`),
+  firmas:    (id) => api.get(`/solicitudes-compensacion/${id}/firmas`),
+  firmar:    (id) => api.patch(`/solicitudes-compensacion/${id}/firmar`),
 };
 
 export const usuariosApi = {

@@ -2,6 +2,7 @@ import { jsPDF } from 'jspdf';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { ENCABEZADO_DAS_PNG } from './encabezadoDAS';
+import { estamparFirma } from './firmasPDF';
 
 // ═════════════════════════════════════════════════════════════════════════════
 // Formatos oficiales DAS Talcahuano (Feriado Legal, Permiso Administrativo y
@@ -103,7 +104,7 @@ function escribirEnLinea(doc, valor, [x1, x2, y], { centrar = false } = {}) {
   }
 }
 
-function dibujarFormato(plantilla, valores, folio) {
+function dibujarFormato(plantilla, valores, folio, firmas = {}) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: PAGINA });
 
   // Marco con la abertura superior donde va el encabezado
@@ -160,6 +161,9 @@ function dibujarFormato(plantilla, valores, folio) {
   for (const [clave, linea] of Object.entries(plantilla.campos)) {
     escribirEnLinea(doc, valores[clave], linea, { centrar: (plantilla.marcas || []).includes(clave) });
   }
+
+  // Firma electrónica en cada línea de firma (solicitante, jefatura, Dirección)
+  for (const [etapa, x1, x2, y] of plantilla.firmas || []) estamparFirma(doc, firmas[etapa], x1, x2, y);
   return doc;
 }
 
@@ -173,6 +177,12 @@ function firmas(yLinea, yUnidad, yTexto, yTextoUnidad, dx = 0) {
       [255 + dx, yTextoUnidad, 'ENCARGADO UNIDAD'],
     ],
     lineas: [[63 + dx, 229.7 + dx, yLinea, 1], [397.9 + dx, 564.6 + dx, yLinea, 1], [229.7 + dx, 396.5 + dx, yUnidad, 1]],
+    // Encargado de unidad = jefatura que pre-aprueba; Jefe oficina o Director = aprobación final
+    firmas: [
+      ['solicitante', 63 + dx, 229.7 + dx, yLinea],
+      ['direccion', 397.9 + dx, 564.6 + dx, yLinea],
+      ['jefe', 229.7 + dx, 396.5 + dx, yUnidad],
+    ],
   };
 }
 
@@ -211,6 +221,7 @@ const ADMINISTRATIVO = (() => {
     },
     marcas: ['indefinido', 'plazo', 'reemplazo', 'dias', 'conGoce', 'sinGoce', 'am', 'pm', 'total', 'solicitados', 'saldo'],
     lineas: [[63.7, 563.7, 401.9], ...f.lineas],
+    firmas: f.firmas,
   };
 })();
 
@@ -249,6 +260,7 @@ const FERIADO = (() => {
     },
     marcas: ['indefinido', 'plazo', 'reemplazo', 'dias', 'jornada', 'total', 'acumulado', 'solicitados', 'periodo', 'periodo2', 'saldo'],
     lineas: [[64, 564, 371], ...f.lineas],
+    firmas: f.firmas,
   };
 })();
 
@@ -264,7 +276,7 @@ export function construirFormatoAdministrativo(solicitud, funcionario, saldoInfo
     sinGoce: sinGoce ? 'X' : '',
     am: jornada === 'AM' ? 'X' : '',
     pm: jornada === 'PM' ? 'X' : '',
-  }, folio);
+  }, folio, solicitud._firmas);
 }
 
 // Período al que se imputan los días de feriado: el arrastre corresponde al año anterior
@@ -287,7 +299,7 @@ export function construirFormatoFeriado(solicitud, funcionario, saldoInfo = {}, 
     acumulado: usaArrastre ? 'X' : '',
     periodo: String(usaArrastre ? anio - 1 : anio),
     periodo2: usaArrastre && usaActual ? String(anio).slice(2) : '',
-  }, folio);
+  }, folio, solicitud._firmas);
 }
 
 // ─── Traspaso (postergación y acumulación) de feriado legal ─────────────────
@@ -343,6 +355,11 @@ function plantillaTraspaso(anioAcumulado) {
       [340, 538, 500, 1], [340, 538, 613, 1],   // firmas dentro del recuadro
       [62.8, 229.6, 686, 1], [397.8, 564.5, 686, 1], [229.6, 396.3, 755, 1],
     ],
+    // El V°B° de la postergación (recuadro superior) lo firma la jefatura a mano
+    firmas: [
+      ['solicitante', 340, 538, 613],
+      ['solicitante', 62.8, 229.6, 686], ['direccion', 397.8, 564.5, 686], ['jefe', 229.6, 396.3, 755],
+    ],
     divisores: [[312.2, 410, 312.2, 635.5]],
   };
 }
@@ -354,5 +371,5 @@ export function construirFormatoTraspaso(solicitud, funcionario, saldoInfo = {},
     ...v,
     anioCalendario: String(anioCalendario),
     anioAcumulado: String(anioCalendario),
-  }, folio);
+  }, folio, solicitud._firmas);
 }

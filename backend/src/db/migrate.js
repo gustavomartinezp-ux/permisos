@@ -441,6 +441,32 @@ const migrations = [
        WHERE sexo IS NULL AND trim(COALESCE(nombres, '')) <> '';
     `,
   },
+  {
+    // Firma electrónica simple: cada funcionario guarda su firma (imagen PNG)
+    // y se estampa en el formulario al enviar, pre-aprobar y aprobar. Al
+    // cambiarla se crea una nueva y la anterior queda inactiva: cada solicitud
+    // guarda la firma vigente al momento de firmar (no cambia después).
+    id: 'firmas_electronicas_v1',
+    sql: `
+      CREATE TABLE IF NOT EXISTS firmas (
+        id              SERIAL PRIMARY KEY,
+        funcionario_id  INTEGER NOT NULL REFERENCES funcionarios(id) ON DELETE CASCADE,
+        imagen          TEXT NOT NULL,
+        activa          BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at      TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS firmas_una_activa ON firmas(funcionario_id) WHERE activa;
+      ALTER TABLE solicitudes
+        ADD COLUMN IF NOT EXISTS firma_solicitante_id INTEGER REFERENCES firmas(id) ON DELETE SET NULL,
+        ADD COLUMN IF NOT EXISTS firma_solicitante_en TIMESTAMPTZ,
+        ADD COLUMN IF NOT EXISTS firma_jefe_id        INTEGER REFERENCES firmas(id) ON DELETE SET NULL,
+        ADD COLUMN IF NOT EXISTS firma_direccion_id   INTEGER REFERENCES firmas(id) ON DELETE SET NULL;
+      ALTER TABLE solicitudes_compensacion
+        ADD COLUMN IF NOT EXISTS firma_solicitante_id INTEGER REFERENCES firmas(id) ON DELETE SET NULL,
+        ADD COLUMN IF NOT EXISTS firma_solicitante_en TIMESTAMPTZ,
+        ADD COLUMN IF NOT EXISTS firma_direccion_id   INTEGER REFERENCES firmas(id) ON DELETE SET NULL;
+    `,
+  },
 ];
 
 async function runMigrations() {

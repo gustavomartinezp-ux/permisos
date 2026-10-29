@@ -4,10 +4,11 @@ import { motion } from 'framer-motion';
 import {
   LayoutDashboard, Users, FileText, Clock, LogOut,
   ChevronRight, Settings, UserCircle, KeyRound, Hourglass, BarChart2, UserCheck, Briefcase, UserCog, Info, ShieldCheck,
-  HeartPulse, Plane,
+  HeartPulse, Plane, PenLine,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import CambiarPasswordModal from './CambiarPasswordModal';
+import MiFirmaModal from './MiFirmaModal';
 import { NOMBRE_ROL, ORDEN_ROL } from '../config/roles';
 
 // Roles permitidos por ítem — deben reflejar lo que el backend realmente exige
@@ -54,6 +55,7 @@ export default function Sidebar({ mobile = false, onClose }) {
   const { usuario, logout, esSoloAutoservicio, rolesEfectivos } = useAuth();
   const navigate = useNavigate();
   const [showCambiarPassword, setShowCambiarPassword] = useState(false);
+  const [showMiFirma, setShowMiFirma] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -140,6 +142,10 @@ export default function Sidebar({ mobile = false, onClose }) {
             <p className="text-xs text-dark-400 truncate" title={etiquetaRol}>{etiquetaRol}</p>
           </div>
         </div>
+        <button onClick={() => setShowMiFirma(true)} className="sidebar-link w-full">
+          <PenLine size={18} />
+          <span>Mi firma</span>
+        </button>
         <button onClick={() => setShowCambiarPassword(true)} className="sidebar-link w-full">
           <KeyRound size={18} />
           <span>Cambiar contraseña</span>
@@ -153,6 +159,7 @@ export default function Sidebar({ mobile = false, onClose }) {
       {showCambiarPassword && (
         <CambiarPasswordModal onClose={() => setShowCambiarPassword(false)} />
       )}
+      {showMiFirma && <MiFirmaModal onClose={() => setShowMiFirma(false)} />}
     </aside>
   );
 }

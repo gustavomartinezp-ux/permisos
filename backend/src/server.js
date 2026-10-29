@@ -26,6 +26,7 @@ const birthdaysRoutes           = require('./routes/birthdays');
 const feriadoLegalRoutes        = require('./routes/feriado-legal');
 const licenciasMedicasRoutes    = require('./routes/licencias-medicas');
 const cometidosComisionesRoutes = require('./routes/cometidos-comisiones');
+const firmasRoutes              = require('./routes/firmas');
 const { evaluarHitosAntiguedad } = require('./workers/antiguedadWorker');
 
 const app = express();
@@ -77,6 +78,7 @@ app.use('/api/birthdays',                birthdaysRoutes);
 app.use('/api/feriado-legal',            feriadoLegalRoutes);
 app.use('/api/licencias-medicas',        licenciasMedicasRoutes);
 app.use('/api/cometidos-comisiones',     cometidosComisionesRoutes);
+app.use('/api/firmas',                   firmasRoutes);
 
 app.get('/api/health', async (req, res) => {
   try {

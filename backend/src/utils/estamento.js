@@ -33,6 +33,30 @@ const DIAS_ESTAMENTO = {
   MEDICO: '12-03',
 };
 
+// Nombre para mostrar (con tildes) de cada clave normalizada
+const NOMBRE_ESTAMENTO = {
+  AUXILIAR: 'Auxiliar', GUARDIA: 'Guardia', CHOFER: 'Chofer',
+  TENS: 'TENS', 'TENS DENTAL': 'TENS Dental', 'TENS PODOLOGIA': 'TENS Podología',
+  'TERAPEUTA OCUPACIONAL': 'Terapeuta Ocupacional',
+  NUTRICIONISTA: 'Nutricionista', KINESIOLOGO: 'Kinesiólogo/a',
+  ENFERMERA: 'Enfermero/a',
+  'INGENIERO EN ADMINISTRACION': 'Ingeniero/a en Administración',
+  'INGENIERO INFORMATICO': 'Ingeniero/a Informático/a',
+  'INGENIERO EN INFORMATICA BIOMEDICA': 'Ingeniero/a en Informática Biomédica',
+  PODOLOGO: 'Podólogo/a',
+  ADMINISTRATIVO: 'Administrativo/a',
+  MATRONA: 'Matrón/Matrona',
+  'TECNOLOGO MEDICO': 'Tecnólogo/a Médico/a',
+  ODONTOLOGO: 'Odontólogo/a',
+  'PROFESOR DE EDUCACION FISICA': 'Profesor/a de Educación Física',
+  PSICOLOGO: 'Psicólogo/a',
+  'ASISTENTE SOCIAL': 'Asistente Social',
+  FONOAUDIOLOGO: 'Fonoaudiólogo/a', 'EDUCADORA DE PARVULOS': 'Educador/a de Párvulos',
+  'QUIMICO FARMACEUTICO': 'Químico/a Farmacéutico/a',
+  MEDICO: 'Médico/a',
+};
+const nombreEstamento = (clave) => NOMBRE_ESTAMENTO[clave] || clave;
+
 // Fecha en que el CESFAM celebra el estamento cuando difiere del día oficial
 // (ej. día en sábado que se celebra el viernes o el lunes). Se carga por año
 // desde el calendario anual; sin entrada se usa el día oficial.
@@ -110,7 +134,7 @@ function errorPermisoEstamento(funcionario, fechaInicio) {
   const dentro = [plazo, plazoEstamento(estamento, anio - 1)].some((p) => fecha >= p.desde && fecha <= p.hasta);
   if (dentro) return null;
   const [, mm, dd] = plazo.desde.split('-');
-  return `El Permiso de Estamento de ${estamento} se toma el ${dd}/${mm} o hasta ${DIAS_PLAZO} días corridos después`;
+  return `El Permiso de Estamento de ${nombreEstamento(estamento)} se toma el ${dd}/${mm} o hasta ${DIAS_PLAZO} días corridos después`;
 }
 
 // Resumen para el formulario: estamento, requisitos y plazos del año y el siguiente.
@@ -118,6 +142,7 @@ function infoEstamento(funcionario, anio) {
   const estamento = normalizarEstamento(funcionario?.escalafon) || null;
   return {
     estamento,
+    nombre: estamento ? nombreEstamento(estamento) : null,
     error: errorRequisitosEstamento(funcionario || {}),
     plazo: estamento ? plazoEstamento(estamento, anio) : null,
     plazo_siguiente: estamento ? plazoEstamento(estamento, anio + 1) : null,

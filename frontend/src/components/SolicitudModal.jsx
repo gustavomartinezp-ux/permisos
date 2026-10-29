@@ -630,7 +630,7 @@ export default function SolicitudModal({ funcionario, onClose, onSuccess }) {
                   <>
                     <p className="font-semibold text-sky-800 flex items-center gap-1.5">
                       <Calendar size={13} />
-                      Plazo para {infoEstamento.estamento}
+                      Plazo para {infoEstamento.nombre}
                     </p>
                     {plazoEstamento ? (
                       <p className="text-sky-700 text-xs mt-0.5">

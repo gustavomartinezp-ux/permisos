@@ -2,7 +2,7 @@
 const express = require('express');
 const { pool } = require('../db');
 const { verificarToken } = require('../middleware/auth');
-const { cargarPermisos, requierePermiso, esSoloAutoservicio, alcanceSupervisor, filtroAlcance, dentroDeAlcance } = require('../middleware/rbac');
+const { cargarPermisos, requierePermiso, esSoloAutoservicio, alcanceSupervisor, filtroAlcance, dentroDeAlcance, puedeActuarPorFuncionario } = require('../middleware/rbac');
 const { calcularSaldo } = require('./horas-compensatorias');
 
 const router = express.Router();
@@ -152,6 +152,9 @@ router.post('/', async (req, res) => {
 
   if (esSoloAutoservicio(req) && req.usuario.funcionario_id != funcionario_id) {
     return res.status(403).json({ error: 'Solo puedes solicitar para ti mismo' });
+  }
+  if (!(await puedeActuarPorFuncionario(req, funcionario_id))) {
+    return res.status(403).json({ error: 'Solo puede ingresar a nombre de funcionarios de su sector o área' });
   }
 
   // Verificar saldo (backend obligatorio)

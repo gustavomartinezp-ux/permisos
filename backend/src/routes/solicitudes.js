@@ -2,7 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const { pool } = require('../db');
 const { verificarToken } = require('../middleware/auth');
-const { cargarPermisos, requierePermiso, noAutoAprobacion, esSoloAutoservicio, tieneVisibilidadGlobal, alcanceSupervisor, filtroAlcance } = require('../middleware/rbac');
+const { cargarPermisos, requierePermiso, noAutoAprobacion, esSoloAutoservicio, tieneVisibilidadGlobal, alcanceSupervisor, filtroAlcance, puedeActuarPorFuncionario } = require('../middleware/rbac');
 const {
   calcularDiasHabiles,
   calcularDistribucion,
@@ -180,6 +180,9 @@ router.post('/', [
 
   if (esSoloAutoservicio(req) && req.usuario.funcionario_id != funcionario_id) {
     return res.status(403).json({ error: 'Solo puedes solicitar permisos para ti mismo' });
+  }
+  if (!(await puedeActuarPorFuncionario(req, funcionario_id))) {
+    return res.status(403).json({ error: 'Solo puede ingresar a nombre de funcionarios de su sector o área' });
   }
 
   const client = await pool.connect();

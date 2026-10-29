@@ -152,6 +152,18 @@ const dentroDeAlcance = (alcance, f) => {
   return inSector || inArea;
 };
 
+// Al ingresar algo a nombre de otro funcionario: un supervisor (o subrogante) solo
+// puede hacerlo dentro de su alcance, salvo que tenga solicitudes.crear_terceros
+// (ej. SECRETARY). Un supervisor sin sector ni área no se acota, igual que en listados.
+const puedeActuarPorFuncionario = async (req, funcionarioId) => {
+  if (req.usuario.funcionario_id == funcionarioId) return true;
+  const alcance = alcanceSupervisor(req);
+  if (!alcance || (!alcance.sector && !alcance.area)) return true;
+  if ((req.usuario.permisos || []).includes('solicitudes.crear_terceros')) return true;
+  const { rows } = await pool.query('SELECT sector, sector_2, area FROM funcionarios WHERE id = $1', [funcionarioId]);
+  return !rows[0] || dentroDeAlcance(alcance, rows[0]);
+};
+
 // Variante sin request (worker de reportería), con la subrogación vigente incluida.
 const alcanceSupervisorPorUsuarioId = async (usuarioId) => {
   const [{ rows }, datos] = await Promise.all([
@@ -175,5 +187,5 @@ const alcanceSupervisorPorUsuarioId = async (usuarioId) => {
 module.exports = {
   cargarPermisos, invalidarPermisos, requierePermiso, noAutoAprobacion, esSoloAutoservicio,
   tieneVisibilidadGlobal, tieneVisibilidadGlobalPorUsuarioId,
-  alcanceSupervisor, filtroAlcance, dentroDeAlcance, alcanceSupervisorPorUsuarioId,
+  alcanceSupervisor, filtroAlcance, dentroDeAlcance, puedeActuarPorFuncionario, alcanceSupervisorPorUsuarioId,
 };

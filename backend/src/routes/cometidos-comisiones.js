@@ -3,7 +3,7 @@
 const express = require('express');
 const { pool } = require('../db');
 const { verificarToken } = require('../middleware/auth');
-const { cargarPermisos, requierePermiso, noAutoAprobacion, esSoloAutoservicio, tieneVisibilidadGlobal, alcanceSupervisor, filtroAlcance } = require('../middleware/rbac');
+const { cargarPermisos, requierePermiso, noAutoAprobacion, esSoloAutoservicio, tieneVisibilidadGlobal, alcanceSupervisor, filtroAlcance, puedeActuarPorFuncionario } = require('../middleware/rbac');
 const { diasCorridos, validarLimiteComision } = require('../utils/cometidosComisiones');
 
 const router = express.Router();
@@ -102,6 +102,9 @@ router.post('/', async (req, res) => {
   }
   if (esSoloAutoservicio(req) && req.usuario.funcionario_id != funcionario_id) {
     return res.status(403).json({ error: 'Solo puedes solicitar para ti mismo' });
+  }
+  if (!(await puedeActuarPorFuncionario(req, funcionario_id))) {
+    return res.status(403).json({ error: 'Solo puede ingresar a nombre de funcionarios de su sector o área' });
   }
 
   const dias = diasCorridos(fecha_inicio, fecha_fin);

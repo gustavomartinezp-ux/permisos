@@ -7,6 +7,13 @@ const { SECTORES_VALIDOS, AREAS_VALIDAS } = require('../config/catalogos');
 const router = express.Router();
 router.use(verificarToken, cargarPermisos);
 
+// Solicitante que es supervisor (rol legacy) o lo está subrogando hoy: sus
+// solicitudes no tienen jefe intermedio y van directo al administrador.
+const ES_SUPERVISOR_SQL = `(u.rol = 'supervisor' OR EXISTS (
+  SELECT 1 FROM subrogaciones sg
+  WHERE sg.usuario_subrogante_id = u.id AND sg.activo = TRUE
+    AND (NOW() AT TIME ZONE 'America/Santiago')::date BETWEEN sg.fecha_inicio AND sg.fecha_fin))`;
+
 router.get('/stats', async (req, res) => {
   if (esSoloAutoservicio(req)) {
     return res.status(403).json({ error: 'Acceso denegado' });
@@ -155,7 +162,7 @@ router.get('/stats', async (req, res) => {
             OR (sol.estado = 'pendiente' AND EXISTS (
                   SELECT 1 FROM usuarios u
                   WHERE u.funcionario_id = sol.funcionario_id
-                    AND u.rol = 'supervisor'
+                    AND ${ES_SUPERVISOR_SQL}
                     AND u.activo = true
                ))
          ORDER BY CASE WHEN sol.estado = 'pendiente' THEN 0 ELSE 1 END,
@@ -172,7 +179,7 @@ router.get('/stats', async (req, res) => {
              AND EXISTS (
                SELECT 1 FROM usuarios u
                WHERE u.funcionario_id = sol.funcionario_id
-                 AND u.rol = 'supervisor'
+                 AND ${ES_SUPERVISOR_SQL}
                  AND u.activo = true
              )`
         )

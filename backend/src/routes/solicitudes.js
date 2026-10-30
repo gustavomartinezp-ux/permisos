@@ -16,6 +16,7 @@ const {
   siguienteDiaHabil,
   validarSolicitudPermiso,
   diasDelRango,
+  esDispositivoExcepcion,
   bloqueObligatorioTomado,
   errorParcializacion,
 } = require('../utils/feriadoLegal');
@@ -449,11 +450,20 @@ router.post('/', [
       // período actual) en vez de una sola con desglose interno, para que
       // cada tramo quede como su propio trámite/folio administrativo.
       if (fromArrastre > 0 && fromActual > 0) {
-        const fechaFinArrastre = fechaEnesimoDiaHabil(fecha_inicio, fromArrastre);
-        const fechaInicioActual = (() => {
-          const d = siguienteDiaHabil(new Date(`${fechaFinArrastre}T12:00:00`));
+        // En SAR (turnos 24/7) el feriado se cuenta en días corridos, así que
+        // los tramos se cortan por calendario y no por días hábiles.
+        const masDias = (iso, n) => {
+          const d = new Date(`${String(iso).substring(0, 10)}T12:00:00`);
+          d.setDate(d.getDate() + n);
           return d.toISOString().split('T')[0];
-        })();
+        };
+        const corridos = esDispositivoExcepcion(funcionario);
+        const fechaFinArrastre = corridos
+          ? masDias(fecha_inicio, fromArrastre - 1)
+          : fechaEnesimoDiaHabil(fecha_inicio, fromArrastre);
+        const fechaInicioActual = corridos
+          ? masDias(fechaFinArrastre, 1)
+          : siguienteDiaHabil(new Date(`${fechaFinArrastre}T12:00:00`)).toISOString().split('T')[0];
 
         const solArrastre = await client.query(
           `INSERT INTO solicitudes

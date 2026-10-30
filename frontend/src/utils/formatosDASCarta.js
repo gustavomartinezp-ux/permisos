@@ -210,8 +210,9 @@ export function construirFormatoCapacitacionDAS(solicitud, funcionario, saldoInf
   linea(doc, 235, 371, yF + 74, 0.8);
   rotulo(doc, 'DIRECCIÓN', 303, yF + 87, { ...T, estilo: 'bold', size: 10.5, align: 'center' });
   const firmas = solicitud._firmas || {};
-  estamparFirma(doc, firmas.solicitante, IZQ + 3, 216, yF);
-  estamparFirma(doc, firmas.jefe, 390, DER, yF);
+  // Las de arriba, más bajas: la fila de totales está justo encima
+  estamparFirma(doc, firmas.solicitante, IZQ + 3, 216, yF, 1, 44);
+  estamparFirma(doc, firmas.jefe, 390, DER, yF, 1, 44);
   estamparFirma(doc, firmas.direccion, 235, 371, yF + 74);
 
   const finCiudad = rotulo(doc, 'TALCAHUANO,', IZQ + 5, 716, { ...T, estilo: 'bold', size: 10.5 });
@@ -457,9 +458,10 @@ export function construirFormatoSuspension(solicitud, funcionario, saldoInfo = {
 
   // Firmas: solicitante, referente (jefatura que pre-aprueba) y director
   const firmas = solicitud._firmas || {};
-  estamparFirma(doc, firmas.solicitante, 71.3, 162.14, 769.4);
-  estamparFirma(doc, firmas.jefe, 258.17, 368.47, 769.4);
-  estamparFirma(doc, firmas.direccion, 438.19, 540.69, 769.4);
+  // Más bajas: la tabla de saldos termina justo encima
+  estamparFirma(doc, firmas.solicitante, 71.3, 162.14, 769.4, 1, 36);
+  estamparFirma(doc, firmas.jefe, 258.17, 368.47, 769.4, 1, 36);
+  estamparFirma(doc, firmas.direccion, 438.19, 540.69, 769.4, 1, 36);
 
   // Fecha de solicitud
   doc.setFont('helvetica', 'normal');
@@ -559,8 +561,9 @@ export function construirMemorandumInterno(solicitud, funcionario, saldoInfo = {
   linea(doc, 210, 402, 762, 0.8);
   rotulo(doc, 'Dirección', 306, 775, { estilo: 'bold', size: 10, align: 'center' });
   const firmas = solicitud._firmas || {};
-  estamparFirma(doc, firmas.solicitante, 348, 540, 692);
-  estamparFirma(doc, firmas.jefe, 72, 264, 692);
+  // Las de arriba, más bajas: la última línea del texto está justo encima
+  estamparFirma(doc, firmas.solicitante, 348, 540, 692, 1, 40);
+  estamparFirma(doc, firmas.jefe, 72, 264, 692, 1, 40);
   estamparFirma(doc, firmas.direccion, 210, 402, 762);
   return doc;
 }

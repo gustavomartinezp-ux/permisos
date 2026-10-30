@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, PenLine, Eraser, Upload, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { firmasApi } from '../api/client';
+import { limpiarPixeles, recortarCanvas, limpiarFirma } from '../utils/limpiarFirma';
 
 // Lienzo en px lógicos; se dibuja al doble de resolución para que la firma
 // salga nítida en el PDF.
@@ -10,30 +11,8 @@ const ANCHO = 560;
 const ALTO = 200;
 const ESCALA = 2;
 
-// Recorta los bordes vacíos (transparentes) y devuelve el PNG, o null si no hay trazo
-function exportarRecortado(canvas) {
-  const ctx = canvas.getContext('2d');
-  const { width, height } = canvas;
-  const { data } = ctx.getImageData(0, 0, width, height);
-  let x1 = width, y1 = height, x2 = -1, y2 = -1;
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      if (data[(y * width + x) * 4 + 3] > 20) {
-        if (x < x1) x1 = x; if (x > x2) x2 = x;
-        if (y < y1) y1 = y; if (y > y2) y2 = y;
-      }
-    }
-  }
-  if (x2 < 0) return null;
-  const m = 8;
-  x1 = Math.max(x1 - m, 0); y1 = Math.max(y1 - m, 0);
-  x2 = Math.min(x2 + m, width - 1); y2 = Math.min(y2 + m, height - 1);
-  const out = document.createElement('canvas');
-  out.width = x2 - x1 + 1;
-  out.height = y2 - y1 + 1;
-  out.getContext('2d').drawImage(canvas, x1, y1, out.width, out.height, 0, 0, out.width, out.height);
-  return out.toDataURL('image/png');
-}
+// PNG recortado al trazo, o null si el lienzo está vacío
+const exportarRecortado = (canvas) => recortarCanvas(canvas)?.toDataURL('image/png') || null;
 
 export default function MiFirmaModal({ onClose }) {
   const canvasRef = useRef(null);
@@ -44,7 +23,8 @@ export default function MiFirmaModal({ onClose }) {
 
   useEffect(() => {
     firmasApi.mia()
-      .then(({ data }) => setActual(data.imagen || null))
+      // Se muestra limpia, tal como sale en los formularios
+      .then(async ({ data }) => setActual(data.imagen ? await limpiarFirma(data.imagen) : null))
       .catch((err) => { setActual(null); toast.error(err?.response?.data?.error || 'No se pudo cargar su firma'); });
   }, []);
 
@@ -88,7 +68,7 @@ export default function MiFirmaModal({ onClose }) {
     setHayTrazo(false);
   };
 
-  // Foto o escaneo de la firma: el fondo claro se vuelve transparente
+  // Foto o escaneo de la firma: se quitan el fondo, las sombras y el ruido
   const subirImagen = (e) => {
     const archivo = e.target.files?.[0];
     e.target.value = '';
@@ -103,12 +83,7 @@ export default function MiFirmaModal({ onClose }) {
       const w = img.width * k, h = img.height * k;
       ctx.drawImage(img, (c.width - w) / 2, (c.height - h) / 2, w, h);
       const datos = ctx.getImageData(0, 0, c.width, c.height);
-      const d = datos.data;
-      for (let i = 0; i < d.length; i += 4) {
-        const luz = (d[i] + d[i + 1] + d[i + 2]) / 3;
-        if (luz > 170) d[i + 3] = 0;
-        else { d[i] = 15; d[i + 1] = 42; d[i + 2] = 92; d[i + 3] = Math.min(d[i + 3], Math.round((170 - luz) * 2.2)); }
-      }
+      datos.data.set(limpiarPixeles(datos.data, c.width, c.height));
       ctx.putImageData(datos, 0, 0);
       URL.revokeObjectURL(img.src);
       setHayTrazo(true);
@@ -184,7 +159,7 @@ export default function MiFirmaModal({ onClose }) {
                 <p className="text-xs font-medium text-dark-700 mb-1.5">Firma registrada</p>
                 <div className="flex items-center gap-3">
                   <div className="flex-1 border border-dark-200 rounded-xl bg-dark-50 p-2 flex justify-center">
-                    <img src={actual} alt="Firma registrada" className="max-h-20" />
+                    <img src={actual} alt="Firma registrada" className="max-h-24" />
                   </div>
                   <button type="button" onClick={eliminar} title="Eliminar firma" className="p-2 rounded-lg hover:bg-red-50 text-red-500">
                     <Trash2 size={18} />

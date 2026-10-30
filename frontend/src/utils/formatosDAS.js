@@ -163,7 +163,7 @@ function dibujarFormato(plantilla, valores, folio, firmas = {}) {
   }
 
   // Firma electrónica en cada línea de firma (solicitante, jefatura, Dirección)
-  for (const [etapa, x1, x2, y] of plantilla.firmas || []) estamparFirma(doc, firmas[etapa], x1, x2, y);
+  for (const [etapa, x1, x2, y, alto] of plantilla.firmas || []) estamparFirma(doc, firmas[etapa], x1, x2, y, 1, alto);
   return doc;
 }
 
@@ -358,7 +358,8 @@ function plantillaTraspaso(anioAcumulado) {
     // El V°B° de la postergación (recuadro superior) lo firma la jefatura a mano
     firmas: [
       ['solicitante', 340, 538, 613],
-      ['solicitante', 62.8, 229.6, 686], ['direccion', 397.8, 564.5, 686], ['jefe', 229.6, 396.3, 755],
+      // Las de abajo, más bajas para no montarse sobre el recuadro
+      ['solicitante', 62.8, 229.6, 686, 38], ['direccion', 397.8, 564.5, 686, 38], ['jefe', 229.6, 396.3, 755],
     ],
     divisores: [[312.2, 410, 312.2, 635.5]],
   };

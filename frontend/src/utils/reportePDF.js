@@ -705,8 +705,9 @@ function seccionFirmas(doc, ancho, margen, y, firmas = {}) {
 
   // Documento en mm: la firma se dimensiona en puntos (k = mm por punto)
   const k = 25.4 / 72;
-  estamparFirma(doc, firmas.solicitante, x1, x1 + w, y, k);
-  estamparFirma(doc, firmas.direccion, x3, x3 + w, y, k);
+  // Las de arriba, más bajas: la línea divisoria está 14 mm encima
+  estamparFirma(doc, firmas.solicitante, x1, x1 + w, y, k, 34);
+  estamparFirma(doc, firmas.direccion, x3, x3 + w, y, k, 34);
   estamparFirma(doc, firmas.jefe, x2, x2 + w, y + 18, k);
 
   return y + 32;

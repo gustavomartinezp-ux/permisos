@@ -6,6 +6,12 @@ const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 const { pool } = require('../db');
 const { verificarToken } = require('../middleware/auth');
 const { cargarPermisos } = require('../middleware/rbac');
+const { registrarAcceso } = require('../utils/accesos');
+
+// Bloqueo de la cuenta (no de la red): tras 5 contraseñas erróneas seguidas,
+// 15 minutos sin poder ingresar desde ningún equipo (Ley 21.719, seguridad).
+const MAX_INTENTOS = 5;
+const MINUTOS_BLOQUEO = 15;
 
 const router = express.Router();
 
@@ -61,11 +67,36 @@ router.post('/login', loginLimiterIp, loginLimiterCuenta, [
     }
 
     const usuario = result.rows[0];
+    const acceso = (detalle) => registrarAcceso(req, {
+      usuarioId: usuario.id, funcionarioId: usuario.funcionario_id, recurso: 'login', detalle,
+    });
+
+    if (usuario.bloqueado_hasta && new Date(usuario.bloqueado_hasta) > new Date()) {
+      acceso('rechazado: cuenta bloqueada');
+      return res.status(423).json({
+        error: `Cuenta bloqueada por ${MAX_INTENTOS} intentos fallidos. Intente nuevamente en ${MINUTOS_BLOQUEO} minutos o pida a RRHH restablecer su contraseña.`,
+      });
+    }
+
     const passwordValida = await bcrypt.compare(password, usuario.password_hash);
 
     if (!passwordValida) {
+      const { rows: [estado] } = await pool.query(
+        `UPDATE usuarios
+         SET intentos_fallidos = CASE WHEN intentos_fallidos + 1 >= $2 THEN 0 ELSE intentos_fallidos + 1 END,
+             bloqueado_hasta   = CASE WHEN intentos_fallidos + 1 >= $2 THEN NOW() + make_interval(mins => $3) ELSE bloqueado_hasta END
+         WHERE id = $1
+         RETURNING bloqueado_hasta > NOW() AS bloqueada`,
+        [usuario.id, MAX_INTENTOS, MINUTOS_BLOQUEO]
+      );
+      acceso(estado?.bloqueada ? 'fallido: cuenta bloqueada' : 'fallido');
       return res.status(401).json({ error: 'Credenciales inválidas' });
     }
+
+    if (usuario.intentos_fallidos || usuario.bloqueado_hasta) {
+      await pool.query('UPDATE usuarios SET intentos_fallidos = 0, bloqueado_hasta = NULL WHERE id = $1', [usuario.id]);
+    }
+    acceso('correcto');
 
     // sector y area: del propio usuario (supervisor) o del funcionario vinculado
     const sector = usuario.sector || usuario.funcionario_sector || null;

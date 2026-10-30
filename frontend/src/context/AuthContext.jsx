@@ -51,6 +51,35 @@ export function AuthProvider({ children }) {
     setUsuario(null);
   }, []);
 
+  // Cierre de sesión tras 30 minutos sin actividad (Ley 21.719, seguridad).
+  // La última actividad se comparte entre pestañas por localStorage.
+  useEffect(() => {
+    if (!usuario) return undefined;
+    const INACTIVIDAD_MS = 30 * 60 * 1000;
+    const marcar = () => { try { localStorage.setItem('ultimaActividad', String(Date.now())); } catch { /* sin storage */ } };
+    let ultima = Date.now();
+    const registrar = () => {
+      const ahora = Date.now();
+      if (ahora - ultima > 15000) { ultima = ahora; marcar(); }
+    };
+    marcar();
+    const eventos = ['mousedown', 'keydown', 'touchstart', 'scroll', 'mousemove'];
+    eventos.forEach((e) => window.addEventListener(e, registrar, { passive: true }));
+    const revisar = setInterval(() => {
+      let ultimaGlobal = ultima;
+      try { ultimaGlobal = Math.max(ultima, Number(localStorage.getItem('ultimaActividad')) || 0); } catch { /* sin storage */ }
+      if (Date.now() - ultimaGlobal > INACTIVIDAD_MS) {
+        logout();
+        try { sessionStorage.setItem('motivoCierre', 'inactividad'); } catch { /* sin storage */ }
+        window.location.assign('/login');
+      }
+    }, 30000);
+    return () => {
+      eventos.forEach((e) => window.removeEventListener(e, registrar));
+      clearInterval(revisar);
+    };
+  }, [usuario?.id, logout]);
+
   // Aplica cambios parciales al perfil en memoria y en localStorage sin re-hacer
   // login — usado tras el cambio obligatorio de contraseña para limpiar
   // must_change_password sin esperar un refresh completo de /auth/me.

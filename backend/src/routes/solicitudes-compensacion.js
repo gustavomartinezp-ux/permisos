@@ -5,6 +5,7 @@ const { verificarToken } = require('../middleware/auth');
 const { cargarPermisos, requierePermiso, esSoloAutoservicio, alcanceSupervisor, filtroAlcance, dentroDeAlcance, puedeActuarPorFuncionario } = require('../middleware/rbac');
 const { calcularSaldo } = require('./horas-compensatorias');
 const { firmaActivaDeUsuario, firmarComoSolicitante, puedeVerDocumentosDe, etapa } = require('../utils/firmas');
+const { registrarAcceso } = require('../utils/accesos');
 
 const router = express.Router();
 router.use(verificarToken, cargarPermisos);
@@ -207,6 +208,7 @@ router.get('/:id/firmas', async (req, res) => {
     const s = rows[0];
     if (!s) return res.status(404).json({ error: 'Solicitud no encontrada' });
     if (!puedeVerDocumentosDe(req, s)) return res.status(403).json({ error: 'Acceso denegado' });
+    registrarAcceso(req, { funcionarioId: s.id, recurso: 'documento', detalle: `compensatorio ${req.params.id}` });
     res.json({
       solicitante: etapa(['pendiente', 'aprobado'].includes(s.estado) && s.firma_solicitante_en, s.solicitante, s.firma_solicitante_en, s.img_solicitante),
       jefe: null,

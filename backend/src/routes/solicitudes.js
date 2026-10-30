@@ -4,6 +4,7 @@ const { pool } = require('../db');
 const { verificarToken } = require('../middleware/auth');
 const { errorPermisoEstamento, esPermisoEstamento, infoEstamento } = require('../utils/estamento');
 const { firmaActivaDeUsuario, firmarComoSolicitante, puedeVerDocumentosDe, etapa } = require('../utils/firmas');
+const { registrarAcceso } = require('../utils/accesos');
 const { cargarPermisos, requierePermiso, noAutoAprobacion, esSoloAutoservicio, tieneVisibilidadGlobal, alcanceSupervisor, filtroAlcance, puedeActuarPorFuncionario } = require('../middleware/rbac');
 const {
   calcularDiasHabiles,
@@ -127,6 +128,8 @@ router.get('/:id/firmas', async (req, res) => {
     const s = rows[0];
     if (!s) return res.status(404).json({ error: 'Solicitud no encontrada' });
     if (!puedeVerDocumentosDe(req, s)) return res.status(403).json({ error: 'Acceso denegado' });
+    // Se pide al generar el formulario PDF
+    registrarAcceso(req, { funcionarioId: s.id, recurso: 'documento', detalle: `solicitud ${req.params.id}` });
     const vigente = ['pendiente', 'pre_aprobado', 'aprobado'].includes(s.estado);
     res.json({
       solicitante: etapa(vigente && s.firma_solicitante_en, s.solicitante, s.firma_solicitante_en, s.img_solicitante),

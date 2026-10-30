@@ -52,6 +52,9 @@ import AcercaDel from './pages/AcercaDel';
 import RolesPermisos from './pages/RolesPermisos';
 import LicenciasMedicas from './pages/LicenciasMedicas';
 import CometidosComisiones from './pages/CometidosComisiones';
+import Privacidad from './pages/Privacidad';
+import MisDatos from './pages/MisDatos';
+import DatosPersonales from './pages/DatosPersonales';
 
 // Redirige según rol al entrar a la app
 function HomeRedirect() {
@@ -110,6 +113,8 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={usuario ? <HomeRedirect /> : <Login />} />
       <Route path="/" element={<HomeRedirect />} />
+      {/* Pública: se enlaza desde el inicio de sesión */}
+      <Route path="/privacidad" element={<Privacidad />} />
 
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         {/* Solo supervisores/admin */}
@@ -135,6 +140,8 @@ function AppRoutes() {
         <Route path="/historial"               element={<Historial />} />
         <Route path="/roles"                   element={<SoloSupervisor><RolesPermisos /></SoloSupervisor>} />
         <Route path="/acerca"                  element={<AcercaDel />} />
+        <Route path="/mis-datos"               element={<MisDatos />} />
+        <Route path="/datos-personales"        element={<RequiereRol roles={['RRHH_ADMIN', 'ADMIN_TI', 'AUDITOR']}><DatosPersonales /></RequiereRol>} />
       </Route>
     </Routes>
   );

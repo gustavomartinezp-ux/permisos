@@ -117,6 +117,16 @@ export const solicitudesApi = {
   firmar: (id) => api.patch(`/solicitudes/${id}/firmar`),
 };
 
+// Protección de datos personales (Ley 21.719)
+export const privacidadApi = {
+  misDatos: () => api.get('/privacidad/mis-datos'),
+  misDerechos: () => api.get('/privacidad/derechos/mias'),
+  solicitarDerecho: (data) => api.post('/privacidad/derechos', data),
+  derechos: () => api.get('/privacidad/derechos'),
+  responderDerecho: (id, data) => api.patch(`/privacidad/derechos/${id}`, data),
+  accesos: (params) => api.get('/privacidad/accesos', { params }),
+};
+
 // Firma electrónica del funcionario (solo la propia)
 export const firmasApi = {
   mia: () => api.get('/firmas/mia'),

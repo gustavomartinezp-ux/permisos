@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Cross, Eye, EyeOff, Lock, Mail, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { SISTEMA } from '../config/sistema';
 
 export default function Login() {
@@ -10,7 +10,14 @@ export default function Login() {
   const navigate = useNavigate();
   const [form, setForm] = useState({ email: '', password: '' });
   const [showPass, setShowPass] = useState(false);
-  const [error, setError] = useState('');
+  // Aviso si la sesión anterior se cerró por inactividad
+  const [error, setError] = useState(() => {
+    try {
+      if (sessionStorage.getItem('motivoCierre') !== 'inactividad') return '';
+      sessionStorage.removeItem('motivoCierre');
+      return 'Su sesión se cerró tras 30 minutos sin actividad. Ingrese nuevamente.';
+    } catch { return ''; }
+  });
   const [cargando, setCargando] = useState(false);
 
   const handleSubmit = async (e) => {
@@ -137,6 +144,11 @@ export default function Login() {
             </p>
             <p className="text-xs text-dark-400 mt-0.5">
               v{SISTEMA.version} · {SISTEMA.anio}
+            </p>
+            <p className="text-xs mt-1.5">
+              <Link to="/privacidad" className="text-brand-600 hover:underline">
+                Política de privacidad y protección de datos personales
+              </Link>
             </p>
           </div>
         </div>

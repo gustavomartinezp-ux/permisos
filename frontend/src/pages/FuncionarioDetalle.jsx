@@ -81,6 +81,8 @@ export default function FuncionarioDetalle() {
   const puedeCrearParaTerceros = tienePermiso('solicitudes.crear_terceros');
   const puedeAjustarSaldos = tienePermiso('saldos.ajustar');
   const puedeEliminarFuncionario = tienePermiso('funcionarios.eliminar');
+  // Licencias médicas (dato de salud): solo el titular y RRHH/Secretaría
+  const puedeVerLicencias = String(usuario?.funcionario_id) === String(id) || tienePermiso('licencias_medicas.gestionar');
   const esPropioFuncionario = esFuncionario && String(usuario?.funcionario_id) === String(id);
   // Deliberadamente NO auto-servicio: el propio funcionario no controla su
   // publicación, solo quien ya puede editar datos básicos (RRHH/Admin/Secretaría).
@@ -191,7 +193,7 @@ export default function FuncionarioDetalle() {
   useEffect(() => {
     if (tab === 'historial') cargarHistorial();
     if (tab === 'suplencias') cargarSuplencias();
-    if (tab === 'licencias') cargarLicenciasMedicas();
+    if (tab === 'licencias' && puedeVerLicencias) cargarLicenciasMedicas();
   }, [tab, id]);
 
   // Carga lista de funcionarios al abrir el modal de nueva suplencia
@@ -792,7 +794,7 @@ export default function FuncionarioDetalle() {
           { id: 'historial',   label: 'Historial',   icon: Clock },
           { id: 'solicitudes', label: 'Solicitudes', icon: Calendar },
           ...(mostrarSuplencias ? [{ id: 'suplencias', label: 'Suplencias', icon: History }] : []),
-          { id: 'licencias', label: 'Licencias Médicas', icon: HeartPulse },
+          ...(puedeVerLicencias ? [{ id: 'licencias', label: 'Licencias Médicas', icon: HeartPulse }] : []),
         ];
         return (
           <div className="flex gap-1 bg-dark-100 p-1 rounded-xl w-fit flex-wrap">

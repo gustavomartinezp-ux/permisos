@@ -3,7 +3,8 @@
 const express = require('express');
 const { pool } = require('../db');
 const { verificarToken } = require('../middleware/auth');
-const { cargarPermisos, requierePermiso, esSoloAutoservicio } = require('../middleware/rbac');
+const { cargarPermisos, requierePermiso } = require('../middleware/rbac');
+const { registrarAcceso } = require('../utils/accesos');
 
 const router = express.Router();
 router.use(verificarToken, cargarPermisos);
@@ -25,6 +26,10 @@ router.get('/', requierePermiso('licencias_medicas.gestionar'), async (req, res)
       params.push(req.query.funcionario_id);
       where += ` AND lm.funcionario_id = $${params.length}`;
     }
+    registrarAcceso(req, {
+      funcionarioId: req.query.funcionario_id ? Number(req.query.funcionario_id) : null,
+      recurso: 'licencias', detalle: req.query.funcionario_id ? null : 'listado general',
+    });
     const { rows } = await pool.query(
       `SELECT lm.*, f.nombres, f.apellidos, f.rut, f.cargo,
               u.email AS registrado_por_email
@@ -42,13 +47,16 @@ router.get('/', requierePermiso('licencias_medicas.gestionar'), async (req, res)
   }
 });
 
-// Historial de un funcionario puntual — de solo lectura para el propio
-// funcionario (su ficha) o para quien ya puede ver datos ajenos (mismo
-// criterio que saldos.js); la escritura sigue exigiendo el permiso arriba.
+// Historial de un funcionario puntual. Son datos de salud (sensibles, Ley
+// 21.719): solo el propio funcionario y quien gestiona licencias (RRHH y
+// Secretaría); jefaturas, auditoría y demás roles no las ven.
 router.get('/funcionario/:id', async (req, res) => {
-  if (esSoloAutoservicio(req) && req.usuario.funcionario_id != req.params.id) {
-    return res.status(403).json({ error: 'Acceso denegado' });
+  const propio = req.usuario.funcionario_id && req.usuario.funcionario_id == req.params.id;
+  const gestiona = req.usuario.rol === 'admin' || (req.usuario.permisos || []).includes('licencias_medicas.gestionar');
+  if (!propio && !gestiona) {
+    return res.status(403).json({ error: 'Las licencias médicas solo las ve el titular y RRHH' });
   }
+  registrarAcceso(req, { funcionarioId: Number(req.params.id), recurso: 'licencias' });
   try {
     const { rows } = await pool.query(
       `SELECT id, fecha_inicio, fecha_fin, dias, folio, entidad_emisora, observaciones, created_at

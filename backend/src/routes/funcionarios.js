@@ -5,6 +5,7 @@ const { pool } = require('../db');
 const { verificarToken } = require('../middleware/auth');
 const { cargarPermisos, requierePermiso, esSoloAutoservicio, invalidarPermisos, alcanceSupervisor, filtroAlcance, dentroDeAlcance } = require('../middleware/rbac');
 const { EMAIL_REGEX, hashPasswordDefault } = require('../utils/credenciales');
+const { registrarAcceso } = require('../utils/accesos');
 
 const router = express.Router();
 const SEXOS = ['Femenino', 'Masculino'];
@@ -240,6 +241,7 @@ router.get('/:id', async (req, res) => {
       [id]
     );
 
+    registrarAcceso(req, { funcionarioId: Number(id), recurso: 'ficha' });
     res.json({
       ...funcionario.rows[0],
       saldos: saldos.rows,
@@ -789,7 +791,7 @@ router.post('/:id/credenciales/reset-password', requierePermiso('funcionarios.ge
 
     const hash = await hashPasswordDefault();
     await client.query(
-      'UPDATE usuarios SET password_hash = $1, must_change_password = TRUE WHERE id = $2',
+      'UPDATE usuarios SET password_hash = $1, must_change_password = TRUE, intentos_fallidos = 0, bloqueado_hasta = NULL WHERE id = $2',
       [hash, usuario.rows[0].id]
     );
     await client.query(

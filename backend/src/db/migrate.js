@@ -467,6 +467,61 @@ const migrations = [
         ADD COLUMN IF NOT EXISTS firma_direccion_id   INTEGER REFERENCES firmas(id) ON DELETE SET NULL;
     `,
   },
+  {
+    // Ley 21.719 (protección de datos personales):
+    //  - accesos_datos: quién consultó datos de otro funcionario (ficha,
+    //    licencias médicas, formularios) e inicios de sesión, para poder
+    //    investigar y notificar una vulneración.
+    //  - derechos_solicitudes: solicitudes de acceso, rectificación, supresión,
+    //    oposición, portabilidad y bloqueo, con plazo de respuesta.
+    //  - bloqueo de la cuenta tras varios intentos fallidos de contraseña.
+    id: 'proteccion_datos_v1',
+    sql: `
+      CREATE TABLE IF NOT EXISTS accesos_datos (
+        id              BIGSERIAL PRIMARY KEY,
+        usuario_id      INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+        funcionario_id  INTEGER REFERENCES funcionarios(id) ON DELETE SET NULL,
+        recurso         VARCHAR(40) NOT NULL,
+        detalle         TEXT,
+        ip              VARCHAR(64),
+        created_at      TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_accesos_funcionario ON accesos_datos(funcionario_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_accesos_usuario ON accesos_datos(usuario_id, created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS derechos_solicitudes (
+        id              SERIAL PRIMARY KEY,
+        funcionario_id  INTEGER NOT NULL REFERENCES funcionarios(id) ON DELETE CASCADE,
+        usuario_id      INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+        tipo            VARCHAR(20) NOT NULL
+          CHECK (tipo IN ('acceso', 'rectificacion', 'supresion', 'oposicion', 'portabilidad', 'bloqueo')),
+        detalle         TEXT NOT NULL,
+        estado          VARCHAR(20) NOT NULL DEFAULT 'pendiente'
+          CHECK (estado IN ('pendiente', 'en_proceso', 'respondida', 'rechazada')),
+        respuesta       TEXT,
+        respondido_por  INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+        respondido_en   TIMESTAMPTZ,
+        plazo           DATE NOT NULL,
+        created_at      TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_derechos_funcionario ON derechos_solicitudes(funcionario_id);
+
+      ALTER TABLE usuarios
+        ADD COLUMN IF NOT EXISTS intentos_fallidos INTEGER NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS bloqueado_hasta   TIMESTAMPTZ;
+
+      INSERT INTO permissions (codigo, descripcion) VALUES
+        ('datos_personales.gestionar', 'Responder solicitudes de derechos sobre datos personales (Ley 21.719)'),
+        ('datos_personales.auditar',   'Ver el registro de accesos a datos personales')
+      ON CONFLICT (codigo) DO NOTHING;
+
+      INSERT INTO role_permissions (role_id, permission_id)
+      SELECT r.id, p.id FROM roles r JOIN permissions p ON
+        (p.codigo = 'datos_personales.gestionar' AND r.codigo IN ('RRHH_ADMIN', 'ADMIN_TI'))
+        OR (p.codigo = 'datos_personales.auditar' AND r.codigo IN ('RRHH_ADMIN', 'ADMIN_TI', 'AUDITOR'))
+      ON CONFLICT DO NOTHING;
+    `,
+  },
 ];
 
 async function runMigrations() {

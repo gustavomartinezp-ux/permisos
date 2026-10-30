@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import {
   LayoutDashboard, Users, FileText, Clock, LogOut,
   ChevronRight, Settings, UserCircle, KeyRound, Hourglass, BarChart2, UserCheck, Briefcase, UserCog, Info, ShieldCheck,
-  HeartPulse, Plane, PenLine,
+  HeartPulse, Plane, PenLine, Shield,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import CambiarPasswordModal from './CambiarPasswordModal';
@@ -32,7 +32,9 @@ const NAV_SUPERVISOR = [
   { to: '/reportes',             label: 'Reportes',            icon: BarChart2,   roles: ELEVADOS },
   { to: '/configuracion',        label: 'Configuración',       icon: Settings,    roles: ['ADMIN_TI'] }, // 👈 único visible para ADMIN_TI
   { to: '/roles',                label: 'Roles y Permisos',    icon: ShieldCheck, roles: ['ADMIN_TI', 'SUPERVISOR'] },
+  { to: '/datos-personales',     label: 'Datos Personales',    icon: Shield,      roles: ['RRHH_ADMIN', 'ADMIN_TI', 'AUDITOR'] },
   { header: 'Información' },
+  { to: '/mis-datos',            label: 'Mis datos personales', icon: Shield },
   { to: '/acerca',               label: 'Acerca del Sistema',  icon: Info },
 ];
 
@@ -74,6 +76,7 @@ export default function Sidebar({ mobile = false, onClose }) {
     { to: '/historial',              label: 'Mi Historial',       icon: Clock },
     { to: '/cometidos-comisiones',   label: 'Cometidos/Comisiones',icon: Plane },
     { header: 'Información' },
+    { to: '/mis-datos',              label: 'Mis datos personales', icon: Shield },
     { to: '/acerca',                 label: 'Acerca del Sistema',  icon: Info },
   ];
 

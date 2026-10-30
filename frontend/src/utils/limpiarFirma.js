@@ -91,8 +91,33 @@ export function limpiarPixeles(data, w, h) {
     }
   }
 
-  // 3. Manchas rellenas: apertura (radio 5) y un margen de 3
-  const gruesa = filtro(filtro(filtro(mask, w, h, 5, false), w, h, 5, true), w, h, 3, true);
+  // 3. Manchas rellenas: apertura (radio 5). Solo se borran las manchas grandes
+  // (sombras); los cruces de trazos o letras apretadas también sobreviven a
+  // la apertura, pero son chicos y se conservan. Se borra con un margen de 3.
+  const abierta = filtro(filtro(mask, w, h, 5, false), w, h, 5, true);
+  const minMancha = Math.max(1500, w * h * 0.01);
+  const grande = new Uint8Array(w * h);
+  {
+    const visto = new Uint8Array(w * h);
+    const pila = new Int32Array(w * h);
+    for (let s = 0; s < w * h; s++) {
+      if (!abierta[s] || visto[s]) continue;
+      const grupo = [];
+      let tope = 0;
+      pila[tope++] = s; visto[s] = 1;
+      while (tope) {
+        const i = pila[--tope];
+        grupo.push(i);
+        const x = i % w, y = (i - x) / w;
+        if (x > 0 && abierta[i - 1] && !visto[i - 1]) { visto[i - 1] = 1; pila[tope++] = i - 1; }
+        if (x < w - 1 && abierta[i + 1] && !visto[i + 1]) { visto[i + 1] = 1; pila[tope++] = i + 1; }
+        if (y > 0 && abierta[i - w] && !visto[i - w]) { visto[i - w] = 1; pila[tope++] = i - w; }
+        if (y < h - 1 && abierta[i + w] && !visto[i + w]) { visto[i + w] = 1; pila[tope++] = i + w; }
+      }
+      if (grupo.length >= minMancha) for (const i of grupo) grande[i] = 1;
+    }
+  }
+  const gruesa = filtro(grande, w, h, 3, true);
   for (let i = 0; i < w * h; i++) if (gruesa[i]) { alpha[i] = 0; mask[i] = 0; }
 
   // 4. Grupos pequeños o débiles
